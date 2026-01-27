@@ -1,0 +1,165 @@
+use tauri::{
+    image::Image,
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, Runtime,
+};
+use tauri_plugin_positioner::{Position, WindowExt};
+
+use crate::cache_monitor::{CacheState, CacheStatus};
+
+/// Tray icon identifier
+pub const TRAY_ID: &str = "symbolsweep-tray";
+
+/// Create the system tray with minimal text-only display
+/// Returns the TrayIcon which MUST be stored to prevent it from being dropped
+pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {
+    // CRITICAL: Check if tray already exists and return it to prevent duplicates
+    // This handles hot reload in dev mode and prevents multiple tray icons
+    if let Some(existing) = app.tray_by_id(TRAY_ID) {
+        // Tray already exists, make sure it's visible and return it
+        let _ = existing.set_visible(true);
+        return Ok(existing);
+    }
+
+    // Create menu items
+    let show_item = MenuItem::with_id(app, "show", "Show SymbolSweep", true, None::<&str>)?;
+    let clean_item = MenuItem::with_id(app, "clean", "Clean Cache Now", true, None::<&str>)?;
+    let separator = MenuItem::with_id(app, "sep", "---", false, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+    // Create menu
+    let menu = Menu::with_items(app, &[&show_item, &clean_item, &separator, &quit_item])?;
+
+    // Create a minimal 1x1 transparent icon (required by Tauri, but we'll hide it with title)
+    let icon = create_minimal_icon()?;
+
+    // Build tray - text only, minimal icon
+    // IMPORTANT: The returned TrayIcon MUST be stored somewhere to prevent it from being dropped
+    let tray = TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icon)
+        .icon_as_template(true)
+        .menu(&menu)
+        .title("0 B") // Initial title - will be updated
+        .tooltip("SymbolSweep - Cache Monitor")
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                // Left click - toggle window
+                if let Some(window) = tray.app_handle().get_webview_window("main") {
+                    if window.is_visible().unwrap_or(false) {
+                        let _ = window.hide();
+                    } else {
+                        // Position BEFORE showing to avoid focus flicker
+                        position_window_near_tray(&window);
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        })
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    position_window_near_tray(&window);
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            "clean" => {
+                // Emit event to trigger clean from frontend
+                let _ = app.emit("clean-requested", ());
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .build(app)?;
+
+    Ok(tray)
+}
+
+/// Create a minimal transparent icon (macOS requires an icon, but we use title for display)
+fn create_minimal_icon() -> Result<Image<'static>, Box<dyn std::error::Error>> {
+    // 16x16 transparent image using raw RGBA data
+    // Each pixel is 4 bytes: R, G, B, A (all zeros = fully transparent)
+    let width = 16u32;
+    let height = 16u32;
+    let rgba_data: Vec<u8> = vec![0u8; (width * height * 4) as usize];
+
+    Ok(Image::new_owned(rgba_data, width, height))
+}
+
+/// Format the tray title with status indicator
+/// Uses colored circle emoji for status, followed by size
+fn format_tray_title(status: &CacheStatus) -> String {
+    let indicator = match status.state {
+        CacheState::Normal => "●", // Will appear in system color (white/black)
+        CacheState::Warning => "🟡",
+        CacheState::Critical => "🔴",
+    };
+
+    // For normal state, just show the size without indicator for cleaner look
+    if status.state == CacheState::Normal {
+        status.size_display.clone()
+    } else {
+        format!("{} {}", indicator, status.size_display)
+    }
+}
+
+/// Update tray with current cache status
+pub fn update_tray_icon<R: Runtime>(
+    app: &AppHandle<R>,
+    status: &CacheStatus,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        // Update title with size and status indicator
+        let title = format_tray_title(status);
+        tray.set_title(Some(&title))?;
+
+        // Update tooltip with more details
+        let tooltip = format!(
+            "SymbolSweep\n{} - {} files\nStatus: {}",
+            status.size_display,
+            status.file_count,
+            match status.state {
+                CacheState::Normal => "Normal",
+                CacheState::Warning => "Warning (5GB+)",
+                CacheState::Critical => "Critical (10GB+)",
+            }
+        );
+        tray.set_tooltip(Some(&tooltip))?;
+    }
+
+    Ok(())
+}
+
+/// Position window below the tray icon using the positioner plugin
+fn position_window_near_tray<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    // Use the positioner plugin to anchor the window below the tray icon
+    let _ = window.move_window(Position::TrayBottomCenter);
+}
+
+/// Send a macOS notification with sound
+pub fn send_notification_with_sound(title: &str, body: &str, sound: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            r#"display notification "{}" with title "{}" sound name "{}""#,
+            body.replace('"', r#"\""#),
+            title.replace('"', r#"\""#),
+            sound
+        );
+
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output();
+    }
+}
