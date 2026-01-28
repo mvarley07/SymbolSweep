@@ -59,7 +59,7 @@ fn get_daemon_status() -> bool {
 
 /// Clean the cache (with full safety checks)
 #[tauri::command]
-fn clean(state: tauri::State<AppState>, dry_run: bool) -> Result<CleanResult, String> {
+fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) -> Result<CleanResult, String> {
     match clean_cache(dry_run) {
         Ok(result) => {
             // Update last clean timestamp only if not a dry run
@@ -67,6 +67,9 @@ fn clean(state: tauri::State<AppState>, dry_run: bool) -> Result<CleanResult, St
                 if let Ok(mut settings) = state.settings.lock() {
                     settings.record_clean();
                 }
+                // Update tray icon immediately after clean
+                let status = get_cache_status();
+                let _ = update_tray_icon(&app, &status);
             }
             Ok(result)
         }

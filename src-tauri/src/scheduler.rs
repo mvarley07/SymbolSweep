@@ -270,7 +270,11 @@ pub enum SchedulerEvent {
 /// Format duration for display
 pub fn format_duration(secs: u64) -> String {
     if secs < 60 {
-        format!("{} seconds", secs)
+        if secs == 1 {
+            "1 second".to_string()
+        } else {
+            format!("{} seconds", secs)
+        }
     } else if secs < 3600 {
         let mins = secs / 60;
         if mins == 1 {

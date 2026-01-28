@@ -83,27 +83,47 @@ fn current_timestamp() -> u64 {
 }
 
 /// Format bytes into human-readable string
+/// Shows GB when ≥1000 MB, MB for 1-999, KB for small, B for tiny
 pub fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
     const GB: u64 = MB * 1024;
+    const GB_THRESHOLD: u64 = 1000 * MB; // Show GB at 1000 MB, not 1024
 
-    let (value, unit) = if bytes >= GB {
-        (bytes as f64 / GB as f64, "GB")
+    if bytes >= GB_THRESHOLD {
+        // Show as GB, omit decimal if whole number
+        let value = bytes as f64 / GB as f64;
+        let rounded = (value * 10.0).round() / 10.0; // Round to 1 decimal
+        if (rounded - rounded.floor()).abs() < 0.01 {
+            format!("{:.0} GB", rounded) // Whole number: "1 GB", "2 GB"
+        } else {
+            format!("{:.1} GB", rounded) // Decimal: "1.5 GB", "2.3 GB"
+        }
     } else if bytes >= MB {
-        (bytes as f64 / MB as f64, "MB")
+        // Show as MB (1-999 range)
+        let value = bytes / MB;
+        format!("{} MB", value)
     } else if bytes >= KB {
-        (bytes as f64 / KB as f64, "KB")
+        // Show as KB
+        format!("{} KB", bytes / KB)
+    } else if bytes > 0 {
+        format!("{} B", bytes)
     } else {
-        return format!("{} B", bytes);
-    };
-
-    // Show decimal only if not a whole number
-    if value.fract() < 0.05 {
-        format!("{:.0} {}", value, unit)
-    } else {
-        format!("{:.1} {}", value, unit)
+        "0 B".to_string()
     }
+}
+
+/// Add commas to numbers (e.g., 1250 -> "1,250")
+fn format_with_commas(n: u64) -> String {
+    let s = n.to_string();
+    let mut result = String::new();
+    for (i, c) in s.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result.chars().rev().collect()
 }
 
 /// Calculate directory size recursively
@@ -220,11 +240,15 @@ mod tests {
 
     #[test]
     fn test_format_size() {
+        assert_eq!(format_size(0), "0 B");
         assert_eq!(format_size(500), "500 B");
         assert_eq!(format_size(1024), "1 KB");
-        assert_eq!(format_size(1536), "1.5 KB");
         assert_eq!(format_size(1048576), "1 MB");
-        assert_eq!(format_size(1073741824), "1 GB");
+        assert_eq!(format_size(500 * 1024 * 1024), "500 MB");
+        assert_eq!(format_size(999 * 1024 * 1024), "999 MB");
+        // 1000 MB should show as GB (threshold)
+        assert_eq!(format_size(1000 * 1024 * 1024), "1 GB");
+        assert_eq!(format_size(1073741824), "1 GB"); // 1024 MB = 1 GB
         assert_eq!(format_size(5368709120), "5 GB");
     }
 

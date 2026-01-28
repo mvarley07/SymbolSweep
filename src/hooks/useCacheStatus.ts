@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { CacheStatus, CleanResult } from '../types';
@@ -69,23 +69,47 @@ export function useCleanCache() {
 
 export function useLastCleanTime() {
   const [lastCleanTime, setLastCleanTime] = useState<string>('Loading...');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchLastCleanTime = useCallback(async () => {
     try {
       const result = await invoke<string>('get_last_clean_time');
       setLastCleanTime(result);
+      return result;
     } catch {
       setLastCleanTime('Unknown');
+      return 'Unknown';
     }
   }, []);
 
-  useEffect(() => {
-    fetchLastCleanTime();
-
-    // Refresh every minute
-    const interval = setInterval(fetchLastCleanTime, 60000);
-    return () => clearInterval(interval);
+  // Call this after cleaning to reset the timer
+  const refresh = useCallback(async () => {
+    // Clear existing timer
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    // Fetch immediately
+    await fetchLastCleanTime();
+    // Trigger effect to restart timer from now
+    setRefreshTrigger(prev => prev + 1);
   }, [fetchLastCleanTime]);
 
-  return { lastCleanTime, refresh: fetchLastCleanTime };
+  useEffect(() => {
+    const scheduleNextFetch = async () => {
+      const result = await fetchLastCleanTime();
+      // Update every 10 seconds when showing seconds, every 60 seconds otherwise
+      const interval = result.includes('second') ? 10000 : 60000;
+      timeoutRef.current = setTimeout(scheduleNextFetch, interval);
+    };
+
+    scheduleNextFetch();
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [fetchLastCleanTime, refreshTrigger]);
+
+  return { lastCleanTime, refresh };
 }
