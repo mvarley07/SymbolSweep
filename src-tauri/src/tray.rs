@@ -170,9 +170,20 @@ pub fn update_tray_icon<R: Runtime>(
 
 /// Position window in top-right corner (near menu bar)
 fn position_window_near_tray<R: Runtime>(window: &tauri::WebviewWindow<R>) {
-    // Use TopRight position which is reliable and near the menu bar area
-    // TrayBottomCenter can panic if tray position is not available
-    let _ = window.move_window(Position::TopRight);
+    use tauri::PhysicalPosition;
+
+    // Calculate fixed position in top-right corner
+    // This avoids the flash caused by the positioner plugin's async behavior
+    if let Ok(Some(monitor)) = window.primary_monitor() {
+        let screen_size = monitor.size();
+        let window_size = window.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 345));
+        let x = screen_size.width as i32 - window_size.width as i32 - 10;
+        let y = 30; // Below menu bar
+        let _ = window.set_position(PhysicalPosition::new(x, y));
+    } else {
+        // Fallback to positioner plugin
+        let _ = window.move_window(Position::TopRight);
+    }
 }
 
 /// Send a macOS notification with multiple fallback methods
