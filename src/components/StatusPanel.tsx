@@ -49,19 +49,6 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
   const [bannerFading, setBannerFading] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
-
-  // Listen for system theme changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
-  const logoSrc = '/logo.png';
 
   // Auto-dismiss success banner after 5 seconds (only if something was cleaned)
   useEffect(() => {

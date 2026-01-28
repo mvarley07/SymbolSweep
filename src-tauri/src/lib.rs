@@ -215,10 +215,32 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .manage(AppState::default())
         .setup(|app| {
-            // Create system tray
+            // Check if launched at login (with --hidden flag)
+            // When launched at login, the system tray may not be ready immediately
+            let args: Vec<String> = std::env::args().collect();
+            let launched_at_login = args.iter().any(|arg| arg == "--hidden");
+
+            if launched_at_login {
+                // Wait for system tray to be ready when launched at login
+                // macOS needs time to initialize the menu bar after login
+                std::thread::sleep(std::time::Duration::from_secs(3));
+            }
+
+            // Create system tray with retry logic
             // IMPORTANT: Store the tray icon to prevent it from being dropped
             // Box::leak keeps it alive for the entire app lifetime
-            let tray = create_tray(app.handle())?;
+            let mut tray_result = create_tray(app.handle());
+            let mut retries = 0;
+            const MAX_RETRIES: u32 = 5;
+
+            while tray_result.is_err() && retries < MAX_RETRIES {
+                retries += 1;
+                eprintln!("Tray creation failed, retry {}/{}", retries, MAX_RETRIES);
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                tray_result = create_tray(app.handle());
+            }
+
+            let tray = tray_result?;
             Box::leak(Box::new(tray));
 
             // Get initial status and update tray (respecting debug mode)
