@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
@@ -8,8 +9,36 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 use crate::cache_monitor::{CacheState, CacheStatus};
 
+/// Activate the macOS app so it receives first-click events
+#[cfg(target_os = "macos")]
+fn activate_app() {
+    use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy};
+    use cocoa::base::nil;
+    unsafe {
+        let app = NSApp();
+        // Activate ignoring other apps to bring to front
+        app.activateIgnoringOtherApps_(true);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn activate_app() {
+    // No-op on other platforms
+}
+
 /// Tray icon identifier
 pub const TRAY_ID: &str = "symbolsweep-tray";
+
+/// Track last show time to prevent rapid toggle (debounce)
+static LAST_SHOW_TIME: AtomicU64 = AtomicU64::new(0);
+
+/// Get current time in milliseconds
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 
 /// Create the system tray with minimal text-only display
 /// Returns the TrayIcon which MUST be stored to prevent it from being dropped
@@ -50,22 +79,26 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
                 ..
             } = event
             {
-                // Left click - toggle window
                 if let Some(window) = tray.app_handle().get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
-                    } else {
-                        // Position BEFORE showing to avoid focus flicker
-                        position_window_near_tray(&window);
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+                    // ALWAYS show the window on tray click - never hide
+                    // User can press Escape or click outside to dismiss
+                    // This avoids the macOS tray click visibility bug entirely
+                    LAST_SHOW_TIME.store(current_time_ms(), Ordering::SeqCst);
+
+                    // Activate the app first so it receives first-click events
+                    activate_app();
+
+                    position_window_near_tray(&window);
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
             }
         })
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 if let Some(window) = app.get_webview_window("main") {
+                    LAST_SHOW_TIME.store(current_time_ms(), Ordering::SeqCst);
+                    activate_app();
                     position_window_near_tray(&window);
                     let _ = window.show();
                     let _ = window.set_focus();
@@ -140,10 +173,11 @@ pub fn update_tray_icon<R: Runtime>(
     Ok(())
 }
 
-/// Position window below the tray icon using the positioner plugin
+/// Position window in top-right corner (near menu bar)
 fn position_window_near_tray<R: Runtime>(window: &tauri::WebviewWindow<R>) {
-    // Use the positioner plugin to anchor the window below the tray icon
-    let _ = window.move_window(Position::TrayBottomCenter);
+    // Use TopRight position which is reliable and near the menu bar area
+    // TrayBottomCenter can panic if tray position is not available
+    let _ = window.move_window(Position::TopRight);
 }
 
 /// Send a macOS notification with sound

@@ -8,6 +8,10 @@
     "core:event:default",
     "core:event:allow-emit",
     "core:event:allow-listen",
+    "core:window:allow-set-size",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
     "opener:default",
     "shell:default"
   ]

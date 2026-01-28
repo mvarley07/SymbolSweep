@@ -240,10 +240,6 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
           )}
         </section>
       </div>
-
-      <footer className="settings-footer">
-        <p className="version">SymbolSweep v0.1.0</p>
-      </footer>
     </div>
   );
 }

@@ -1,22 +1,24 @@
+/* SettingsPanel - Compact System Utility Design */
+
 .settings-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 16px;
+  padding: 10px 14px 12px 12px;
   box-sizing: border-box;
+  height: 100%;
 }
 
 .settings-header {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .settings-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-md);
   font-weight: 600;
   flex: 1;
   text-align: center;
@@ -25,7 +27,7 @@
 .back-btn {
   background: none;
   border: none;
-  padding: 4px;
+  padding: 3px;
   cursor: pointer;
   color: inherit;
   opacity: 0.6;
@@ -42,7 +44,7 @@
 }
 
 .header-spacer {
-  width: 28px;
+  width: 24px;
 }
 
 .settings-loading {
@@ -55,29 +57,31 @@
 .settings-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
-/* Sections */
+/* Sections - Tight spacing */
 .settings-section {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .settings-section h2 {
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: rgba(128, 128, 128, 0.7);
-  margin: 0 0 8px 0;
+  color: var(--text-tertiary);
+  margin: 0 0 4px 0;
 }
 
-/* Setting Rows */
+/* Setting Rows - Compact */
 .setting-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 10px;
 }
 
 .setting-row:last-child {
@@ -85,92 +89,113 @@
 }
 
 .setting-row.nested {
-  padding-left: 16px;
+  padding-left: 12px;
   background: rgba(128, 128, 128, 0.05);
-  margin: 0 -16px;
-  padding-right: 16px;
+  margin: 0 -12px;
+  padding-right: 12px;
 }
 
 .setting-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .setting-info label {
-  font-size: 14px;
+  font-size: var(--font-sm);
   font-weight: 500;
   cursor: pointer;
+  line-height: 1.3;
 }
 
 .setting-description {
-  font-size: 11px;
-  color: rgba(128, 128, 128, 0.7);
+  font-size: 9px;
+  color: var(--text-tertiary);
+  line-height: 1.2;
+  margin-top: 1px;
 }
 
-/* Toggle Switch */
-.toggle {
+/* Toggle Switch - macOS native size (compact) */
+.settings-panel .toggle {
   position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
+  display: inline-flex;
+  width: 26px;
+  height: 15px;
   flex-shrink: 0;
 }
 
-.toggle input {
+.settings-panel .toggle input {
   opacity: 0;
   width: 0;
   height: 0;
+  position: absolute;
 }
 
-.toggle-slider {
+.settings-panel .toggle .toggle-slider {
   position: absolute;
   cursor: pointer;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(128, 128, 128, 0.3);
-  transition: 0.3s;
-  border-radius: 24px;
+  width: 26px;
+  height: 15px;
+  background-color: rgba(120, 120, 128, 0.32);
+  transition: background-color 0.2s ease;
+  border-radius: 8px;
 }
 
-.toggle-slider::before {
+.settings-panel .toggle .toggle-slider::before {
   position: absolute;
   content: "";
-  height: 20px;
-  width: 20px;
+  height: 11px;
+  width: 11px;
   left: 2px;
   bottom: 2px;
   background-color: white;
-  transition: 0.3s;
+  transition: transform 0.2s ease;
   border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.toggle input:checked + .toggle-slider {
-  background-color: #34c759;
+.settings-panel .toggle input:checked + .toggle-slider {
+  background-color: var(--accent);
 }
 
-.toggle input:checked + .toggle-slider::before {
-  transform: translateX(20px);
+.settings-panel .toggle input:checked + .toggle-slider::before {
+  transform: translateX(11px);
 }
 
-.toggle input:disabled + .toggle-slider {
+.settings-panel .toggle input:disabled + .toggle-slider {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* Select */
+/* Select / Dropdown - Compact */
 select {
-  padding: 6px 10px;
-  font-size: 13px;
-  border: 1px solid rgba(128, 128, 128, 0.3);
-  border-radius: 6px;
-  background: rgba(128, 128, 128, 0.1);
-  color: inherit;
+  padding: 4px 22px 4px 8px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  border: 1px solid var(--border-medium);
+  border-radius: 5px;
+  background-color: var(--bg-secondary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  color: var(--text-primary);
   cursor: pointer;
-  min-width: 100px;
+  min-width: 90px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  transition: border-color 0.15s ease;
+}
+
+select:hover {
+  border-color: var(--border-medium);
+  background-color: var(--bg-hover);
 }
 
 select:disabled {
@@ -180,98 +205,82 @@ select:disabled {
 
 select:focus {
   outline: none;
-  border-color: #007aff;
+  border-color: var(--accent);
 }
 
-/* Footer */
-.settings-footer {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid rgba(128, 128, 128, 0.2);
-  text-align: center;
-}
-
-.version {
-  font-size: 11px;
-  color: rgba(128, 128, 128, 0.5);
-  margin: 0;
+select option {
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 /* Debug Section */
 .debug-section {
-  border-top: 1px dashed rgba(128, 128, 128, 0.3);
-  padding-top: 12px;
-  margin-top: 8px;
+  border-top: 1px dashed var(--border-medium);
+  padding-top: 6px;
+  margin-top: 4px;
 }
 
 .debug-section h2 {
-  color: rgba(255, 149, 0, 0.8);
+  color: var(--status-warning);
 }
 
 .debug-sizes {
-  padding: 12px 0;
+  padding: 4px 0;
 }
 
 .debug-label {
-  font-size: 12px;
-  color: rgba(128, 128, 128, 0.7);
-  margin: 0 0 8px 0;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  margin: 0 0 4px 0;
 }
 
 .debug-buttons {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 3px;
 }
 
 .debug-btn {
-  padding: 8px 4px;
-  font-size: 12px;
+  padding: 4px 3px;
+  font-size: 9px;
   font-weight: 600;
-  border: 1px solid rgba(128, 128, 128, 0.3);
-  border-radius: 6px;
-  background: rgba(128, 128, 128, 0.1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-secondary);
   color: inherit;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .debug-btn:hover:not(:disabled) {
-  background: rgba(128, 128, 128, 0.2);
+  background: var(--bg-hover);
 }
 
 .debug-btn.active {
-  background: #007aff;
-  border-color: #007aff;
+  background: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
 
 .debug-btn.warning {
-  border-color: rgba(255, 149, 0, 0.5);
+  border-color: var(--status-warning-glow);
 }
 
 .debug-btn.warning.active {
-  background: #ff9500;
-  border-color: #ff9500;
+  background: var(--status-warning);
+  border-color: var(--status-warning);
 }
 
 .debug-btn.critical {
-  border-color: rgba(255, 59, 48, 0.5);
+  border-color: var(--status-critical-glow);
 }
 
 .debug-btn.critical.active {
-  background: #ff3b30;
-  border-color: #ff3b30;
+  background: var(--status-critical);
+  border-color: var(--status-critical);
 }
 
 .debug-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* Dark mode adjustments for select */
-@media (prefers-color-scheme: dark) {
-  select {
-    background: rgba(255, 255, 255, 0.1);
-  }
 }

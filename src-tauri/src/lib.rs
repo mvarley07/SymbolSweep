@@ -5,20 +5,8 @@ mod cache_monitor;
 mod scheduler;
 mod tray;
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
-
-/// Track when window was last shown (to debounce focus-loss hiding)
-static WINDOW_SHOWN_AT: AtomicU64 = AtomicU64::new(0);
-
-fn current_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 
 use cache_cleaner::{clean_cache, get_log_file_path, reindex_spotlight, CleanResult};
 use cache_monitor::{get_cache_status, get_combined_cache_status, get_simulated_status, is_daemon_running, CacheStatus};
@@ -121,6 +109,12 @@ fn update_settings(state: tauri::State<AppState>, settings: Settings) -> Result<
 fn get_last_clean_time(state: tauri::State<AppState>) -> String {
     let settings = state.settings.lock().unwrap();
     time_since_last_clean(&settings)
+}
+
+/// Quit the application
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
 }
 
 // ============================================================================
@@ -259,30 +253,18 @@ pub fn run() {
                 // Make window float above others
                 let _ = window.set_always_on_top(true);
 
-                // Hide from dock on macOS
-                #[cfg(target_os = "macos")]
-                {
-                    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-                }
+                // Note: LSUIElement in Info.plist handles hiding from dock
 
-                // Close window when it loses focus (menu bar app behavior)
-                // But ignore focus loss within 300ms of showing (debounce tray click)
+                // Hide window when it loses focus (click outside)
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
-                    match event {
-                        tauri::WindowEvent::Focused(true) => {
-                            // Window gained focus - record timestamp
-                            WINDOW_SHOWN_AT.store(current_millis(), Ordering::Relaxed);
-                        }
-                        tauri::WindowEvent::Focused(false) => {
-                            // Only hide if window has been visible for at least 300ms
-                            let shown_at = WINDOW_SHOWN_AT.load(Ordering::Relaxed);
-                            let now = current_millis();
-                            if now - shown_at > 300 {
-                                let _ = window_clone.hide();
-                            }
-                        }
-                        _ => {}
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        // Small delay to prevent race with tray click
+                        let w = window_clone.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            let _ = w.hide();
+                        });
                     }
                 });
             }
@@ -299,7 +281,21 @@ pub fn run() {
             get_settings,
             update_settings,
             get_last_clean_time,
+            quit_app,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Handle dock icon click on macOS
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    // Position near tray - use TopRight as fallback since TrayBottomCenter can panic
+                    use tauri_plugin_positioner::{Position, WindowExt};
+                    let _ = window.move_window(Position::TopRight);
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }

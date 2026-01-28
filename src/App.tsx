@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { StatusPanel } from './components/StatusPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -7,6 +8,13 @@ import { useSettings } from './hooks/useSettings';
 import './App.css';
 
 type View = 'welcome' | 'status' | 'settings';
+
+// Window heights for different views
+const VIEW_HEIGHTS = {
+  welcome: 320,
+  status: 275,
+  settings: 400,
+};
 
 function App() {
   const { settings, loading, updateSettings } = useSettings();
@@ -18,6 +26,26 @@ function App() {
       setView('welcome');
     }
   }, [loading, settings.first_run_completed]);
+
+  // Resize window when view changes
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    const height = VIEW_HEIGHTS[view];
+    appWindow.setSize({ width: 280, height, type: 'Logical' });
+  }, [view]);
+
+  // Handle Escape key and click outside to close window
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        getCurrentWindow().hide();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Focus-loss hiding is now handled in Rust (lib.rs) for reliability
 
   // Listen for clean request from tray menu
   useEffect(() => {

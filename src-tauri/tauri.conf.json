@@ -15,12 +15,12 @@
       {
         "title": "SymbolSweep",
         "label": "main",
-        "width": 320,
-        "height": 480,
-        "minWidth": 320,
-        "minHeight": 480,
-        "maxWidth": 320,
-        "maxHeight": 480,
+        "width": 280,
+        "height": 275,
+        "minWidth": 280,
+        "minHeight": 200,
+        "maxWidth": 280,
+        "maxHeight": 420,
         "resizable": false,
         "decorations": false,
         "transparent": true,
@@ -47,7 +47,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "infoPlist": "Info.plist"
     }
   }
 }
