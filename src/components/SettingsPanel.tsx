@@ -219,7 +219,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
             <div className="setting-info">
               <label htmlFor="launch-login">Launch at login</label>
               <span className="setting-description">
-                Start SymbolSweep when you log in
+                Runs quietly in your menu bar after login
               </span>
             </div>
             <label className="toggle">
