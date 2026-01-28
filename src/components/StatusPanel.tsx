@@ -45,6 +45,7 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
   const [bannerFading, setBannerFading] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches
   );
@@ -106,16 +107,19 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
   };
 
   const performClean = async () => {
+    setIsLoading(true);
     try {
-      // Add minimum delay so spinner is visible even for fast operations
+      // Run clean and ensure minimum 1.5 second loading state for visibility
       await Promise.all([
         clean(false),
-        new Promise(resolve => setTimeout(resolve, 500))
+        new Promise(resolve => setTimeout(resolve, 1500))
       ]);
       refresh();
       await refreshLastClean();
     } catch (err) {
       console.error('Clean failed:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -186,14 +190,8 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
           <div className="detail-row">
             <span className="detail-label">Last cleaned</span>
             <span className="detail-value">
-              {cleaning ? (
-                <span className="cleaning-indicator">
-                  <svg className="mini-spinner" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3"/>
-                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                  </svg>
-                  Cleaning...
-                </span>
+              {isLoading ? (
+                <span className="skeleton-loader" />
               ) : (
                 lastCleanTime
               )}
@@ -209,18 +207,14 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
         )}
 
         <button
-          className={`clean-btn ${stateClass}`}
+          className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
           onClick={handleCleanClick}
-          disabled={cleaning || !status.exists}
+          disabled={isLoading || cleaning || !status.exists}
         >
-          {cleaning ? (
-            <>
-              <svg className="btn-spinner" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3"/>
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-              </svg>
-              Cleaning...
-            </>
+          {isLoading ? (
+            <span className="loading-text">
+              Cleaning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
+            </span>
           ) : (
             'Clean Now'
           )}
