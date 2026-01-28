@@ -401,9 +401,17 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 if let Some(window) = app.get_webview_window("main") {
-                    // Position near tray - use TopRight as fallback since TrayBottomCenter can panic
-                    use tauri_plugin_positioner::{Position, WindowExt};
-                    let _ = window.move_window(Position::TopRight);
+                    use tauri::PhysicalPosition;
+                    // Get screen size and position window at top-right before showing
+                    if let Ok(monitor) = window.primary_monitor() {
+                        if let Some(monitor) = monitor {
+                            let screen_size = monitor.size();
+                            let window_size = window.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 345));
+                            let x = screen_size.width as i32 - window_size.width as i32 - 10;
+                            let y = 30; // Below menu bar
+                            let _ = window.set_position(PhysicalPosition::new(x, y));
+                        }
+                    }
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
