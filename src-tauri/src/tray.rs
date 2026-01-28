@@ -130,20 +130,15 @@ fn create_minimal_icon() -> Result<Image<'static>, Box<dyn std::error::Error>> {
 }
 
 /// Format the tray title with status indicator
-/// Uses colored circle emoji for status, followed by size
+/// Uses flat colored circles - renders cleanly on macOS
 fn format_tray_title(status: &CacheStatus) -> String {
     let indicator = match status.state {
-        CacheState::Normal => "●", // Will appear in system color (white/black)
-        CacheState::Warning => "🟡",
-        CacheState::Critical => "🔴",
+        CacheState::Normal => "🟢",   // Green - healthy
+        CacheState::Warning => "🟠",  // Orange - attention needed
+        CacheState::Critical => "🔴", // Red - urgent
     };
 
-    // For normal state, just show the size without indicator for cleaner look
-    if status.state == CacheState::Normal {
-        status.size_display.clone()
-    } else {
-        format!("{} {}", indicator, status.size_display)
-    }
+    format!("{} {}", indicator, status.size_display)
 }
 
 /// Update tray with current cache status

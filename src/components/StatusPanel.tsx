@@ -221,11 +221,11 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
         </button>
 
         {status.state === 'Warning' && (
-          <p className="warning-text">Cache is getting large. Consider cleaning soon.</p>
+          <p className="warning-text">Cache getting large – consider cleaning</p>
         )}
 
         {status.state === 'Critical' && (
-          <p className="critical-text">Cache is critically large! Clean immediately to prevent issues.</p>
+          <p className="critical-text">Cache critically large – clean now!</p>
         )}
       </div>
     </div>

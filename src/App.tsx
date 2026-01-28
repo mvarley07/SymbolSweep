@@ -12,7 +12,7 @@ type View = 'welcome' | 'status' | 'settings';
 // Window heights for different views
 const VIEW_HEIGHTS = {
   welcome: 320,
-  status: 275,
+  status: 320,
   settings: 400,
 };
 

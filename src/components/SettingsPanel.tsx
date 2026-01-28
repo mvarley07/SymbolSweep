@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { WARNING_THRESHOLD, CRITICAL_THRESHOLD, DEBUG_SIZES } from '../types';
 import './SettingsPanel.css';
@@ -21,6 +22,31 @@ function formatInterval(secs: number): string {
 
 export function SettingsPanel({ onBack }: SettingsPanelProps) {
   const { settings, loading, saving, updateSetting } = useSettings();
+  const [debugUnlocked, setDebugUnlocked] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
+  const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleVersionTap = () => {
+    if (debugUnlocked) return;
+
+    // Clear existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+
+    if (newCount >= 5) {
+      setDebugUnlocked(true);
+      setTapCount(0);
+    } else {
+      // Reset after 2 seconds of no taps
+      tapTimeoutRef.current = setTimeout(() => {
+        setTapCount(0);
+      }, 2000);
+    }
+  };
 
   if (loading) {
     return (
@@ -181,64 +207,70 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
           </div>
         </section>
 
-        <section className="settings-section debug-section">
-          <h2>Debug</h2>
+        {debugUnlocked && (
+          <section className="settings-section debug-section">
+            <h2>Debug</h2>
 
-          <div className="setting-row">
-            <div className="setting-info">
-              <label htmlFor="debug-mode">Debug mode</label>
-              <span className="setting-description">
-                Simulate cache sizes to test UI states
-              </span>
-            </div>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                id="debug-mode"
-                checked={settings.debug_mode}
-                onChange={(e) => updateSetting('debug_mode', e.target.checked)}
-                disabled={saving}
-              />
-              <span className="toggle-slider" />
-            </label>
-          </div>
-
-          {settings.debug_mode && (
-            <div className="debug-sizes">
-              <p className="debug-label">Simulated cache size:</p>
-              <div className="debug-buttons">
-                <button
-                  className={`debug-btn ${settings.debug_simulated_size === DEBUG_SIZES.EMPTY ? 'active' : ''}`}
-                  onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.EMPTY)}
-                  disabled={saving}
-                >
-                  0 B
-                </button>
-                <button
-                  className={`debug-btn ${settings.debug_simulated_size === DEBUG_SIZES.SMALL ? 'active' : ''}`}
-                  onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.SMALL)}
-                  disabled={saving}
-                >
-                  3GB
-                </button>
-                <button
-                  className={`debug-btn warning ${settings.debug_simulated_size === DEBUG_SIZES.WARNING ? 'active' : ''}`}
-                  onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.WARNING)}
-                  disabled={saving}
-                >
-                  7GB
-                </button>
-                <button
-                  className={`debug-btn critical ${settings.debug_simulated_size === DEBUG_SIZES.CRITICAL ? 'active' : ''}`}
-                  onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.CRITICAL)}
-                  disabled={saving}
-                >
-                  15GB
-                </button>
+            <div className="setting-row">
+              <div className="setting-info">
+                <label htmlFor="debug-mode">Debug mode</label>
+                <span className="setting-description">
+                  Simulate cache sizes to test UI states
+                </span>
               </div>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  id="debug-mode"
+                  checked={settings.debug_mode}
+                  onChange={(e) => updateSetting('debug_mode', e.target.checked)}
+                  disabled={saving}
+                />
+                <span className="toggle-slider" />
+              </label>
             </div>
-          )}
-        </section>
+
+            {settings.debug_mode && (
+              <div className="debug-sizes">
+                <p className="debug-label">Simulated cache size:</p>
+                <div className="debug-buttons">
+                  <button
+                    className={`debug-btn ${settings.debug_simulated_size === DEBUG_SIZES.EMPTY ? 'active' : ''}`}
+                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.EMPTY)}
+                    disabled={saving}
+                  >
+                    0 B
+                  </button>
+                  <button
+                    className={`debug-btn ${settings.debug_simulated_size === DEBUG_SIZES.SMALL ? 'active' : ''}`}
+                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.SMALL)}
+                    disabled={saving}
+                  >
+                    3GB
+                  </button>
+                  <button
+                    className={`debug-btn warning ${settings.debug_simulated_size === DEBUG_SIZES.WARNING ? 'active' : ''}`}
+                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.WARNING)}
+                    disabled={saving}
+                  >
+                    7GB
+                  </button>
+                  <button
+                    className={`debug-btn critical ${settings.debug_simulated_size === DEBUG_SIZES.CRITICAL ? 'active' : ''}`}
+                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.CRITICAL)}
+                    disabled={saving}
+                  >
+                    15GB
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        <footer className="settings-footer" onClick={handleVersionTap}>
+          <span className="version-text">v0.1.0</span>
+        </footer>
       </div>
     </div>
   );
