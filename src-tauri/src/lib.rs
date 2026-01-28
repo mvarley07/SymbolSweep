@@ -299,15 +299,6 @@ pub fn run() {
                     if should_auto_clean {
                         let show_notifications = settings.lock().unwrap().show_notifications;
 
-                        // Notify about auto-clean starting
-                        if show_notifications {
-                            send_notification(
-                                &app_handle,
-                                "SymbolSweep",
-                                &format!("Auto-cleaning cache ({})...", status.size_display),
-                            );
-                        }
-
                         // Perform clean
                         if let Ok(result) = clean_cache(false) {
                             // Update last clean timestamp and reset debug size
@@ -331,12 +322,12 @@ pub fn run() {
                             // Emit clean result
                             let _ = app_handle.emit("auto-clean-completed", &result);
 
-                            // Notify about completion
-                            if show_notifications {
+                            // Notify about completion (only if something was actually freed)
+                            if show_notifications && result.bytes_freed > 0 {
                                 send_notification(
                                     &app_handle,
                                     "SymbolSweep",
-                                    &format!("Freed {}", result.bytes_freed_display),
+                                    &format!("Cleaned {} of cache", result.bytes_freed_display),
                                 );
                             }
                         }

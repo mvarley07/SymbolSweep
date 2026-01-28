@@ -218,15 +218,21 @@ fn position_window_near_tray<R: Runtime>(window: &tauri::WebviewWindow<R>) {
 pub fn send_notification<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
 
-    // Try Tauri notification plugin first (works in signed/production builds)
-    if app.notification()
+    // Try Tauri notification plugin first
+    let result = app.notification()
         .builder()
         .title(title)
         .body(body)
-        .show()
-        .is_ok()
-    {
-        return;
+        .show();
+
+    match &result {
+        Ok(_) => {
+            // In release builds, trust that Tauri notification worked
+            #[cfg(not(debug_assertions))]
+            return;
+            // In debug builds, fall through to terminal-notifier since Tauri silently fails for unsigned apps
+        }
+        Err(_) => {}
     }
 
     #[cfg(target_os = "macos")]
@@ -241,7 +247,7 @@ pub fn send_notification<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str
             .arg("default")
             .output();
 
-        if matches!(result, Ok(ref output) if output.status.success()) {
+        if matches!(&result, Ok(output) if output.status.success()) {
             return;
         }
 
