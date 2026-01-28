@@ -142,9 +142,17 @@ pub fn run() {
             let tray = create_tray(app.handle())?;
             Box::leak(Box::new(tray));
 
-            // Get initial status and update tray
-            let status = get_cache_status();
-            let _ = update_tray_icon(app.handle(), &status);
+            // Get initial status and update tray (respecting debug mode)
+            let state = app.state::<AppState>();
+            let initial_status = {
+                let settings = state.settings.lock().unwrap();
+                if settings.debug_mode {
+                    get_simulated_status(settings.debug_simulated_size)
+                } else {
+                    get_cache_status()
+                }
+            };
+            let _ = update_tray_icon(app.handle(), &initial_status);
 
             // Set up background monitoring
             let app_handle = app.handle().clone();
