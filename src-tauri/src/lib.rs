@@ -156,31 +156,10 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
-/// Test notification (debug only) - sends a test notification via terminal-notifier
+/// Test notification (debug only) - uses the same notification path as real notifications
 #[tauri::command]
-fn test_notification() {
-    #[cfg(target_os = "macos")]
-    {
-        let result = std::process::Command::new("terminal-notifier")
-            .arg("-title")
-            .arg("SymbolSweep Test")
-            .arg("-message")
-            .arg("Notifications are working!")
-            .arg("-sound")
-            .arg("default")
-            .output();
-
-        match result {
-            Ok(output) => {
-                if output.status.success() {
-                    eprintln!("Notification sent via terminal-notifier");
-                } else {
-                    eprintln!("terminal-notifier failed: {}", String::from_utf8_lossy(&output.stderr));
-                }
-            }
-            Err(e) => eprintln!("Failed to run terminal-notifier: {}", e),
-        }
-    }
+fn test_notification(app: tauri::AppHandle) {
+    tray::send_notification(&app, "SymbolSweep Test", "Notifications are working!");
 }
 
 /// Open macOS System Settings to the Notifications pane
@@ -269,6 +248,11 @@ pub fn run() {
             let settings = Arc::clone(&state.settings);
 
             std::thread::spawn(move || {
+                // Track if we've already notified for warning/critical this session
+                // Reset when state drops back to normal
+                let mut warning_notified = false;
+                let mut critical_notified = false;
+
                 loop {
                     // Get monitoring interval (read before sleep)
                     let interval = {
@@ -313,12 +297,16 @@ pub fn run() {
                     };
 
                     if should_auto_clean {
-                        // Notify about auto-clean
-                        send_notification(
-                            &app_handle,
-                            "SymbolSweep",
-                            &format!("Auto-cleaning cache ({})...", status.size_display),
-                        );
+                        let show_notifications = settings.lock().unwrap().show_notifications;
+
+                        // Notify about auto-clean starting
+                        if show_notifications {
+                            send_notification(
+                                &app_handle,
+                                "SymbolSweep",
+                                &format!("Auto-cleaning cache ({})...", status.size_display),
+                            );
+                        }
 
                         // Perform clean
                         if let Ok(result) = clean_cache(false) {
@@ -344,29 +332,45 @@ pub fn run() {
                             let _ = app_handle.emit("auto-clean-completed", &result);
 
                             // Notify about completion
-                            send_notification(
-                                &app_handle,
-                                "SymbolSweep",
-                                &format!("Freed {}", result.bytes_freed_display),
-                            );
+                            if show_notifications {
+                                send_notification(
+                                    &app_handle,
+                                    "SymbolSweep",
+                                    &format!("Freed {}", result.bytes_freed_display),
+                                );
+                            }
                         }
                     }
 
-                    // Check for warning/critical thresholds and notify
+                    // Check for warning/critical thresholds and notify (once per escalation)
                     let show_notifications = settings.lock().unwrap().show_notifications;
                     if show_notifications {
                         match status.state {
                             cache_monitor::CacheState::Warning => {
-                                // Only notify once per session (could track with a flag)
+                                if !warning_notified {
+                                    send_notification(
+                                        &app_handle,
+                                        "SymbolSweep - Warning",
+                                        &format!("Cache at {} - consider cleaning soon", status.size_display),
+                                    );
+                                    warning_notified = true;
+                                }
                             }
                             cache_monitor::CacheState::Critical => {
-                                send_notification(
-                                    &app_handle,
-                                    "SymbolSweep - Critical",
-                                    &format!("Cache at {} - cleaning recommended!", status.size_display),
-                                );
+                                if !critical_notified {
+                                    send_notification(
+                                        &app_handle,
+                                        "SymbolSweep - Critical",
+                                        &format!("Cache at {} - cleaning recommended!", status.size_display),
+                                    );
+                                    critical_notified = true;
+                                }
                             }
-                            _ => {}
+                            cache_monitor::CacheState::Normal => {
+                                // Reset flags when back to normal so user gets notified again next time
+                                warning_notified = false;
+                                critical_notified = false;
+                            }
                         }
                     }
                 }
