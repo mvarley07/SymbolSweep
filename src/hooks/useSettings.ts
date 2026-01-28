@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Settings } from '../types';
 
 const defaultSettings: Settings = {
@@ -61,6 +62,15 @@ export function useSettings() {
 
   useEffect(() => {
     fetchSettings();
+
+    // Listen for settings updates from backend (e.g., after clean resets debug size)
+    const unlisten = listen<Settings>('settings-updated', (event) => {
+      setSettings(event.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, [fetchSettings]);
 
   return {

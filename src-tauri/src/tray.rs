@@ -175,20 +175,50 @@ fn position_window_near_tray<R: Runtime>(window: &tauri::WebviewWindow<R>) {
     let _ = window.move_window(Position::TopRight);
 }
 
-/// Send a macOS notification with sound
-pub fn send_notification_with_sound(title: &str, body: &str, sound: &str) {
+/// Send a macOS notification with multiple fallback methods
+/// 1. Tauri plugin (works in signed production builds)
+/// 2. terminal-notifier (works if installed via Homebrew)
+/// 3. osascript (may require Script Editor permissions)
+pub fn send_notification<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
+    use tauri_plugin_notification::NotificationExt;
+
+    // Try Tauri notification plugin first (works in signed/production builds)
+    if app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .is_ok()
+    {
+        return;
+    }
+
     #[cfg(target_os = "macos")]
     {
+        // Fallback to terminal-notifier (works if installed)
+        let result = std::process::Command::new("terminal-notifier")
+            .arg("-title")
+            .arg(title)
+            .arg("-message")
+            .arg(body)
+            .arg("-sound")
+            .arg("default")
+            .output();
+
+        if matches!(result, Ok(ref output) if output.status.success()) {
+            return;
+        }
+
+        // Last resort: osascript
         let script = format!(
-            r#"display notification "{}" with title "{}" sound name "{}""#,
+            r#"display notification "{}" with title "{}" sound name "Glass""#,
             body.replace('"', r#"\""#),
             title.replace('"', r#"\""#),
-            sound
         );
-
         let _ = std::process::Command::new("osascript")
             .arg("-e")
             .arg(&script)
             .output();
     }
 }
+

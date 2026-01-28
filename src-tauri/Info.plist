@@ -8,5 +8,7 @@
     <string>SymbolSweep</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>SymbolSweep needs to send system notifications about cache status.</string>
 </dict>
 </plist>
