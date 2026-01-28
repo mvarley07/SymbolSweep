@@ -215,17 +215,8 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .manage(AppState::default())
         .setup(|app| {
-            // Check if launched at login (with --hidden flag)
-            // When launched at login, the system tray may not be ready immediately
-            let args: Vec<String> = std::env::args().collect();
-            let launched_at_login = args.iter().any(|arg| arg == "--hidden");
-
-            if launched_at_login {
-                // Brief wait for system tray to be ready when launched at login
-                std::thread::sleep(std::time::Duration::from_millis(500));
-            }
-
-            // Create system tray with retry logic
+            // Create system tray IMMEDIATELY with retry logic
+            // No initial delay - tray should appear as fast as possible
             // IMPORTANT: Store the tray icon to prevent it from being dropped
             // Box::leak keeps it alive for the entire app lifetime
             let mut tray_result = create_tray(app.handle());
@@ -235,24 +226,30 @@ pub fn run() {
             while tray_result.is_err() && retries < MAX_RETRIES {
                 retries += 1;
                 eprintln!("Tray creation failed, retry {}/{}", retries, MAX_RETRIES);
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                std::thread::sleep(std::time::Duration::from_millis(100));
                 tray_result = create_tray(app.handle());
             }
 
             let tray = tray_result?;
             Box::leak(Box::new(tray));
 
-            // Get initial status and update tray (respecting debug mode)
+            // Tray is now visible with placeholder "0 B"
+            // Get initial status in background to avoid blocking startup
+            let app_handle_init = app.handle().clone();
             let state = app.state::<AppState>();
-            let initial_status = {
-                let settings = state.settings.lock().unwrap();
-                if settings.debug_mode {
-                    get_simulated_status(settings.debug_simulated_size)
-                } else {
-                    get_cache_status()
-                }
-            };
-            let _ = update_tray_icon(app.handle(), &initial_status);
+            let settings_init = Arc::clone(&state.settings);
+            std::thread::spawn(move || {
+                let initial_status = {
+                    let settings = settings_init.lock().unwrap();
+                    if settings.debug_mode {
+                        get_simulated_status(settings.debug_simulated_size)
+                    } else {
+                        get_cache_status()
+                    }
+                };
+                let _ = update_tray_icon(&app_handle_init, &initial_status);
+                let _ = app_handle_init.emit("cache-status-update", &initial_status);
+            });
 
             // Sync autostart state with saved setting
             {

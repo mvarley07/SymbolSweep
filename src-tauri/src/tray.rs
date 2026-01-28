@@ -88,7 +88,13 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
                     // Activate the app first so it receives first-click events
                     activate_app();
 
+                    // Position window (this hides it first to prevent flash)
                     position_window_near_tray(&window);
+
+                    // Small delay to let macOS process the position change
+                    // before showing - prevents the flash/drift issue
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
@@ -100,6 +106,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
                     LAST_SHOW_TIME.store(current_time_ms(), Ordering::SeqCst);
                     activate_app();
                     position_window_near_tray(&window);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
@@ -169,17 +176,35 @@ pub fn update_tray_icon<R: Runtime>(
 }
 
 /// Position window in top-right corner (near menu bar)
+/// Uses fixed window dimensions to avoid measurement inconsistencies
 fn position_window_near_tray<R: Runtime>(window: &tauri::WebviewWindow<R>) {
     use tauri::PhysicalPosition;
 
-    // Calculate fixed position in top-right corner
-    // This avoids the flash caused by the positioner plugin's async behavior
+    // FIRST: Ensure window is hidden to prevent flash
+    let _ = window.hide();
+
+    // Use FIXED window dimensions (from tauri.conf.json) to avoid measurement issues
+    // when window is hidden - outer_size() can return wrong values
+    const WINDOW_WIDTH: i32 = 280;
+    const MARGIN_RIGHT: i32 = 10;
+    const MENU_BAR_HEIGHT: i32 = 30;
+
+    // Calculate position based on primary monitor
     if let Ok(Some(monitor)) = window.primary_monitor() {
         let screen_size = monitor.size();
-        let window_size = window.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 345));
-        let x = screen_size.width as i32 - window_size.width as i32 - 10;
-        let y = 30; // Below menu bar
-        let _ = window.set_position(PhysicalPosition::new(x, y));
+        let scale = monitor.scale_factor();
+
+        // Account for scale factor on Retina displays
+        let screen_width = (screen_size.width as f64 / scale) as i32;
+
+        let x = screen_width - WINDOW_WIDTH - MARGIN_RIGHT;
+        let y = MENU_BAR_HEIGHT;
+
+        // Set position (physical pixels on macOS)
+        let _ = window.set_position(PhysicalPosition::new(
+            (x as f64 * scale) as i32,
+            (y as f64 * scale) as i32,
+        ));
     } else {
         // Fallback to positioner plugin
         let _ = window.move_window(Position::TopRight);
