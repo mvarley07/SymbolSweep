@@ -334,8 +334,9 @@ pub fn run() {
                     }
 
                     // Check for warning/critical thresholds and notify (once per escalation)
+                    // Skip if auto-clean just ran - no point warning about something we just cleaned
                     let show_notifications = settings.lock().unwrap().show_notifications;
-                    if show_notifications {
+                    if show_notifications && !should_auto_clean {
                         match status.state {
                             cache_monitor::CacheState::Warning => {
                                 if !warning_notified {
@@ -357,12 +358,14 @@ pub fn run() {
                                     critical_notified = true;
                                 }
                             }
-                            cache_monitor::CacheState::Normal => {
-                                // Reset flags when back to normal so user gets notified again next time
-                                warning_notified = false;
-                                critical_notified = false;
-                            }
+                            _ => {}
                         }
+                    }
+
+                    // Reset notification flags when back to normal
+                    if matches!(status.state, cache_monitor::CacheState::Normal) {
+                        warning_notified = false;
+                        critical_notified = false;
                     }
                 }
             });
