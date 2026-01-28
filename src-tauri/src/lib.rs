@@ -221,9 +221,8 @@ pub fn run() {
             let launched_at_login = args.iter().any(|arg| arg == "--hidden");
 
             if launched_at_login {
-                // Wait for system tray to be ready when launched at login
-                // macOS needs time to initialize the menu bar after login
-                std::thread::sleep(std::time::Duration::from_secs(3));
+                // Brief wait for system tray to be ready when launched at login
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
 
             // Create system tray with retry logic
@@ -236,7 +235,7 @@ pub fn run() {
             while tray_result.is_err() && retries < MAX_RETRIES {
                 retries += 1;
                 eprintln!("Tray creation failed, retry {}/{}", retries, MAX_RETRIES);
-                std::thread::sleep(std::time::Duration::from_secs(2));
+                std::thread::sleep(std::time::Duration::from_millis(500));
                 tray_result = create_tray(app.handle());
             }
 
