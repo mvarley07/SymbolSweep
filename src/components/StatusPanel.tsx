@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useCacheStatus, useCleanCache, useLastCleanTime } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
@@ -62,7 +62,7 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
 
   // Auto-dismiss success banner after 5 seconds (only if something was cleaned)
   useEffect(() => {
-    if (cleanResult && !cleanResult.was_dry_run && cleanResult.files_cleaned > 0) {
+    if (cleanResult && !cleanResult.was_dry_run && cleanResult.files_removed > 0) {
       setShowBanner(true);
       setBannerFading(false);
 
@@ -199,7 +199,7 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
           </div>
         </div>
 
-        {showBanner && cleanResult && !cleanResult.was_dry_run && cleanResult.files_cleaned > 0 && (
+        {showBanner && cleanResult && !cleanResult.was_dry_run && cleanResult.files_removed > 0 && (
           <div className={`clean-result${bannerFading ? ' fading-out' : ''}`}>
             <span className="result-icon">✓</span>
             <span>{cleanResult.message}</span>

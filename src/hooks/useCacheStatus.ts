@@ -70,7 +70,7 @@ export function useCleanCache() {
 export function useLastCleanTime() {
   const [lastCleanTime, setLastCleanTime] = useState<string>('Loading...');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchLastCleanTime = useCallback(async () => {
     try {

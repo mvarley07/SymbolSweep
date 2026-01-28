@@ -101,10 +101,20 @@ fn get_settings(state: tauri::State<AppState>) -> Settings {
 
 /// Update settings
 #[tauri::command]
-fn update_settings(state: tauri::State<AppState>, settings: Settings) -> Result<(), String> {
+fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, settings: Settings) -> Result<(), String> {
     let mut current = state.settings.lock().unwrap();
-    *current = settings;
-    current.save()
+    *current = settings.clone();
+    current.save()?;
+
+    // Update tray immediately when settings change (especially debug mode)
+    let status = if settings.debug_mode {
+        get_simulated_status(settings.debug_simulated_size)
+    } else {
+        get_cache_status()
+    };
+    let _ = update_tray_icon(&app, &status);
+
+    Ok(())
 }
 
 /// Get time since last clean

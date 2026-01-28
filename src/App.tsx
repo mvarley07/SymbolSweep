@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { StatusPanel } from './components/StatusPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -31,7 +31,7 @@ function App() {
   useEffect(() => {
     const appWindow = getCurrentWindow();
     const height = VIEW_HEIGHTS[view];
-    appWindow.setSize({ width: 280, height, type: 'Logical' });
+    appWindow.setSize(new LogicalSize(280, height));
   }, [view]);
 
   // Handle Escape key and click outside to close window

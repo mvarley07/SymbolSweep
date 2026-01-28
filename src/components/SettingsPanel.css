@@ -244,7 +244,7 @@ select option {
   padding: 4px 3px;
   font-size: 9px;
   font-weight: 600;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid transparent;
   border-radius: 4px;
   background: var(--bg-secondary);
   color: inherit;
@@ -252,32 +252,37 @@ select option {
   transition: all 0.2s;
 }
 
-.debug-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.debug-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
+.debug-btn:hover:not(:disabled):not(.active) {
+  background: #10b981;
   color: white;
 }
 
-.debug-btn.warning {
-  border-color: var(--status-warning-glow);
+.debug-btn.active {
+  background: #10b981;
+  border-color: #10b981;
+  color: white;
+}
+
+.debug-btn.warning:hover:not(:disabled):not(.active) {
+  background: var(--status-warning);
+  color: white;
 }
 
 .debug-btn.warning.active {
   background: var(--status-warning);
   border-color: var(--status-warning);
+  color: white;
 }
 
-.debug-btn.critical {
-  border-color: var(--status-critical-glow);
+.debug-btn.critical:hover:not(:disabled):not(.active) {
+  background: var(--status-critical);
+  color: white;
 }
 
 .debug-btn.critical.active {
   background: var(--status-critical);
   border-color: var(--status-critical);
+  color: white;
 }
 
 .debug-btn:disabled {
