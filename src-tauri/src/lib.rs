@@ -7,11 +7,12 @@ mod tray;
 
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
+use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, reindex_spotlight, CleanResult};
 use cache_monitor::{get_cache_status, get_combined_cache_status, get_simulated_status, is_daemon_running, CacheStatus};
 use scheduler::{time_since_last_clean, Settings};
-use tray::{create_tray, send_notification_with_sound, update_tray_icon};
+use tray::{create_tray, send_notification, update_tray_icon};
 
 /// App state for sharing across commands
 pub struct AppState {
@@ -66,10 +67,19 @@ fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) ->
             if !dry_run && result.success {
                 if let Ok(mut settings) = state.settings.lock() {
                     settings.record_clean();
+                    // Reset debug simulated size to 0 after clean (makes debug mode more realistic)
+                    if settings.debug_mode {
+                        settings.debug_simulated_size = 0;
+                        let _ = settings.save();
+                        // Notify frontend to refresh settings
+                        let _ = app.emit("settings-updated", settings.clone());
+                    }
                 }
-                // Update tray icon immediately after clean
+                // Update tray icon immediately after clean (use real status since debug size is now 0)
                 let status = get_cache_status();
                 let _ = update_tray_icon(&app, &status);
+                // Emit status update so frontend refreshes
+                let _ = app.emit("cache-status-update", &status);
             }
             Ok(result)
         }
@@ -103,6 +113,11 @@ fn get_settings(state: tauri::State<AppState>) -> Settings {
 #[tauri::command]
 fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, settings: Settings) -> Result<(), String> {
     let mut current = state.settings.lock().unwrap();
+
+    // Check if launch_at_login changed
+    let launch_changed = current.launch_at_login != settings.launch_at_login;
+    let new_launch_value = settings.launch_at_login;
+
     *current = settings.clone();
     current.save()?;
 
@@ -113,6 +128,17 @@ fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, setting
         get_cache_status()
     };
     let _ = update_tray_icon(&app, &status);
+
+    // Handle launch at login change
+    if launch_changed {
+        use tauri_plugin_autostart::ManagerExt;
+        let autostart_manager = app.autolaunch();
+        if new_launch_value {
+            let _ = autostart_manager.enable();
+        } else {
+            let _ = autostart_manager.disable();
+        }
+    }
 
     Ok(())
 }
@@ -128,6 +154,44 @@ fn get_last_clean_time(state: tauri::State<AppState>) -> String {
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// Test notification (debug only) - sends a test notification via terminal-notifier
+#[tauri::command]
+fn test_notification() {
+    #[cfg(target_os = "macos")]
+    {
+        let result = std::process::Command::new("terminal-notifier")
+            .arg("-title")
+            .arg("SymbolSweep Test")
+            .arg("-message")
+            .arg("Notifications are working!")
+            .arg("-sound")
+            .arg("default")
+            .output();
+
+        match result {
+            Ok(output) => {
+                if output.status.success() {
+                    eprintln!("Notification sent via terminal-notifier");
+                } else {
+                    eprintln!("terminal-notifier failed: {}", String::from_utf8_lossy(&output.stderr));
+                }
+            }
+            Err(e) => eprintln!("Failed to run terminal-notifier: {}", e),
+        }
+    }
+}
+
+/// Open macOS System Settings to the Notifications pane
+#[tauri::command]
+fn open_notification_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+            .spawn();
+    }
 }
 
 // ============================================================================
@@ -147,6 +211,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .manage(AppState::default())
         .setup(|app| {
             // Create system tray
@@ -167,6 +233,18 @@ pub fn run() {
             };
             let _ = update_tray_icon(app.handle(), &initial_status);
 
+            // Sync autostart state with saved setting
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let autostart_manager = app.autolaunch();
+                let settings = state.settings.lock().unwrap();
+                if settings.launch_at_login {
+                    let _ = autostart_manager.enable();
+                } else {
+                    let _ = autostart_manager.disable();
+                }
+            }
+
             // Set up background monitoring
             let app_handle = app.handle().clone();
             let state = app.state::<AppState>();
@@ -174,20 +252,23 @@ pub fn run() {
 
             std::thread::spawn(move || {
                 loop {
-                    // Get monitoring interval and debug settings
-                    let (interval, debug_mode, debug_size) = {
+                    // Get monitoring interval (read before sleep)
+                    let interval = {
                         let s = settings.lock().unwrap();
-                        (s.monitor_interval_secs, s.debug_mode, s.debug_simulated_size)
+                        s.monitor_interval_secs
                     };
 
                     // Sleep first (so we don't immediately check on startup)
                     std::thread::sleep(std::time::Duration::from_secs(interval));
 
-                    // Get current status (respecting debug mode)
-                    let status = if debug_mode {
-                        get_simulated_status(debug_size)
-                    } else {
-                        get_cache_status()
+                    // Get current status (read debug settings FRESH after sleep)
+                    let status = {
+                        let s = settings.lock().unwrap();
+                        if s.debug_mode {
+                            get_simulated_status(s.debug_simulated_size)
+                        } else {
+                            get_cache_status()
+                        }
                     };
 
                     // Update tray icon
@@ -215,30 +296,40 @@ pub fn run() {
 
                     if should_auto_clean {
                         // Notify about auto-clean
-                        send_notification_with_sound(
+                        send_notification(
+                            &app_handle,
                             "SymbolSweep",
-                            &format!(
-                                "Auto-cleaning cache ({})...",
-                                status.size_display
-                            ),
-                            "Purr",
+                            &format!("Auto-cleaning cache ({})...", status.size_display),
                         );
 
                         // Perform clean
                         if let Ok(result) = clean_cache(false) {
-                            // Update last clean timestamp
+                            // Update last clean timestamp and reset debug size
                             if let Ok(mut s) = settings.lock() {
                                 s.record_clean();
+                                // Reset debug simulated size to 0 after clean
+                                if s.debug_mode {
+                                    s.debug_simulated_size = 0;
+                                    let _ = s.save();
+                                    // Notify frontend to refresh settings
+                                    let _ = app_handle.emit("settings-updated", s.clone());
+                                }
                             }
+
+                            // Update tray to show clean state
+                            let clean_status = get_cache_status();
+                            let _ = update_tray_icon(&app_handle, &clean_status);
+                            // Emit status update so frontend refreshes
+                            let _ = app_handle.emit("cache-status-update", &clean_status);
 
                             // Emit clean result
                             let _ = app_handle.emit("auto-clean-completed", &result);
 
                             // Notify about completion
-                            send_notification_with_sound(
+                            send_notification(
+                                &app_handle,
                                 "SymbolSweep",
                                 &format!("Freed {}", result.bytes_freed_display),
-                                "Glass",
                             );
                         }
                     }
@@ -251,13 +342,10 @@ pub fn run() {
                                 // Only notify once per session (could track with a flag)
                             }
                             cache_monitor::CacheState::Critical => {
-                                send_notification_with_sound(
+                                send_notification(
+                                    &app_handle,
                                     "SymbolSweep - Critical",
-                                    &format!(
-                                        "Cache at {} - cleaning recommended!",
-                                        status.size_display
-                                    ),
-                                    "Sosumi",
+                                    &format!("Cache at {} - cleaning recommended!", status.size_display),
                                 );
                             }
                             _ => {}
@@ -303,6 +391,8 @@ pub fn run() {
             update_settings,
             get_last_clean_time,
             quit_app,
+            test_notification,
+            open_notification_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

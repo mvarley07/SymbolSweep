@@ -8,13 +8,14 @@ import './StatusPanel.css';
 interface StatusIndicatorProps {
   state: CacheState;
   size: string;
+  isLoading?: boolean;
 }
 
-function StatusIndicator({ state, size }: StatusIndicatorProps) {
+function StatusIndicator({ state, size, isLoading }: StatusIndicatorProps) {
   const stateConfig = {
     Normal: { label: 'Healthy' },
-    Warning: { label: 'Getting Large' },
-    Critical: { label: 'Clean Now' },
+    Warning: { label: 'Warning' },
+    Critical: { label: 'Critical' },
   };
 
   const config = stateConfig[state];
@@ -22,7 +23,9 @@ function StatusIndicator({ state, size }: StatusIndicatorProps) {
 
   return (
     <div className="status-indicator">
-      <div className={`status-size ${stateClass}`}>{size}</div>
+      <div className={`status-size ${stateClass}`}>
+        {isLoading ? <span className="skeleton-loader size-loader" /> : size}
+      </div>
       <div className={`status-state ${stateClass}`}>
         <span className="status-dot" />
         <span className="status-label">{config.label}</span>
@@ -58,7 +61,7 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
-  const logoSrc = isDarkMode ? '/logo-dark.png' : '/logo-light.png';
+  const logoSrc = '/logo.png';
 
   // Auto-dismiss success banner after 5 seconds (only if something was cleaned)
   useEffect(() => {
@@ -168,7 +171,7 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
     <div className="status-panel">
       <header className="panel-header">
         <div className="header-logo">
-          <img src={logoSrc} alt="SymbolSweep" className="logo-icon" />
+          <div className="logo-icon" aria-hidden="true" />
           <span className="logo-text">SymbolSweep</span>
         </div>
         <button className="settings-btn" onClick={onSettingsClick} title="Settings">
@@ -180,12 +183,18 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
       </header>
 
       <div className="status-content">
-        <StatusIndicator state={status.state} size={status.size_display} />
+        <StatusIndicator state={status.state} size={status.size_display} isLoading={isLoading} />
 
         <div className="status-details">
           <div className="detail-row">
             <span className="detail-label">Files</span>
-            <span className="detail-value">{status.file_count.toLocaleString()}</span>
+            <span className="detail-value">
+              {isLoading ? (
+                <span className="skeleton-loader" />
+              ) : (
+                status.file_count.toLocaleString()
+              )}
+            </span>
           </div>
           <div className="detail-row">
             <span className="detail-label">Last cleaned</span>

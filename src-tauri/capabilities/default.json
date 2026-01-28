@@ -13,6 +13,14 @@
     "core:window:allow-hide",
     "core:window:allow-set-focus",
     "opener:default",
-    "shell:default"
+    "shell:default",
+    "notification:default",
+    "notification:allow-notify",
+    "notification:allow-request-permission",
+    "notification:allow-is-permission-granted",
+    "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

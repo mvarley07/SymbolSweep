@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { useSettings } from '../hooks/useSettings';
 import { WARNING_THRESHOLD, CRITICAL_THRESHOLD, DEBUG_SIZES } from '../types';
 import './SettingsPanel.css';
@@ -136,6 +138,9 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                 onChange={(e) => updateSetting('auto_clean_interval_secs', Number(e.target.value))}
                 disabled={saving}
               >
+                {settings.debug_mode && (
+                  <option value={2 * 60}>2 minutes (debug)</option>
+                )}
                 <option value={1 * 60 * 60}>1 hour</option>
                 <option value={3 * 60 * 60}>3 hours</option>
                 <option value={6 * 60 * 60}>6 hours</option>
@@ -161,12 +166,50 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                 type="checkbox"
                 id="notifications"
                 checked={settings.show_notifications}
-                onChange={(e) => updateSetting('show_notifications', e.target.checked)}
+                onChange={async (e) => {
+                  const enabled = e.target.checked;
+                  updateSetting('show_notifications', enabled);
+
+                  if (enabled) {
+                    // Request permission and send test notification
+                    try {
+                      let permissionGranted = await isPermissionGranted();
+                      if (!permissionGranted) {
+                        const permission = await requestPermission();
+                        permissionGranted = permission === 'granted';
+                      }
+                      if (permissionGranted) {
+                        sendNotification({
+                          title: 'SymbolSweep',
+                          body: 'Notifications enabled!'
+                        });
+                      }
+                    } catch (e) {
+                      console.error('Notification setup error:', e);
+                    }
+                  }
+                }}
                 disabled={saving}
               />
               <span className="toggle-slider" />
             </label>
           </div>
+
+          {settings.show_notifications && (
+            <div className="setting-row nested notification-hint">
+              <span className="hint-text">
+                Not seeing notifications? Enable them in macOS Settings.
+              </span>
+              <button
+                className="hint-btn"
+                onClick={() => {
+                  invoke('open_notification_settings');
+                }}
+              >
+                Open Settings
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="settings-section">
@@ -191,8 +234,13 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
             </label>
           </div>
 
-          <div className="setting-row nested">
-            <label htmlFor="monitor-interval">Check interval</label>
+          <div className="setting-row">
+            <div className="setting-info">
+              <label htmlFor="monitor-interval">Background refresh</label>
+              <span className="setting-description">
+                How often to check your cache
+              </span>
+            </div>
             <select
               id="monitor-interval"
               value={settings.monitor_interval_secs}
@@ -263,15 +311,35 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                     15GB
                   </button>
                 </div>
+                <button
+                  className="debug-btn test-notification"
+                  onClick={async () => {
+                    console.log('Sending test notification via backend...');
+                    try {
+                      await invoke('test_notification');
+                      console.log('Test notification command sent');
+                    } catch (e) {
+                      console.error('Notification error:', e);
+                      alert('Failed to send notification. Check console for details.');
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  Test Notification
+                </button>
               </div>
             )}
           </section>
         )}
 
-        <footer className="settings-footer" onClick={handleVersionTap}>
-          <span className="version-text">v0.1.0</span>
-        </footer>
-      </div>
+        </div>
+
+      <footer className="settings-footer" onClick={handleVersionTap}>
+        <div className="footer-logo">
+          <div className="footer-logo-icon" aria-hidden="true" />
+          <span className="footer-logo-text">SymbolSweep</span>
+        </div>
+      </footer>
     </div>
   );
 }

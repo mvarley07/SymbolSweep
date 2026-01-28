@@ -9,10 +9,10 @@
   --space-xl: 20px;
 
   /* Signature colors - Teal accent */
-  --accent: #14b8a6;
-  --accent-hover: #0d9488;
-  --accent-glow: rgba(20, 184, 166, 0.3);
-  --accent-gradient: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+  --accent: #03babd;
+  --accent-hover: #029a9d;
+  --accent-glow: rgba(3, 186, 189, 0.3);
+  --accent-gradient: linear-gradient(135deg, #03babd 0%, #06b6d4 100%);
 
   /* Status colors */
   --status-normal: #22c55e;

@@ -19,26 +19,28 @@
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
 }
 
 .logo-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  object-fit: contain;
+  height: 15px;
+  width: 15px;
   flex-shrink: 0;
+  background-color: var(--accent);
+  -webkit-mask-image: url('/broom-icon.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-image: url('/broom-icon.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
 }
 
 .logo-text {
-  font-size: var(--font-md);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
   line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 .settings-btn {
@@ -177,15 +179,19 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  overflow: hidden;
+  margin-bottom: 4px;
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 10px;
+  padding: 8px 10px;
   transition: background 0.15s ease;
+}
+
+.detail-row:last-child {
+  padding-bottom: 10px;
 }
 
 .detail-row:hover {
@@ -207,7 +213,7 @@
   color: var(--text-primary);
 }
 
-/* Skeleton loader for Last cleaned */
+/* Skeleton loader */
 .skeleton-loader {
   display: inline-block;
   width: 60px;
@@ -221,6 +227,12 @@
   background-size: 200% 100%;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
   border-radius: 4px;
+}
+
+.skeleton-loader.size-loader {
+  width: 80px;
+  height: 34px;
+  border-radius: 6px;
 }
 
 @keyframes skeleton-pulse {
@@ -429,10 +441,12 @@
 .warning-text {
   color: var(--status-warning);
   background: var(--status-warning-glow);
+  margin-bottom: 8px;
 }
 
 .critical-text {
   color: var(--status-critical);
   background: var(--status-critical-glow);
   animation: fadeIn 0.3s ease-out;
+  margin-bottom: 8px;
 }
