@@ -304,17 +304,17 @@ select option {
 }
 
 .debug-btn.test-notification {
-  margin-top: 10px;
-  padding: 8px 16px;
-  font-size: 11px;
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  margin-top: 12px;
+  padding: 6px 12px;
+  font-size: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.1));
 }
 
 .debug-btn.test-notification:hover:not(:disabled) {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--bg-tertiary, #3a3a3a);
+  color: var(--text-primary);
 }
 
 /* Footer with logo */
