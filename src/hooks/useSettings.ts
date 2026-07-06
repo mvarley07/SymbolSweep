@@ -16,6 +16,7 @@ const defaultSettings: Settings = {
   debug_simulated_size: 0,
   first_run_completed: false,
   first_clean_confirmed: false,
+  dev_scan_roots: [],
 };
 
 export function useSettings() {

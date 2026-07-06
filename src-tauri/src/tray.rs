@@ -7,7 +7,7 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
-use crate::cache_monitor::{CacheState, CacheStatus};
+use crate::cache_monitor::{format_size, CacheState, CacheStatus};
 
 /// Activate the macOS app so it receives first-click events
 #[cfg(target_os = "macos")]
@@ -148,27 +148,53 @@ fn format_tray_title(status: &CacheStatus) -> String {
     format!("{} {}", indicator, status.size_display)
 }
 
-/// Update tray with current cache status
+/// Update tray with current cache status (coresymbolicationd only)
 pub fn update_tray_icon<R: Runtime>(
     app: &AppHandle<R>,
     status: &CacheStatus,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    update_tray_with_dev(app, status, 0)
+}
+
+/// Update tray with combined cache + dev artifact totals
+pub fn update_tray_with_dev<R: Runtime>(
+    app: &AppHandle<R>,
+    status: &CacheStatus,
+    dev_total_bytes: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        // Update title with size and status indicator
-        let title = format_tray_title(status);
+        let combined_bytes = status.size_bytes + dev_total_bytes;
+        let combined_state = CacheState::from_size(combined_bytes);
+
+        let indicator = match combined_state {
+            CacheState::Normal => "\u{1F7E2}",   // Green circle
+            CacheState::Warning => "\u{1F7E0}",  // Orange circle
+            CacheState::Critical => "\u{1F534}", // Red circle
+        };
+
+        let title = format!("{} {}", indicator, format_size(combined_bytes));
         tray.set_title(Some(&title))?;
 
-        // Update tooltip with more details
-        let tooltip = format!(
-            "SymbolSweep\n{} - {} files\nStatus: {}",
-            status.size_display,
-            status.file_count,
-            match status.state {
-                CacheState::Normal => "Normal",
-                CacheState::Warning => "Warning (5GB+)",
-                CacheState::Critical => "Critical (10GB+)",
-            }
-        );
+        // Tooltip with breakdown
+        let tooltip = if dev_total_bytes > 0 {
+            format!(
+                "SymbolSweep\nSystem cache: {}\nDev artifacts: {}\nTotal reclaimable: {}",
+                status.size_display,
+                format_size(dev_total_bytes),
+                format_size(combined_bytes),
+            )
+        } else {
+            format!(
+                "SymbolSweep\n{} - {} files\nStatus: {}",
+                status.size_display,
+                status.file_count,
+                match status.state {
+                    CacheState::Normal => "Normal",
+                    CacheState::Warning => "Warning (5GB+)",
+                    CacheState::Critical => "Critical (10GB+)",
+                }
+            )
+        };
         tray.set_tooltip(Some(&tooltip))?;
     }
 

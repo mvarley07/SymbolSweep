@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useCacheStatus, useCleanCache, useLastCleanTime } from '../hooks/useCacheStatus';
+import { useCacheStatus, useCleanCache, useLastCleanTime, useDevScan } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
 import type { CacheState, CleanResult } from '../types';
@@ -36,13 +36,15 @@ function StatusIndicator({ state, size, isLoading }: StatusIndicatorProps) {
 
 interface StatusPanelProps {
   onSettingsClick: () => void;
+  onDevScanClick: () => void;
 }
 
-export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
+export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProps) {
   const { status, loading, error, refresh } = useCacheStatus();
   const { clean, dryRun, cleaning, result: cleanResult } = useCleanCache();
   const { lastCleanTime, refresh: refreshLastClean } = useLastCleanTime();
   const { settings, updateSetting } = useSettings();
+  const { result: devResult } = useDevScan();
 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
@@ -217,11 +219,18 @@ export function StatusPanel({ onSettingsClick }: StatusPanelProps) {
         </button>
 
         {status.state === 'Warning' && (
-          <p className="warning-text">Cache getting large – consider cleaning</p>
+          <p className="warning-text">Cache getting large -- consider cleaning</p>
         )}
 
         {status.state === 'Critical' && (
-          <p className="critical-text">Cache critically large – clean now!</p>
+          <p className="critical-text">Cache critically large -- clean now!</p>
+        )}
+
+        {devResult && devResult.total_bytes > 0 && (
+          <button className="dev-scan-link" onClick={onDevScanClick}>
+            <span className="dev-scan-total">{devResult.total_display} dev artifacts</span>
+            <span className="dev-scan-arrow">&rsaquo;</span>
+          </button>
         )}
       </div>
     </div>

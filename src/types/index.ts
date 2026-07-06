@@ -44,6 +44,35 @@ export interface Settings {
   debug_simulated_size: number;
   first_run_completed: boolean;
   first_clean_confirmed: boolean;
+  dev_scan_roots: string[];
+}
+
+// Dev artifact scanning types
+export type ArtifactTier = 'Safe' | 'SafeWithReinstall' | 'Ask';
+
+export interface DevArtifact {
+  path: string;
+  size_bytes: number;
+  size_display: string;
+  tier: ArtifactTier;
+  kind: string;
+  project: string | null;
+  staleness_days: number | null;
+  is_nested: boolean;
+}
+
+export interface DevScanResult {
+  artifacts: DevArtifact[];
+  total_bytes: number;
+  total_display: string;
+  safe_bytes: number;
+  safe_display: string;
+  safe_with_reinstall_bytes: number;
+  safe_with_reinstall_display: string;
+  ask_bytes: number;
+  ask_display: string;
+  scan_duration_ms: number;
+  scan_roots: string[];
 }
 
 // Debug preset sizes

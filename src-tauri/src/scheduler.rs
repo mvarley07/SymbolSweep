@@ -38,6 +38,13 @@ pub struct Settings {
     /// First clean confirmed - user has acknowledged the safety message
     #[serde(default)]
     pub first_clean_confirmed: bool,
+    /// Project root directories to scan for dev artifacts
+    #[serde(default = "default_dev_scan_roots")]
+    pub dev_scan_roots: Vec<String>,
+}
+
+fn default_dev_scan_roots() -> Vec<String> {
+    crate::dev_scanner::default_scan_roots()
 }
 
 impl Default for Settings {
@@ -55,6 +62,7 @@ impl Default for Settings {
             debug_simulated_size: 0,
             first_run_completed: false,
             first_clean_confirmed: false,
+            dev_scan_roots: default_dev_scan_roots(),
         }
     }
 }

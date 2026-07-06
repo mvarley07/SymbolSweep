@@ -2,6 +2,7 @@
 
 mod cache_cleaner;
 mod cache_monitor;
+mod dev_scanner;
 mod scheduler;
 mod tray;
 
@@ -11,18 +12,25 @@ use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, reindex_spotlight, CleanResult};
 use cache_monitor::{get_cache_status, get_combined_cache_status, get_simulated_status, is_daemon_running, CacheStatus};
+use dev_scanner::DevScanResult;
 use scheduler::{time_since_last_clean, Settings};
-use tray::{create_tray, send_notification, update_tray_icon};
+use tray::{create_tray, send_notification, update_tray_icon, update_tray_with_dev};
 
 /// App state for sharing across commands
 pub struct AppState {
     pub settings: Arc<Mutex<Settings>>,
+    /// Latest dev artifact scan result (populated on startup and on-demand)
+    pub dev_scan_result: Arc<Mutex<Option<DevScanResult>>>,
+    /// Guard to prevent concurrent dev scans
+    pub dev_scan_in_progress: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             settings: Arc::new(Mutex::new(Settings::load())),
+            dev_scan_result: Arc::new(Mutex::new(None)),
+            dev_scan_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }
@@ -97,6 +105,66 @@ fn get_log_path() -> String {
 #[tauri::command]
 fn reindex() -> Result<(), String> {
     reindex_spotlight().map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// Tauri Commands - Dev Artifact Scanning
+// ============================================================================
+
+/// Run a dev artifact scan (detection only, no deletion)
+#[tauri::command]
+fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevScanResult, String> {
+    use std::sync::atomic::Ordering;
+
+    // Prevent concurrent scans
+    if state
+        .dev_scan_in_progress
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        // Return cached result if scan already in progress
+        let cached = state.dev_scan_result.lock().unwrap();
+        return cached
+            .clone()
+            .ok_or_else(|| "Scan already in progress".to_string());
+    }
+
+    let roots = {
+        let s = state.settings.lock().unwrap();
+        s.dev_scan_roots.clone()
+    };
+
+    let result = dev_scanner::scan_dev_artifacts(&roots);
+
+    // Cache the result
+    {
+        let mut cached = state.dev_scan_result.lock().unwrap();
+        *cached = Some(result.clone());
+    }
+
+    // Update tray to reflect combined totals
+    let cache_status = {
+        let s = state.settings.lock().unwrap();
+        if s.debug_mode {
+            get_simulated_status(s.debug_simulated_size)
+        } else {
+            get_cache_status()
+        }
+    };
+    let _ = update_tray_with_dev(&app, &cache_status, result.total_bytes);
+
+    // Release scan lock
+    state
+        .dev_scan_in_progress
+        .store(false, Ordering::SeqCst);
+
+    Ok(result)
+}
+
+/// Get the cached dev scan result without running a new scan
+#[tauri::command]
+fn get_dev_scan_result(state: tauri::State<AppState>) -> Option<DevScanResult> {
+    state.dev_scan_result.lock().unwrap().clone()
 }
 
 // ============================================================================
@@ -217,7 +285,10 @@ pub fn run() {
             let app_handle_init = app.handle().clone();
             let state = app.state::<AppState>();
             let settings_init = Arc::clone(&state.settings);
+            let dev_result_init = Arc::clone(&state.dev_scan_result);
+            let dev_in_progress_init = Arc::clone(&state.dev_scan_in_progress);
             std::thread::spawn(move || {
+                // Phase 1: Quick — get coresymbolicationd status
                 let initial_status = {
                     let settings = settings_init.lock().unwrap();
                     if settings.debug_mode {
@@ -228,6 +299,38 @@ pub fn run() {
                 };
                 let _ = update_tray_icon(&app_handle_init, &initial_status);
                 let _ = app_handle_init.emit("cache-status-update", &initial_status);
+
+                // Phase 2: Slower — run initial dev artifact scan
+                if dev_in_progress_init
+                    .compare_exchange(
+                        false,
+                        true,
+                        std::sync::atomic::Ordering::SeqCst,
+                        std::sync::atomic::Ordering::SeqCst,
+                    )
+                    .is_ok()
+                {
+                    let roots = {
+                        let s = settings_init.lock().unwrap();
+                        s.dev_scan_roots.clone()
+                    };
+                    let dev_result = dev_scanner::scan_dev_artifacts(&roots);
+                    let dev_total = dev_result.total_bytes;
+
+                    // Cache the result
+                    {
+                        let mut cached = dev_result_init.lock().unwrap();
+                        *cached = Some(dev_result.clone());
+                    }
+
+                    // Update tray with combined total
+                    let _ = update_tray_with_dev(&app_handle_init, &initial_status, dev_total);
+
+                    // Notify frontend that dev scan is ready
+                    let _ = app_handle_init.emit("dev-scan-ready", &dev_result);
+
+                    dev_in_progress_init.store(false, std::sync::atomic::Ordering::SeqCst);
+                }
             });
 
             // Sync autostart state with saved setting
@@ -246,6 +349,7 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let state = app.state::<AppState>();
             let settings = Arc::clone(&state.settings);
+            let dev_result_monitor = Arc::clone(&state.dev_scan_result);
 
             std::thread::spawn(move || {
                 // Track if we've already notified for warning/critical this session
@@ -273,8 +377,14 @@ pub fn run() {
                         }
                     };
 
-                    // Update tray icon
-                    let _ = update_tray_icon(&app_handle, &status);
+                    // Update tray icon (include dev scan total if available)
+                    let dev_total = dev_result_monitor
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .map(|r| r.total_bytes)
+                        .unwrap_or(0);
+                    let _ = update_tray_with_dev(&app_handle, &status, dev_total);
 
                     // Emit status update to frontend
                     let _ = app_handle.emit("cache-status-update", &status);
@@ -409,6 +519,8 @@ pub fn run() {
             quit_app,
             test_notification,
             open_notification_settings,
+            scan_dev,
+            get_dev_scan_result,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

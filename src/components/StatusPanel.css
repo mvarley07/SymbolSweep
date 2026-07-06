@@ -450,3 +450,35 @@
   animation: fadeIn 0.3s ease-out;
   margin-bottom: 8px;
 }
+
+/* Dev Scan Link */
+.dev-scan-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 4px;
+  background: rgba(255, 159, 10, 0.08);
+  border: 1px solid rgba(255, 159, 10, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dev-scan-link:hover {
+  background: rgba(255, 159, 10, 0.14);
+  border-color: rgba(255, 159, 10, 0.25);
+}
+
+.dev-scan-total {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 159, 10, 0.9);
+}
+
+.dev-scan-arrow {
+  font-size: 16px;
+  color: rgba(255, 159, 10, 0.5);
+  font-weight: 300;
+}

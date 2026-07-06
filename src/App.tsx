@@ -4,16 +4,18 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { StatusPanel } from './components/StatusPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { DevScanPanel } from './components/DevScanPanel';
 import { useSettings } from './hooks/useSettings';
 import './App.css';
 
-type View = 'welcome' | 'status' | 'settings';
+type View = 'welcome' | 'status' | 'settings' | 'devscan';
 
 // Window heights for different views
 const VIEW_HEIGHTS = {
   welcome: 320,
-  status: 320,
+  status: 345,
   settings: 400,
+  devscan: 520,
 };
 
 function App() {
@@ -82,10 +84,16 @@ function App() {
         <WelcomeScreen onComplete={handleWelcomeComplete} />
       )}
       {view === 'status' && (
-        <StatusPanel onSettingsClick={() => setView('settings')} />
+        <StatusPanel
+          onSettingsClick={() => setView('settings')}
+          onDevScanClick={() => setView('devscan')}
+        />
       )}
       {view === 'settings' && (
         <SettingsPanel onBack={() => setView('status')} />
+      )}
+      {view === 'devscan' && (
+        <DevScanPanel onBack={() => setView('status')} />
       )}
     </div>
   );

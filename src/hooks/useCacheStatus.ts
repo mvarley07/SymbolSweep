@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { CacheStatus, CleanResult } from '../types';
+import type { CacheStatus, CleanResult, DevScanResult } from '../types';
 
 export function useCacheStatus() {
   const [status, setStatus] = useState<CacheStatus | null>(null);
@@ -65,6 +65,46 @@ export function useCleanCache() {
   }, [clean]);
 
   return { clean, dryRun, cleaning, result, error };
+}
+
+export function useDevScan() {
+  const [result, setResult] = useState<DevScanResult | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load cached result on mount
+  useEffect(() => {
+    invoke<DevScanResult | null>('get_dev_scan_result').then((cached) => {
+      if (cached) setResult(cached);
+    });
+
+    // Listen for background scan completion
+    const unlisten = listen<DevScanResult>('dev-scan-ready', (event) => {
+      setResult(event.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const scan = useCallback(async () => {
+    setScanning(true);
+    setError(null);
+    try {
+      const res = await invoke<DevScanResult>('scan_dev');
+      setResult(res);
+      return res;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      throw err;
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  return { result, scanning, error, scan };
 }
 
 export function useLastCleanTime() {
