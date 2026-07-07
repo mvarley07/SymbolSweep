@@ -657,6 +657,67 @@ fn looks_like_project(dir: &Path) -> bool {
 }
 
 // ============================================================================
+// Deletion
+// ============================================================================
+
+/// Result of deleting dev artifacts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevDeleteResult {
+    pub deleted_count: usize,
+    pub bytes_freed: u64,
+    pub bytes_freed_display: String,
+    pub errors: Vec<String>,
+}
+
+/// Delete specific dev artifacts by path.
+/// Only deletes paths that were found in the most recent scan result (safety check).
+pub fn delete_dev_artifacts(paths: &[String], known_artifacts: &[DevArtifact]) -> DevDeleteResult {
+    let known_paths: std::collections::HashSet<&str> =
+        known_artifacts.iter().map(|a| a.path.as_str()).collect();
+
+    let mut deleted_count = 0usize;
+    let mut bytes_freed = 0u64;
+    let mut errors = Vec::new();
+
+    for path_str in paths {
+        // Safety: only delete paths that were in the scan result
+        if !known_paths.contains(path_str.as_str()) {
+            errors.push(format!("Skipped unknown path: {}", path_str));
+            continue;
+        }
+
+        let path = std::path::Path::new(path_str);
+        if !path.exists() {
+            continue;
+        }
+
+        // Look up expected size from artifacts
+        let expected_bytes = known_artifacts
+            .iter()
+            .find(|a| a.path == *path_str)
+            .map(|a| a.size_bytes)
+            .unwrap_or(0);
+
+        match fs::remove_dir_all(path) {
+            Ok(()) => {
+                deleted_count += 1;
+                bytes_freed += expected_bytes;
+            }
+            Err(e) => {
+                errors.push(format!("{}: {}", path_str, e));
+            }
+        }
+    }
+
+    DevDeleteResult {
+        deleted_count,
+        bytes_freed,
+        bytes_freed_display: format_size(bytes_freed),
+        errors,
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

@@ -75,6 +75,13 @@ export interface DevScanResult {
   scan_roots: string[];
 }
 
+export interface DevDeleteResult {
+  deleted_count: number;
+  bytes_freed: number;
+  bytes_freed_display: string;
+  errors: string[];
+}
+
 // Debug preset sizes
 export const DEBUG_SIZES = {
   EMPTY: 0,

@@ -1,17 +1,48 @@
 import { useState, useEffect } from 'react';
-import { useCacheStatus, useCleanCache, useLastCleanTime, useDevScan } from '../hooks/useCacheStatus';
+import { useCacheStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
 import type { CacheState, CleanResult } from '../types';
+import { WARNING_THRESHOLD, CRITICAL_THRESHOLD } from '../types';
 import './StatusPanel.css';
+
+/** Format bytes to human-readable string (matches Rust format_size) */
+function formatSize(bytes: number): string {
+  const KB = 1024;
+  const MB = KB * 1024;
+  const GB = MB * 1024;
+  const GB_THRESHOLD = 1000 * MB;
+
+  if (bytes >= GB_THRESHOLD) {
+    const value = bytes / GB;
+    const rounded = Math.round(value * 10) / 10;
+    if (Math.abs(rounded - Math.floor(rounded)) < 0.01) {
+      return `${Math.floor(rounded)} GB`;
+    }
+    return `${rounded.toFixed(1)} GB`;
+  } else if (bytes >= MB) {
+    return `${Math.floor(bytes / MB)} MB`;
+  } else if (bytes >= KB) {
+    return `${Math.floor(bytes / KB)} KB`;
+  } else if (bytes > 0) {
+    return `${bytes} B`;
+  }
+  return '0 B';
+}
+
+/** Determine cache state from combined byte total */
+function stateFromSize(bytes: number): CacheState {
+  if (bytes >= CRITICAL_THRESHOLD) return 'Critical';
+  if (bytes >= WARNING_THRESHOLD) return 'Warning';
+  return 'Normal';
+}
 
 interface StatusIndicatorProps {
   state: CacheState;
   size: string;
-  isLoading?: boolean;
 }
 
-function StatusIndicator({ state, size, isLoading }: StatusIndicatorProps) {
+function StatusIndicator({ state, size }: StatusIndicatorProps) {
   const stateConfig = {
     Normal: { label: 'Healthy' },
     Warning: { label: 'Warning' },
@@ -24,7 +55,7 @@ function StatusIndicator({ state, size, isLoading }: StatusIndicatorProps) {
   return (
     <div className="status-indicator">
       <div className={`status-size ${stateClass}`}>
-        {isLoading ? <span className="skeleton-loader size-loader" /> : size}
+        {size}
       </div>
       <div className={`status-state ${stateClass}`}>
         <span className="status-dot" />
@@ -41,38 +72,44 @@ interface StatusPanelProps {
 
 export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProps) {
   const { status, loading, error, refresh } = useCacheStatus();
-  const { clean, dryRun, cleaning, result: cleanResult } = useCleanCache();
+  const { clean, dryRun, cleaning } = useCleanCache();
   const { lastCleanTime, refresh: refreshLastClean } = useLastCleanTime();
   const { settings, updateSetting } = useSettings();
   const { result: devResult } = useDevScan();
+  const { deleteArtifacts } = useDeleteDevArtifacts();
 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
   const [bannerFading, setBannerFading] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
-  // Auto-dismiss success banner after 5 seconds (only if something was cleaned)
+  const showCleanBanner = (message: string) => {
+    setBannerMessage(message);
+    setShowBanner(true);
+    setBannerFading(false);
+  };
+
+  // Auto-dismiss success banner after 5 seconds
   useEffect(() => {
-    if (cleanResult && !cleanResult.was_dry_run && cleanResult.files_removed > 0) {
-      setShowBanner(true);
+    if (!showBanner) return;
+
+    const fadeTimer = setTimeout(() => {
+      setBannerFading(true);
+    }, 4700);
+
+    const removeTimer = setTimeout(() => {
+      setShowBanner(false);
       setBannerFading(false);
+      setBannerMessage(null);
+    }, 5000);
 
-      const fadeTimer = setTimeout(() => {
-        setBannerFading(true);
-      }, 4700);
-
-      const removeTimer = setTimeout(() => {
-        setShowBanner(false);
-        setBannerFading(false);
-      }, 5000);
-
-      return () => {
-        clearTimeout(fadeTimer);
-        clearTimeout(removeTimer);
-      };
-    }
-  }, [cleanResult]);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }, [showBanner]);
 
   const handleCleanClick = () => {
     if (!settings.first_clean_confirmed) {
@@ -101,13 +138,30 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const performClean = async () => {
     setIsLoading(true);
     try {
-      // Run clean and ensure minimum 1.5 second loading state for visibility
-      await Promise.all([
-        clean(false),
-        new Promise(resolve => setTimeout(resolve, 1500))
-      ]);
+      // Clean system cache
+      const sysResult = await clean(false);
+      let totalFreed = sysResult.bytes_freed;
+
+      // Also clean Safe + SafeWithReinstall dev artifacts
+      if (devResult) {
+        const cleanablePaths = devResult.artifacts
+          .filter(a => !a.is_nested && (a.tier === 'Safe' || a.tier === 'SafeWithReinstall'))
+          .map(a => a.path);
+        if (cleanablePaths.length > 0) {
+          const devDeleteResult = await deleteArtifacts(cleanablePaths);
+          totalFreed += devDeleteResult.bytes_freed;
+        }
+      }
+
       refresh();
       await refreshLastClean();
+
+      // Show combined result banner
+      if (totalFreed > 0) {
+        showCleanBanner(`Freed ${formatSize(totalFreed)}`);
+      } else {
+        showCleanBanner('Already clean');
+      }
     } catch (err) {
       console.error('Clean failed:', err);
     } finally {
@@ -154,7 +208,11 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
-  const stateClass = status.state.toLowerCase();
+  const devBytes = devResult?.total_bytes ?? 0;
+  const combinedBytes = status.size_bytes + devBytes;
+  const combinedState = stateFromSize(combinedBytes);
+  const combinedDisplay = formatSize(combinedBytes);
+  const stateClass = combinedState.toLowerCase();
 
   return (
     <div className="status-panel">
@@ -172,35 +230,23 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       </header>
 
       <div className="status-content">
-        <StatusIndicator state={status.state} size={status.size_display} isLoading={isLoading} />
+        <StatusIndicator state={combinedState} size={combinedDisplay} />
 
         <div className="status-details">
           <div className="detail-row">
             <span className="detail-label">Files</span>
-            <span className="detail-value">
-              {isLoading ? (
-                <span className="skeleton-loader" />
-              ) : (
-                status.file_count.toLocaleString()
-              )}
-            </span>
+            <span className="detail-value">{status.file_count.toLocaleString()}</span>
           </div>
           <div className="detail-row">
             <span className="detail-label">Last cleaned</span>
-            <span className="detail-value">
-              {isLoading ? (
-                <span className="skeleton-loader" />
-              ) : (
-                lastCleanTime
-              )}
-            </span>
+            <span className="detail-value">{lastCleanTime}</span>
           </div>
         </div>
 
-        {showBanner && cleanResult && !cleanResult.was_dry_run && cleanResult.files_removed > 0 && (
+        {showBanner && bannerMessage && (
           <div className={`clean-result${bannerFading ? ' fading-out' : ''}`}>
             <span className="result-icon">✓</span>
-            <span>{cleanResult.message}</span>
+            <span>{bannerMessage}</span>
           </div>
         )}
 
@@ -218,11 +264,11 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
           )}
         </button>
 
-        {status.state === 'Warning' && (
+        {combinedState === 'Warning' && (
           <p className="warning-text">Cache getting large -- consider cleaning</p>
         )}
 
-        {status.state === 'Critical' && (
+        {combinedState === 'Critical' && (
           <p className="critical-text">Cache critically large -- clean now!</p>
         )}
 

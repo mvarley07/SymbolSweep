@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { CacheStatus, CleanResult, DevScanResult } from '../types';
+import type { CacheStatus, CleanResult, DevDeleteResult, DevScanResult } from '../types';
 
 export function useCacheStatus() {
   const [status, setStatus] = useState<CacheStatus | null>(null);
@@ -105,6 +105,28 @@ export function useDevScan() {
   }, []);
 
   return { result, scanning, error, scan };
+}
+
+export function useDeleteDevArtifacts() {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const deleteArtifacts = useCallback(async (paths: string[]) => {
+    setDeleting(true);
+    setError(null);
+    try {
+      const result = await invoke<DevDeleteResult>('delete_dev_artifacts', { paths });
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      throw err;
+    } finally {
+      setDeleting(false);
+    }
+  }, []);
+
+  return { deleteArtifacts, deleting, error };
 }
 
 export function useLastCleanTime() {

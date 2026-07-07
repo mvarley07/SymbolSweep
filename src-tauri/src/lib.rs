@@ -12,7 +12,7 @@ use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, reindex_spotlight, CleanResult};
 use cache_monitor::{get_cache_status, get_combined_cache_status, get_simulated_status, is_daemon_running, CacheStatus};
-use dev_scanner::DevScanResult;
+use dev_scanner::{DevDeleteResult, DevScanResult};
 use scheduler::{time_since_last_clean, Settings};
 use tray::{create_tray, send_notification, update_tray_icon, update_tray_with_dev};
 
@@ -165,6 +165,54 @@ fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevS
 #[tauri::command]
 fn get_dev_scan_result(state: tauri::State<AppState>) -> Option<DevScanResult> {
     state.dev_scan_result.lock().unwrap().clone()
+}
+
+/// Delete specific dev artifacts by path, then re-scan and return updated results
+#[tauri::command]
+fn delete_dev_artifacts(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    paths: Vec<String>,
+) -> Result<DevDeleteResult, String> {
+    // Get known artifacts from cached scan result (safety: only delete known paths)
+    let known_artifacts = {
+        let cached = state.dev_scan_result.lock().unwrap();
+        match cached.as_ref() {
+            Some(result) => result.artifacts.clone(),
+            None => return Err("No scan result available. Run a scan first.".to_string()),
+        }
+    };
+
+    let delete_result = dev_scanner::delete_dev_artifacts(&paths, &known_artifacts);
+
+    // Re-scan to get updated totals
+    let roots = {
+        let s = state.settings.lock().unwrap();
+        s.dev_scan_roots.clone()
+    };
+    let new_scan = dev_scanner::scan_dev_artifacts(&roots);
+
+    // Update cached result
+    {
+        let mut cached = state.dev_scan_result.lock().unwrap();
+        *cached = Some(new_scan.clone());
+    }
+
+    // Update tray with new combined totals
+    let cache_status = {
+        let s = state.settings.lock().unwrap();
+        if s.debug_mode {
+            get_simulated_status(s.debug_simulated_size)
+        } else {
+            get_cache_status()
+        }
+    };
+    let _ = update_tray_with_dev(&app, &cache_status, new_scan.total_bytes);
+
+    // Notify frontend of updated scan result
+    let _ = app.emit("dev-scan-ready", &new_scan);
+
+    Ok(delete_result)
 }
 
 // ============================================================================
@@ -521,6 +569,7 @@ pub fn run() {
             open_notification_settings,
             scan_dev,
             get_dev_scan_result,
+            delete_dev_artifacts,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

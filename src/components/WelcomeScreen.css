@@ -1,4 +1,4 @@
-/* WelcomeScreen - Premium Design */
+/* WelcomeScreen */
 
 .welcome-screen {
   display: flex;
@@ -20,7 +20,7 @@
   width: 18px;
   height: 18px;
   color: var(--accent);
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 @keyframes float {
@@ -47,14 +47,14 @@
   width: 44px;
   height: 44px;
   background: var(--accent-gradient);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   box-shadow:
-    0 2px 8px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 2px 10px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .welcome-icon svg {
@@ -96,9 +96,9 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .feature-item {
@@ -115,7 +115,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-glow);
+  background: var(--accent-subtle);
   border-radius: 4px;
   color: var(--accent);
   font-size: 10px;
@@ -128,9 +128,9 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background: var(--bg-secondary);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s ease;
   margin-top: auto;
@@ -149,7 +149,7 @@
   position: relative;
   width: 44px;
   height: 24px;
-  background-color: var(--bg-tertiary);
+  background-color: rgba(120, 120, 128, 0.28);
   border-radius: 24px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
@@ -165,7 +165,7 @@
   background-color: white;
   border-radius: 50%;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .welcome-toggle input:checked + .toggle-slider {
@@ -189,13 +189,13 @@
   font-size: 14px;
   font-weight: 600;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   background: var(--accent-gradient);
   color: white;
   box-shadow:
-    0 2px 8px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 2px 10px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
@@ -204,8 +204,8 @@
 .welcome-button:hover {
   transform: translateY(-1px);
   box-shadow:
-    0 4px 16px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 20px var(--accent-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .welcome-button:active {
@@ -223,7 +223,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.15),
     transparent
   );
   transition: left 0.5s ease;

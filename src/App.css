@@ -9,49 +9,57 @@
   --space-xl: 20px;
 
   /* Signature colors - Teal accent */
-  --accent: #03babd;
-  --accent-hover: #029a9d;
-  --accent-glow: rgba(3, 186, 189, 0.3);
-  --accent-gradient: linear-gradient(135deg, #03babd 0%, #06b6d4 100%);
+  --accent: #14b8a6;
+  --accent-hover: #0d9488;
+  --accent-glow: rgba(20, 184, 166, 0.25);
+  --accent-gradient: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+  --accent-subtle: rgba(20, 184, 166, 0.08);
 
   /* Status colors */
-  --status-normal: #22c55e;
-  --status-normal-glow: rgba(34, 197, 94, 0.2);
-  --status-warning: #f59e0b;
-  --status-warning-glow: rgba(245, 158, 11, 0.2);
-  --status-critical: #ef4444;
-  --status-critical-glow: rgba(239, 68, 68, 0.25);
+  --status-normal: #34d399;
+  --status-normal-glow: rgba(52, 211, 153, 0.15);
+  --status-warning: #fbbf24;
+  --status-warning-glow: rgba(251, 191, 36, 0.15);
+  --status-critical: #f87171;
+  --status-critical-glow: rgba(248, 113, 113, 0.18);
 
-  /* Surface colors - Dark mode first (menu bar apps are typically dark) */
-  --bg-primary: rgba(22, 22, 24, 0.98);
-  --bg-secondary: rgba(255, 255, 255, 0.04);
-  --bg-tertiary: rgba(255, 255, 255, 0.06);
-  --bg-hover: rgba(255, 255, 255, 0.08);
-  --bg-active: rgba(255, 255, 255, 0.12);
+  /* Surface colors */
+  --bg-primary: rgba(18, 18, 22, 0.97);
+  --bg-secondary: rgba(255, 255, 255, 0.035);
+  --bg-tertiary: rgba(255, 255, 255, 0.055);
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-active: rgba(255, 255, 255, 0.10);
+  --bg-elevated: rgba(255, 255, 255, 0.045);
 
   /* Text colors */
-  --text-primary: rgba(255, 255, 255, 0.95);
-  --text-secondary: rgba(255, 255, 255, 0.6);
-  --text-tertiary: rgba(255, 255, 255, 0.4);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
 
   /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.10);
+  --border-accent: rgba(20, 184, 166, 0.2);
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px var(--accent-glow);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 24px var(--accent-glow);
 
-  /* Typography Scale - Consistent across app */
-  --font-xs: 10px;    /* code, paths */
-  --font-sm: 11px;    /* captions, subtle labels */
-  --font-base: 13px;  /* body text, buttons */
-  --font-md: 14px;    /* emphasized text */
-  --font-lg: 15px;    /* section headers */
-  --font-xl: 16px;    /* modal titles */
-  --font-hero: 44px;  /* main number display */
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Typography Scale */
+  --font-xs: 10px;
+  --font-sm: 11px;
+  --font-base: 13px;
+  --font-md: 14px;
+  --font-lg: 15px;
+  --font-xl: 16px;
+  --font-hero: 44px;
 
   /* Typography */
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
@@ -83,12 +91,15 @@ html, body, #root {
 .app-container {
   height: 100%;
   background: var(--bg-primary);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border-radius: 12px;
+  backdrop-filter: blur(60px) saturate(200%);
+  -webkit-backdrop-filter: blur(60px) saturate(200%);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   overflow: hidden;
-  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
 }
 
 /* Premium button base */
@@ -127,29 +138,27 @@ a:hover {
 
 /* Premium scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 3px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
-  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Smooth view transitions */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -164,14 +173,14 @@ a:hover {
   }
   to {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-6px);
   }
 }
 
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateX(12px);
+    transform: translateX(10px);
   }
   to {
     opacity: 1;
@@ -182,7 +191,7 @@ a:hover {
 @keyframes scaleIn {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
@@ -210,7 +219,7 @@ a:hover {
 
 .status-panel,
 .settings-panel {
-  animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .welcome-screen,
@@ -230,8 +239,8 @@ a:hover {
 
 .app-loading::after {
   content: '';
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border: 2px solid var(--border-medium);
   border-top-color: var(--accent);
   border-radius: 50%;
@@ -250,7 +259,6 @@ a:hover {
   background-clip: text;
 }
 
-/* Number display with tabular figures */
 .mono {
   font-feature-settings: 'tnum' 1;
   font-variant-numeric: tabular-nums;
