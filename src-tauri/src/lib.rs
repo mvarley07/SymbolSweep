@@ -83,9 +83,13 @@ fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) ->
                         let _ = app.emit("settings-updated", settings.clone());
                     }
                 }
-                // Update tray icon immediately after clean (use real status since debug size is now 0)
+                // Update tray icon immediately after clean (include dev artifact total)
                 let status = get_cache_status();
-                let _ = update_tray_icon(&app, &status);
+                let dev_total = state.dev_scan_result.lock()
+                    .ok()
+                    .and_then(|s| s.as_ref().map(|r| r.total_bytes))
+                    .unwrap_or(0);
+                let _ = update_tray_with_dev(&app, &status, dev_total);
                 // Emit status update so frontend refreshes
                 let _ = app.emit("cache-status-update", &status);
             }

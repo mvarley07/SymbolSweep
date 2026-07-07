@@ -142,10 +142,10 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       const sysResult = await clean(false);
       let totalFreed = sysResult.bytes_freed;
 
-      // Also clean Safe + SafeWithReinstall dev artifacts
+      // Also clean all dev artifacts
       if (devResult) {
         const cleanablePaths = devResult.artifacts
-          .filter(a => !a.is_nested && (a.tier === 'Safe' || a.tier === 'SafeWithReinstall'))
+          .filter(a => !a.is_nested)
           .map(a => a.path);
         if (cleanablePaths.length > 0) {
           const devDeleteResult = await deleteArtifacts(cleanablePaths);
@@ -234,8 +234,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
         <div className="status-details">
           <div className="detail-row">
-            <span className="detail-label">Files</span>
-            <span className="detail-value">{status.file_count.toLocaleString()}</span>
+            <span className="detail-label">Items</span>
+            <span className="detail-value">{(status.file_count + (devResult?.artifacts.filter(a => !a.is_nested).length ?? 0)).toLocaleString()}</span>
           </div>
           <div className="detail-row">
             <span className="detail-label">Last cleaned</span>
