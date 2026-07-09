@@ -5,8 +5,8 @@ use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Cache status thresholds in bytes
-pub const WARNING_THRESHOLD: u64 = 5 * 1024 * 1024 * 1024; // 5GB
-pub const CRITICAL_THRESHOLD: u64 = 10 * 1024 * 1024 * 1024; // 10GB
+pub const WARNING_THRESHOLD: u64 = 2 * 1024 * 1024 * 1024; // 2GB
+pub const CRITICAL_THRESHOLD: u64 = 5 * 1024 * 1024 * 1024; // 5GB
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CacheState {
@@ -255,10 +255,10 @@ mod tests {
     #[test]
     fn test_cache_state_from_size() {
         assert_eq!(CacheState::from_size(0), CacheState::Normal);
-        assert_eq!(CacheState::from_size(4 * 1024 * 1024 * 1024), CacheState::Normal);
-        assert_eq!(CacheState::from_size(5 * 1024 * 1024 * 1024), CacheState::Warning);
-        assert_eq!(CacheState::from_size(7 * 1024 * 1024 * 1024), CacheState::Warning);
-        assert_eq!(CacheState::from_size(10 * 1024 * 1024 * 1024), CacheState::Critical);
-        assert_eq!(CacheState::from_size(15 * 1024 * 1024 * 1024), CacheState::Critical);
+        assert_eq!(CacheState::from_size(1 * 1024 * 1024 * 1024), CacheState::Normal);
+        assert_eq!(CacheState::from_size(2 * 1024 * 1024 * 1024), CacheState::Warning);
+        assert_eq!(CacheState::from_size(3 * 1024 * 1024 * 1024), CacheState::Warning);
+        assert_eq!(CacheState::from_size(5 * 1024 * 1024 * 1024), CacheState::Critical);
+        assert_eq!(CacheState::from_size(7 * 1024 * 1024 * 1024), CacheState::Critical);
     }
 }

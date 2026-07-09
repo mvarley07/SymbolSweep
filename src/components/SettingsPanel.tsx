@@ -102,10 +102,10 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                 onChange={(e) => updateSetting('auto_clean_threshold', Number(e.target.value))}
                 disabled={saving}
               >
-                <option value={2 * 1024 * 1024 * 1024}>2GB</option>
-                <option value={WARNING_THRESHOLD}>5GB (Warning)</option>
-                <option value={7 * 1024 * 1024 * 1024}>7GB</option>
-                <option value={CRITICAL_THRESHOLD}>10GB (Critical)</option>
+                <option value={1 * 1024 * 1024 * 1024}>1GB</option>
+                <option value={WARNING_THRESHOLD}>2GB (Warning)</option>
+                <option value={3 * 1024 * 1024 * 1024}>3GB</option>
+                <option value={CRITICAL_THRESHOLD}>5GB (Critical)</option>
               </select>
             </div>
           )}

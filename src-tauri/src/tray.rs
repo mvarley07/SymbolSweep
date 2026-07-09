@@ -190,8 +190,8 @@ pub fn update_tray_with_dev<R: Runtime>(
                 status.file_count,
                 match status.state {
                     CacheState::Normal => "Normal",
-                    CacheState::Warning => "Warning (5GB+)",
-                    CacheState::Critical => "Critical (10GB+)",
+                    CacheState::Warning => "Warning (2GB+)",
+                    CacheState::Critical => "Critical (5GB+)",
                 }
             )
         };
