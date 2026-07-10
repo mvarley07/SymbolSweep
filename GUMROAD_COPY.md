@@ -1,65 +1,60 @@
 # SymbolSweep - Gumroad Listing Copy
 
 ## Title
-**SymbolSweep - Reclaim Your Mac's Hidden Storage**
+**SymbolSweep — The macOS Symbolication Cache Cleaner**
 
 ## Tagline
-Stop the silent disk hog that's eating your Mac's storage.
+Your Mac's `coresymbolicationd` cache is silently eating 50–100GB. This fixes that.
 
 ---
 
 ## Description
 
-### The Problem You Didn't Know You Had
+### A macOS-specific problem needs a macOS-specific tool
 
-If you use Xcode, debug apps, or analyze crash logs on your Mac, there's a hidden cache quietly growing in the background: **CoreSymbolication**.
+If you develop on a Mac, there's a system daemon called `coresymbolicationd` that caches debug symbols every time you build in Xcode, attach a debugger, or symbolicate a crash log. Apple never expires this cache. It just grows — 50GB, 100GB, sometimes more — until you notice your disk is full and go hunting.
 
-It can silently balloon to **50GB, 100GB, or more** — and macOS never cleans it up. You only notice when you're out of disk space and wondering where it all went.
+This isn't a cross-platform problem. Windows and Linux don't have this daemon. Only macOS accumulates this cache, and only macOS developers hit the wall.
 
-### The Fix
+**SymbolSweep** is a menu bar utility built for exactly this. It monitors the cache, auto-cleans at your threshold, and stays out of your way.
 
-**SymbolSweep** is a lightweight menu bar app that:
+### What it does
 
-- **Monitors** your CoreSymbolication cache in real-time
-- **Auto-cleans** when it hits your threshold (default: 5GB)
-- **Notifies** you before storage becomes a problem
-- **Lives quietly** in your menu bar — set it and forget it
+- **Watches the cache** — shows the current size in your menu bar
+- **One-click clean** — reclaim gigabytes instantly, with a dry-run option first
+- **Auto-clean** — set a threshold and forget about it
+- **Dev artifact scanner** — also finds `node_modules`, `DerivedData`, build caches, and other dev cruft across your projects
+- **Safe by design** — hardcoded to one path (`~/Library/Caches/com.apple.coresymbolicationd`), all deletions logged, your code is never touched
 
-### Features
+### Built for Mac developers
 
-- **One-click clean** — Free up gigabytes instantly
-- **Dev artifact scanner** — Find and clean node_modules, build caches, Xcode DerivedData, and more
-- **Auto-clean** — Set a threshold, never think about it again
-- **Smart notifications** — Only alerts when action is needed
-- **Tiny footprint** — 14MB app, minimal resource usage
-- **Launch at login** — Always watching, never intrusive
-- **Auto-updates** — Built-in updater keeps you current
+- Universal binary — native on Apple Silicon and Intel
+- 14MB footprint, lives in the menu bar, hidden from the Dock
+- Launch at login for always-on monitoring
+- Built-in auto-updater, no subscription
+- macOS native notifications
 
-### Who It's For
+### Who actually needs this
 
-- macOS developers using Xcode
-- Anyone who debugs or symbolizes crash logs
-- Mac users who've mysteriously lost disk space
+- You use Xcode regularly
+- You debug or profile apps on macOS
+- You've been symbolicating crash logs and noticed your disk shrinking
+- You checked `~/Library/Caches` and found a folder measured in tens of gigabytes
 
-### What You Get
+If none of that applies to you, you don't have this problem — and you don't need this tool. That's the point.
+
+### What you get
 
 - SymbolSweep.app (macOS, Apple Silicon + Intel)
-- Lightweight DMG installer — drag to Applications and go
-- Built-in auto-updater — always stay current
-- Free updates for life
-
-### Download
-
-After purchase, download the latest DMG from:
-[GitHub Releases](https://github.com/mvarley07/SymbolSweep/releases/latest)
+- DMG installer — drag to Applications
+- Lifetime license, free updates forever
 
 ---
 
 ## Pricing
 
 - **$12** (Pay What You Want, $12 minimum)
-- Lifetime license — no subscriptions, no recurring fees
-- Free updates forever via built-in auto-updater
+- One-time purchase — no subscription, no recurring fees
 
 ---
 
@@ -88,16 +83,19 @@ After purchase, download the latest DMG from:
 ## FAQ
 
 **Is this safe?**
-Yes. SymbolSweep only deletes symbol cache files that macOS regenerates as needed. Your apps, data, and system files are never touched.
+Yes. SymbolSweep deletes symbol cache files that macOS regenerates on demand. Your apps, projects, and system files are never touched. Every deletion is logged to `~/Library/Logs/SymbolSweep/deletions.log`.
 
 **Will this break Xcode?**
-No. The cache rebuilds automatically when needed. You may see slightly longer symbolication times immediately after cleaning, but that's it.
+No. The cache rebuilds automatically. You may see slightly longer symbolication times immediately after a clean — that's it.
+
+**Why macOS only?**
+Because `coresymbolicationd` is a macOS system daemon. Windows and Linux don't have it, so they don't accumulate this cache. There's no cross-platform version of this problem to solve.
 
 **Does it support Intel Macs?**
-Yes! SymbolSweep ships as a universal binary that runs natively on both Apple Silicon (M1/M2/M3/M4) and Intel Macs.
+Yes. SymbolSweep ships as a universal binary — native on both Apple Silicon (M1–M4) and Intel.
 
 **How do updates work?**
-SymbolSweep checks for updates automatically in the background. When an update is available, it downloads and installs silently. Just restart the app to apply. You can also check manually from Settings.
+SymbolSweep checks for updates in the background and downloads them automatically. Restart the app to apply, or check manually from Settings.
 
 **Do I need to keep the app running?**
 For auto-clean and monitoring, yes — it sits quietly in your menu bar. For manual cleaning, just open it when needed.
