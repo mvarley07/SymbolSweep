@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { useSettings } from '../hooks/useSettings';
 import { WARNING_THRESHOLD, CRITICAL_THRESHOLD, DEBUG_SIZES } from '../types';
@@ -27,6 +28,28 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up_to_date' | 'installed' | 'error'>('idle');
+
+  useEffect(() => {
+    getVersion().then(setAppVersion);
+  }, []);
+
+  const handleCheckUpdate = async () => {
+    setUpdateStatus('checking');
+    try {
+      const result = await invoke<string>('check_for_update');
+      if (result === 'up_to_date') {
+        setUpdateStatus('up_to_date');
+        setTimeout(() => setUpdateStatus('idle'), 3000);
+      } else {
+        setUpdateStatus('installed');
+      }
+    } catch {
+      setUpdateStatus('error');
+      setTimeout(() => setUpdateStatus('idle'), 3000);
+    }
+  };
 
   const handleVersionTap = () => {
     if (debugUnlocked) return;
@@ -252,6 +275,26 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
               <option value={300}>5 minutes</option>
               <option value={600}>10 minutes</option>
             </select>
+          </div>
+
+          <div className="setting-row">
+            <div className="setting-info">
+              <label>Updates</label>
+              <span className="setting-description">
+                {updateStatus === 'installed' ? 'Restart to apply update' : `v${appVersion}`}
+              </span>
+            </div>
+            <button
+              className="update-check-btn"
+              onClick={handleCheckUpdate}
+              disabled={updateStatus === 'checking'}
+            >
+              {updateStatus === 'checking' ? 'Checking...' :
+               updateStatus === 'up_to_date' ? 'Up to date' :
+               updateStatus === 'installed' ? 'Restart' :
+               updateStatus === 'error' ? 'Failed' :
+               'Check'}
+            </button>
           </div>
         </section>
 

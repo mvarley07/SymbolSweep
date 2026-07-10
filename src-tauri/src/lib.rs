@@ -282,6 +282,26 @@ fn test_notification(app: tauri::AppHandle) {
     tray::send_notification(&app, "SymbolSweep Test", "Notifications are working!");
 }
 
+/// Check for updates and install if available
+#[tauri::command]
+async fn check_for_update(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let version = update.version.clone();
+            update
+                .download_and_install(|_, _| {}, || {})
+                .await
+                .map_err(|e| format!("Install failed: {}", e))?;
+            Ok(format!("v{} installed -- restart to apply", version))
+        }
+        Ok(None) => Ok("up_to_date".to_string()),
+        Err(e) => Err(format!("Update check failed: {}", e)),
+    }
+}
+
 /// Open macOS System Settings to the Notifications pane
 #[tauri::command]
 fn open_notification_settings() {
@@ -312,6 +332,7 @@ pub fn run() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .setup(|app| {
             // Create system tray IMMEDIATELY with retry logic
@@ -532,10 +553,48 @@ pub fn run() {
                 }
             });
 
+            // Background update check (30s after launch, then every 6 hours)
+            let app_handle_updater = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(30));
+                loop {
+                    let handle = app_handle_updater.clone();
+                    tauri::async_runtime::block_on(async move {
+                        use tauri_plugin_updater::UpdaterExt;
+                        if let Ok(updater) = handle.updater() {
+                            if let Ok(Some(update)) = updater.check().await {
+                                let _ = update.download_and_install(|_, _| {}, || {}).await;
+                            }
+                        }
+                    });
+                    std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
+                }
+            });
+
             // Configure window for menu bar app behavior
             if let Some(window) = app.get_webview_window("main") {
                 // Hide window initially (will show when tray icon clicked)
                 let _ = window.hide();
+
+                // Pre-position to top-right so the first show() never flashes at center
+                {
+                    use tauri::PhysicalPosition;
+                    const WINDOW_WIDTH: i32 = 280;
+                    const MARGIN_RIGHT: i32 = 10;
+                    const MENU_BAR_HEIGHT: i32 = 30;
+
+                    if let Ok(Some(monitor)) = window.primary_monitor() {
+                        let screen_size = monitor.size();
+                        let scale = monitor.scale_factor();
+                        let screen_width = (screen_size.width as f64 / scale) as i32;
+                        let x = screen_width - WINDOW_WIDTH - MARGIN_RIGHT;
+                        let y = MENU_BAR_HEIGHT;
+                        let _ = window.set_position(PhysicalPosition::new(
+                            (x as f64 * scale) as i32,
+                            (y as f64 * scale) as i32,
+                        ));
+                    }
+                }
 
                 // Make window float above others
                 let _ = window.set_always_on_top(true);
@@ -574,6 +633,7 @@ pub fn run() {
             scan_dev,
             get_dev_scan_result,
             delete_dev_artifacts,
+            check_for_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -583,16 +643,26 @@ pub fn run() {
             if let tauri::RunEvent::Reopen { .. } = event {
                 if let Some(window) = app.get_webview_window("main") {
                     use tauri::PhysicalPosition;
-                    // Get screen size and position window at top-right before showing
-                    if let Ok(monitor) = window.primary_monitor() {
-                        if let Some(monitor) = monitor {
-                            let screen_size = monitor.size();
-                            let window_size = window.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 345));
-                            let x = screen_size.width as i32 - window_size.width as i32 - 10;
-                            let y = 30; // Below menu bar
-                            let _ = window.set_position(PhysicalPosition::new(x, y));
-                        }
+                    const WINDOW_WIDTH: i32 = 280;
+                    const MARGIN_RIGHT: i32 = 10;
+                    const MENU_BAR_HEIGHT: i32 = 30;
+
+                    // Hide first to prevent flash at old position
+                    let _ = window.hide();
+
+                    if let Ok(Some(monitor)) = window.primary_monitor() {
+                        let screen_size = monitor.size();
+                        let scale = monitor.scale_factor();
+                        let screen_width = (screen_size.width as f64 / scale) as i32;
+                        let x = screen_width - WINDOW_WIDTH - MARGIN_RIGHT;
+                        let y = MENU_BAR_HEIGHT;
+                        let _ = window.set_position(PhysicalPosition::new(
+                            (x as f64 * scale) as i32,
+                            (y as f64 * scale) as i32,
+                        ));
                     }
+
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                     let _ = window.show();
                     let _ = window.set_focus();
                 }

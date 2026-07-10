@@ -225,6 +225,31 @@ select option {
   color: var(--text-primary);
 }
 
+/* Update check button */
+.update-check-btn {
+  padding: 5px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.update-check-btn:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.update-check-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Debug Section */
 .debug-section {
   border-top: 1px dashed var(--border-medium);

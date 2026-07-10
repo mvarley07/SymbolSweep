@@ -21,6 +21,10 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 
+# Tauri signing keys
+*.key
+*.key.pub
+
 # Logs
 *.log
 npm-debug.log*
