@@ -127,13 +127,11 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
 
 /// Create a minimal transparent icon (macOS requires an icon, but we use title for display)
 fn create_minimal_icon() -> Result<Image<'static>, Box<dyn std::error::Error>> {
-    // 16x16 transparent image using raw RGBA data
-    // Each pixel is 4 bytes: R, G, B, A (all zeros = fully transparent)
-    let width = 16u32;
-    let height = 16u32;
-    let rgba_data: Vec<u8> = vec![0u8; (width * height * 4) as usize];
-
-    Ok(Image::new_owned(rgba_data, width, height))
+    // 1x1 transparent pixel — smallest possible icon to avoid wasting menu bar width.
+    // macOS allocates horizontal space equal to the icon canvas width, so a 16x16
+    // transparent image eats ~16 logical px of dead padding next to the title text.
+    let rgba_data: Vec<u8> = vec![0u8; 4]; // single RGBA pixel, fully transparent
+    Ok(Image::new_owned(rgba_data, 1, 1))
 }
 
 /// Format the tray title with status indicator
