@@ -7,7 +7,7 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
-use crate::cache_monitor::{format_size, CacheState, CacheStatus};
+use crate::cache_monitor::{AppStatus, CacheState};
 
 /// Activate the macOS app so it receives first-click events
 #[cfg(target_os = "macos")]
@@ -61,7 +61,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
     let menu = Menu::with_items(app, &[&show_item, &clean_item, &separator, &quit_item])?;
 
     // Create a minimal 1x1 transparent icon (required by Tauri, but we'll hide it with title)
-    let icon = create_minimal_icon()?;
+    let icon = create_tray_icon()?;
 
     // Build tray - text only, minimal icon
     // IMPORTANT: The returned TrayIcon MUST be stored somewhere to prevent it from being dropped
@@ -125,74 +125,45 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
     Ok(tray)
 }
 
-/// Create a minimal transparent icon (macOS requires an icon, but we use title for display)
-fn create_minimal_icon() -> Result<Image<'static>, Box<dyn std::error::Error>> {
-    // 1x1 transparent pixel — smallest possible icon to avoid wasting menu bar width.
-    // macOS allocates horizontal space equal to the icon canvas width, so a 16x16
-    // transparent image eats ~16 logical px of dead padding next to the title text.
-    let rgba_data: Vec<u8> = vec![0u8; 4]; // single RGBA pixel, fully transparent
-    Ok(Image::new_owned(rgba_data, 1, 1))
+/// Load the broom template icon for the tray.
+/// macOS treats images with filenames ending in "Template" as template images,
+/// automatically adapting to light/dark menu bar.
+fn create_tray_icon() -> Result<Image<'static>, Box<dyn std::error::Error>> {
+    let icon_bytes = include_bytes!("../icons/tray-iconTemplate@2x.png");
+    let img = Image::from_bytes(icon_bytes)?.to_owned();
+    Ok(img)
 }
 
-/// Format the tray title with status indicator
-/// Uses flat colored circles - renders cleanly on macOS
-fn format_tray_title(status: &CacheStatus) -> String {
-    let indicator = match status.state {
-        CacheState::Normal => "🟢",   // Green - healthy
-        CacheState::Warning => "🟠",  // Orange - attention needed
-        CacheState::Critical => "🔴", // Red - urgent
-    };
-
-    format!("{} {}", indicator, status.size_display)
-}
-
-/// Update tray with current cache status (coresymbolicationd only)
-pub fn update_tray_icon<R: Runtime>(
+/// Update tray from the unified AppStatus — single source of truth.
+/// Both tray and popup read from the same struct, emitted at the same moment.
+pub fn update_tray<R: Runtime>(
     app: &AppHandle<R>,
-    status: &CacheStatus,
-) -> Result<(), Box<dyn std::error::Error>> {
-    update_tray_with_dev(app, status, 0)
-}
-
-/// Update tray with combined cache + dev artifact totals
-pub fn update_tray_with_dev<R: Runtime>(
-    app: &AppHandle<R>,
-    status: &CacheStatus,
-    dev_total_bytes: u64,
+    status: &AppStatus,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let combined_bytes = status.size_bytes + dev_total_bytes;
-        let combined_state = CacheState::from_size(combined_bytes);
+        match status.health {
+            CacheState::Normal => {
+                // Icon only — minimal menu bar footprint
+                tray.set_title(Some(""))?;
+            }
+            CacheState::Warning | CacheState::Critical => {
+                // Show disk free space (same value as popup hero)
+                tray.set_title(Some(&format!("{} free", status.disk_free_display)))?;
+            }
+        }
 
-        let indicator = match combined_state {
-            CacheState::Normal => "\u{1F7E2}",   // Green circle
-            CacheState::Warning => "\u{1F7E0}",  // Orange circle
-            CacheState::Critical => "\u{1F534}", // Red circle
-        };
-
-        let title = format!("{} {}", indicator, format_size(combined_bytes));
-        tray.set_title(Some(&title))?;
-
-        // Tooltip with breakdown
-        let tooltip = if dev_total_bytes > 0 {
-            format!(
-                "SymbolSweep\nSystem cache: {}\nDev artifacts: {}\nTotal reclaimable: {}",
-                status.size_display,
-                format_size(dev_total_bytes),
-                format_size(combined_bytes),
-            )
-        } else {
-            format!(
-                "SymbolSweep\n{} - {} files\nStatus: {}",
-                status.size_display,
-                status.file_count,
-                match status.state {
-                    CacheState::Normal => "Normal",
-                    CacheState::Warning => "Warning (2GB+)",
-                    CacheState::Critical => "Critical (5GB+)",
-                }
-            )
-        };
+        // Tooltip always shows full breakdown
+        let tooltip = format!(
+            "SymbolSweep\nDisk: {} free of {}\nReclaimable: {}\nStatus: {}",
+            status.disk_free_display,
+            status.disk_total_display,
+            status.reclaimable_display,
+            match status.health {
+                CacheState::Normal => "Healthy",
+                CacheState::Warning => "Warning",
+                CacheState::Critical => "Critical",
+            }
+        );
         tray.set_tooltip(Some(&tooltip))?;
     }
 

@@ -3889,6 +3889,7 @@ name = "symbolsweep"
 version = "1.0.0"
 dependencies = [
  "cocoa",
+ "libc",
  "objc",
  "serde",
  "serde_json",

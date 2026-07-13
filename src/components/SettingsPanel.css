@@ -79,6 +79,13 @@
   padding-left: 2px;
 }
 
+.section-description {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin: -4px 0 10px 2px;
+  line-height: 1.4;
+}
+
 /* Setting Rows */
 .setting-row {
   display: flex;

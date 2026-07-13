@@ -79,14 +79,24 @@ impl Settings {
     /// Load settings from disk
     pub fn load() -> Self {
         let path = Self::file_path();
-        if path.exists() {
+        let mut settings = if path.exists() {
             match fs::read_to_string(&path) {
                 Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
                 Err(_) => Self::default(),
             }
         } else {
             Self::default()
+        };
+
+        // Clamp stale debug-only intervals: if debug mode is off but interval
+        // is below the minimum non-debug value (1 hour), reset to 1 hour.
+        // This fixes intervals left over from a previous debug session.
+        if !settings.debug_mode && settings.auto_clean_interval_secs < 3600 {
+            settings.auto_clean_interval_secs = 3600;
+            let _ = settings.save();
         }
+
+        settings
     }
 
     /// Save settings to disk

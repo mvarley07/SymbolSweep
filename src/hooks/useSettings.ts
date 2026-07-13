@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { Settings } from '../types';
 
 const defaultSettings: Settings = {
-  auto_clean_on_threshold: false,
+  auto_clean_on_threshold: true,
   auto_clean_threshold: 5 * 1024 * 1024 * 1024, // 5GB
   auto_clean_scheduled: false,
   auto_clean_interval_secs: 6 * 60 * 60, // 6 hours

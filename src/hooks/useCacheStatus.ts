@@ -1,8 +1,43 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { CacheStatus, CleanResult, DevDeleteResult, DevScanResult } from '../types';
+import type { AppStatus, CacheStatus, CleanResult, DevDeleteResult, DevScanResult } from '../types';
 
+export function useAppStatus() {
+  const [status, setStatus] = useState<AppStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const result = await invoke<AppStatus>('get_app_status');
+      setStatus(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Initial fetch
+    fetchStatus();
+
+    // Listen for unified status updates from backend
+    const unlisten = listen<AppStatus>('app-status-update', (event) => {
+      setStatus(event.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [fetchStatus]);
+
+  return { status, loading, error, refresh: fetchStatus };
+}
+
+/** @deprecated Use useAppStatus instead — kept for backward compatibility */
 export function useCacheStatus() {
   const [status, setStatus] = useState<CacheStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,17 +56,11 @@ export function useCacheStatus() {
   }, []);
 
   useEffect(() => {
-    // Initial fetch
     fetchStatus();
-
-    // Listen for status updates from backend
-    const unlisten = listen<CacheStatus>('cache-status-update', (event) => {
-      setStatus(event.payload);
+    const unlisten = listen<AppStatus>('app-status-update', (event) => {
+      setStatus(event.payload.cache);
     });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
+    return () => { unlisten.then((fn) => fn()); };
   }, [fetchStatus]);
 
   return { status, loading, error, refresh: fetchStatus };
@@ -116,6 +145,29 @@ export function useDeleteDevArtifacts() {
     setError(null);
     try {
       const result = await invoke<DevDeleteResult>('delete_dev_artifacts', { paths });
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      throw err;
+    } finally {
+      setDeleting(false);
+    }
+  }, []);
+
+  return { deleteArtifacts, deleting, error };
+}
+
+/** Manual deletion — allows Rebuildable/SafeWithReinstall, blocks Ask tier */
+export function useDeleteDevArtifactsManual() {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const deleteArtifacts = useCallback(async (paths: string[]) => {
+    setDeleting(true);
+    setError(null);
+    try {
+      const result = await invoke<DevDeleteResult>('delete_dev_artifacts_manual', { paths });
       return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

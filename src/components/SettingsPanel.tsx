@@ -96,6 +96,9 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
       <div className="settings-content">
         <section className="settings-section">
           <h2>Auto-Clean</h2>
+          <p className="section-description">
+            Cleans system and package-manager caches. Never touches build artifacts or project files.
+          </p>
 
           <div className="setting-row">
             <div className="setting-info">

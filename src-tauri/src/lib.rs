@@ -11,10 +11,13 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, reindex_spotlight, CleanResult};
-use cache_monitor::{get_cache_status, get_combined_cache_status, get_simulated_status, is_daemon_running, CacheStatus};
+use cache_monitor::{
+    compute_app_status, get_cache_status, get_combined_cache_status, get_simulated_status,
+    is_daemon_running, AppStatus, CacheStatus,
+};
 use dev_scanner::{DevDeleteResult, DevScanResult};
 use scheduler::{time_since_last_clean, Settings};
-use tray::{create_tray, send_notification, update_tray_icon, update_tray_with_dev};
+use tray::{create_tray, send_notification, update_tray};
 
 /// App state for sharing across commands
 pub struct AppState {
@@ -56,6 +59,26 @@ fn get_combined_status() -> CacheStatus {
     get_combined_cache_status()
 }
 
+/// Get the unified app status — single source of truth for tray and popup
+#[tauri::command]
+fn get_app_status(state: tauri::State<AppState>) -> AppStatus {
+    let cache = {
+        let settings = state.settings.lock().unwrap();
+        if settings.debug_mode {
+            get_simulated_status(settings.debug_simulated_size)
+        } else {
+            get_cache_status()
+        }
+    };
+    let dev_total = state
+        .dev_scan_result
+        .lock()
+        .ok()
+        .and_then(|s| s.as_ref().map(|r| r.total_bytes))
+        .unwrap_or(0);
+    compute_app_status(&cache, dev_total)
+}
+
 /// Check if coresymbolicationd daemon is running
 #[tauri::command]
 fn get_daemon_status() -> bool {
@@ -83,15 +106,18 @@ fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) ->
                         let _ = app.emit("settings-updated", settings.clone());
                     }
                 }
-                // Update tray icon immediately after clean (include dev artifact total)
-                let status = get_cache_status();
+                // Compute unified status and update both tray and frontend
+                let cache = {
+                    let s = state.settings.lock().unwrap();
+                    if s.debug_mode { get_simulated_status(s.debug_simulated_size) } else { get_cache_status() }
+                };
                 let dev_total = state.dev_scan_result.lock()
                     .ok()
                     .and_then(|s| s.as_ref().map(|r| r.total_bytes))
                     .unwrap_or(0);
-                let _ = update_tray_with_dev(&app, &status, dev_total);
-                // Emit status update so frontend refreshes
-                let _ = app.emit("cache-status-update", &status);
+                let app_status = compute_app_status(&cache, dev_total);
+                let _ = update_tray(&app, &app_status);
+                let _ = app.emit("app-status-update", &app_status);
             }
             Ok(result)
         }
@@ -103,6 +129,27 @@ fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) ->
 #[tauri::command]
 fn get_log_path() -> String {
     get_log_file_path()
+}
+
+/// Read recent deletion log entries (last 50 lines)
+#[tauri::command]
+fn get_recent_deletions() -> Vec<String> {
+    let log_path = std::path::PathBuf::from(get_log_file_path());
+    if !log_path.exists() {
+        return Vec::new();
+    }
+    match std::fs::read_to_string(&log_path) {
+        Ok(content) => {
+            let lines: Vec<String> = content
+                .lines()
+                .rev()
+                .take(50)
+                .map(|l| l.to_string())
+                .collect();
+            lines
+        }
+        Err(_) => Vec::new(),
+    }
 }
 
 /// Reindex Spotlight (requires password)
@@ -146,7 +193,7 @@ fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevS
         *cached = Some(result.clone());
     }
 
-    // Update tray to reflect combined totals
+    // Compute unified status and update tray + emit
     let cache_status = {
         let s = state.settings.lock().unwrap();
         if s.debug_mode {
@@ -155,7 +202,9 @@ fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevS
             get_cache_status()
         }
     };
-    let _ = update_tray_with_dev(&app, &cache_status, result.total_bytes);
+    let app_status = compute_app_status(&cache_status, result.total_bytes);
+    let _ = update_tray(&app, &app_status);
+    let _ = app.emit("app-status-update", &app_status);
 
     // Release scan lock
     state
@@ -171,12 +220,31 @@ fn get_dev_scan_result(state: tauri::State<AppState>) -> Option<DevScanResult> {
     state.dev_scan_result.lock().unwrap().clone()
 }
 
-/// Delete specific dev artifacts by path, then re-scan and return updated results
+/// Delete specific dev artifacts by path (bulk — Safe tier only), then re-scan
 #[tauri::command]
 fn delete_dev_artifacts(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
     paths: Vec<String>,
+) -> Result<DevDeleteResult, String> {
+    delete_dev_artifacts_inner(&app, &state, &paths, false)
+}
+
+/// Delete specific dev artifacts by path (manual — user-initiated, allows non-Safe except Ask)
+#[tauri::command]
+fn delete_dev_artifacts_manual(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    paths: Vec<String>,
+) -> Result<DevDeleteResult, String> {
+    delete_dev_artifacts_inner(&app, &state, &paths, true)
+}
+
+fn delete_dev_artifacts_inner(
+    app: &tauri::AppHandle,
+    state: &tauri::State<AppState>,
+    paths: &[String],
+    manual: bool,
 ) -> Result<DevDeleteResult, String> {
     // Get known artifacts from cached scan result (safety: only delete known paths)
     let known_artifacts = {
@@ -187,7 +255,11 @@ fn delete_dev_artifacts(
         }
     };
 
-    let delete_result = dev_scanner::delete_dev_artifacts(&paths, &known_artifacts);
+    let delete_result = if manual {
+        dev_scanner::delete_dev_artifacts_manual(paths, &known_artifacts)
+    } else {
+        dev_scanner::delete_dev_artifacts(paths, &known_artifacts)
+    };
 
     // Re-scan to get updated totals
     let roots = {
@@ -202,7 +274,7 @@ fn delete_dev_artifacts(
         *cached = Some(new_scan.clone());
     }
 
-    // Update tray with new combined totals
+    // Compute unified status and update tray + emit
     let cache_status = {
         let s = state.settings.lock().unwrap();
         if s.debug_mode {
@@ -211,9 +283,11 @@ fn delete_dev_artifacts(
             get_cache_status()
         }
     };
-    let _ = update_tray_with_dev(&app, &cache_status, new_scan.total_bytes);
+    let app_status = compute_app_status(&cache_status, new_scan.total_bytes);
+    let _ = update_tray(app, &app_status);
+    let _ = app.emit("app-status-update", &app_status);
 
-    // Notify frontend of updated scan result
+    // Notify frontend of updated scan result (full artifact list)
     let _ = app.emit("dev-scan-ready", &new_scan);
 
     Ok(delete_result)
@@ -231,7 +305,12 @@ fn get_settings(state: tauri::State<AppState>) -> Settings {
 
 /// Update settings
 #[tauri::command]
-fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, settings: Settings) -> Result<(), String> {
+fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, mut settings: Settings) -> Result<(), String> {
+    // Clamp debug-only intervals when debug mode is off
+    if !settings.debug_mode && settings.auto_clean_interval_secs < 3600 {
+        settings.auto_clean_interval_secs = 3600;
+    }
+
     let mut current = state.settings.lock().unwrap();
 
     // Check if launch_at_login changed
@@ -242,12 +321,18 @@ fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, setting
     current.save()?;
 
     // Update tray immediately when settings change (especially debug mode)
-    let status = if settings.debug_mode {
+    let cache = if settings.debug_mode {
         get_simulated_status(settings.debug_simulated_size)
     } else {
         get_cache_status()
     };
-    let _ = update_tray_icon(&app, &status);
+    let dev_total = state.dev_scan_result.lock()
+        .ok()
+        .and_then(|s| s.as_ref().map(|r| r.total_bytes))
+        .unwrap_or(0);
+    let app_status = compute_app_status(&cache, dev_total);
+    let _ = update_tray(&app, &app_status);
+    let _ = app.emit("app-status-update", &app_status);
 
     // Handle launch at login change
     if launch_changed {
@@ -313,6 +398,17 @@ fn open_notification_settings() {
     }
 }
 
+/// Open macOS System Settings to the Storage pane
+#[tauri::command]
+fn open_storage_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.settings.Storage")
+            .spawn();
+    }
+}
+
 // ============================================================================
 // App Entry Point
 // ============================================================================
@@ -353,16 +449,15 @@ pub fn run() {
             let tray = tray_result?;
             Box::leak(Box::new(tray));
 
-            // Tray is now visible with placeholder "0 B"
-            // Get initial status in background to avoid blocking startup
+            // Tray is now visible — get initial status in background
             let app_handle_init = app.handle().clone();
             let state = app.state::<AppState>();
             let settings_init = Arc::clone(&state.settings);
             let dev_result_init = Arc::clone(&state.dev_scan_result);
             let dev_in_progress_init = Arc::clone(&state.dev_scan_in_progress);
             std::thread::spawn(move || {
-                // Phase 1: Quick — get coresymbolicationd status
-                let initial_status = {
+                // Phase 1: Quick — get coresymbolicationd cache status
+                let initial_cache = {
                     let settings = settings_init.lock().unwrap();
                     if settings.debug_mode {
                         get_simulated_status(settings.debug_simulated_size)
@@ -370,8 +465,10 @@ pub fn run() {
                         get_cache_status()
                     }
                 };
-                let _ = update_tray_icon(&app_handle_init, &initial_status);
-                let _ = app_handle_init.emit("cache-status-update", &initial_status);
+                // Emit unified AppStatus (dev_total=0 until scan completes)
+                let app_status = compute_app_status(&initial_cache, 0);
+                let _ = update_tray(&app_handle_init, &app_status);
+                let _ = app_handle_init.emit("app-status-update", &app_status);
 
                 // Phase 2: Slower — run initial dev artifact scan
                 if dev_in_progress_init
@@ -396,10 +493,12 @@ pub fn run() {
                         *cached = Some(dev_result.clone());
                     }
 
-                    // Update tray with combined total
-                    let _ = update_tray_with_dev(&app_handle_init, &initial_status, dev_total);
+                    // Re-compute and emit unified AppStatus with dev total
+                    let app_status = compute_app_status(&initial_cache, dev_total);
+                    let _ = update_tray(&app_handle_init, &app_status);
+                    let _ = app_handle_init.emit("app-status-update", &app_status);
 
-                    // Notify frontend that dev scan is ready
+                    // Also emit full artifact list for DevScanPanel
                     let _ = app_handle_init.emit("dev-scan-ready", &dev_result);
 
                     dev_in_progress_init.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -440,8 +539,8 @@ pub fn run() {
                     // Sleep first (so we don't immediately check on startup)
                     std::thread::sleep(std::time::Duration::from_secs(interval));
 
-                    // Get current status (read debug settings FRESH after sleep)
-                    let status = {
+                    // Get current cache status (read debug settings FRESH after sleep)
+                    let cache_status = {
                         let s = settings.lock().unwrap();
                         if s.debug_mode {
                             get_simulated_status(s.debug_simulated_size)
@@ -450,23 +549,22 @@ pub fn run() {
                         }
                     };
 
-                    // Update tray icon (include dev scan total if available)
+                    // Compute unified AppStatus and update both tray + frontend
                     let dev_total = dev_result_monitor
                         .lock()
                         .unwrap()
                         .as_ref()
                         .map(|r| r.total_bytes)
                         .unwrap_or(0);
-                    let _ = update_tray_with_dev(&app_handle, &status, dev_total);
-
-                    // Emit status update to frontend
-                    let _ = app_handle.emit("cache-status-update", &status);
+                    let app_status = compute_app_status(&cache_status, dev_total);
+                    let _ = update_tray(&app_handle, &app_status);
+                    let _ = app_handle.emit("app-status-update", &app_status);
 
                     // Check for auto-clean conditions
                     let should_auto_clean = {
                         let s = settings.lock().unwrap();
                         let threshold_clean = s.auto_clean_on_threshold
-                            && status.size_bytes >= s.auto_clean_threshold;
+                            && cache_status.size_bytes >= s.auto_clean_threshold;
 
                         let now = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
@@ -487,25 +585,22 @@ pub fn run() {
                             // Update last clean timestamp and reset debug size
                             if let Ok(mut s) = settings.lock() {
                                 s.record_clean();
-                                // Reset debug simulated size to 0 after clean
                                 if s.debug_mode {
                                     s.debug_simulated_size = 0;
                                     let _ = s.save();
-                                    // Notify frontend to refresh settings
                                     let _ = app_handle.emit("settings-updated", s.clone());
                                 }
                             }
 
-                            // Update tray to show clean state
-                            let clean_status = get_cache_status();
-                            let _ = update_tray_icon(&app_handle, &clean_status);
-                            // Emit status update so frontend refreshes
-                            let _ = app_handle.emit("cache-status-update", &clean_status);
+                            // Re-compute and emit unified AppStatus after clean
+                            let clean_cache = get_cache_status();
+                            let post_clean_status = compute_app_status(&clean_cache, dev_total);
+                            let _ = update_tray(&app_handle, &post_clean_status);
+                            let _ = app_handle.emit("app-status-update", &post_clean_status);
 
                             // Emit clean result
                             let _ = app_handle.emit("auto-clean-completed", &result);
 
-                            // Notify about completion (only if something was actually freed)
                             if show_notifications && result.bytes_freed > 0 {
                                 send_notification(
                                     &app_handle,
@@ -517,16 +612,16 @@ pub fn run() {
                     }
 
                     // Check for warning/critical thresholds and notify (once per escalation)
-                    // Skip if auto-clean just ran - no point warning about something we just cleaned
+                    // Uses unified health state, not just cache state
                     let show_notifications = settings.lock().unwrap().show_notifications;
                     if show_notifications && !should_auto_clean {
-                        match status.state {
+                        match app_status.health {
                             cache_monitor::CacheState::Warning => {
                                 if !warning_notified {
                                     send_notification(
                                         &app_handle,
                                         "SymbolSweep - Warning",
-                                        &format!("Cache at {} - consider cleaning soon", status.size_display),
+                                        &format!("Disk free: {} - consider cleaning", app_status.disk_free_display),
                                     );
                                     warning_notified = true;
                                 }
@@ -536,7 +631,7 @@ pub fn run() {
                                     send_notification(
                                         &app_handle,
                                         "SymbolSweep - Critical",
-                                        &format!("Cache at {} - cleaning recommended!", status.size_display),
+                                        &format!("Disk free: {} - cleaning recommended!", app_status.disk_free_display),
                                     );
                                     critical_notified = true;
                                 }
@@ -546,7 +641,7 @@ pub fn run() {
                     }
 
                     // Reset notification flags when back to normal
-                    if matches!(status.state, cache_monitor::CacheState::Normal) {
+                    if matches!(app_status.health, cache_monitor::CacheState::Normal) {
                         warning_notified = false;
                         critical_notified = false;
                     }
@@ -620,6 +715,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_status,
             get_combined_status,
+            get_app_status,
             get_daemon_status,
             clean,
             get_log_path,
@@ -630,9 +726,12 @@ pub fn run() {
             quit_app,
             test_notification,
             open_notification_settings,
+            open_storage_settings,
             scan_dev,
             get_dev_scan_result,
             delete_dev_artifacts,
+            delete_dev_artifacts_manual,
+            get_recent_deletions,
             check_for_update,
         ])
         .build(tauri::generate_context!())
