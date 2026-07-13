@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cache_cleaner::{clean_cache, CleanResult};
-use crate::cache_monitor::{get_cache_status, CacheState, WARNING_THRESHOLD};
+use crate::cache_monitor::{get_cache_status, CacheState, CRITICAL_THRESHOLD, WARNING_THRESHOLD};
 
 /// Settings for auto-clean behavior
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,8 +50,8 @@ fn default_dev_scan_roots() -> Vec<String> {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            auto_clean_on_threshold: false,
-            auto_clean_threshold: WARNING_THRESHOLD,
+            auto_clean_on_threshold: true,
+            auto_clean_threshold: CRITICAL_THRESHOLD,
             auto_clean_scheduled: false,
             auto_clean_interval_secs: 6 * 60 * 60, // 6 hours
             show_notifications: true,
