@@ -307,23 +307,23 @@ select option {
   color: white;
 }
 
-.debug-btn.warning:hover:not(:disabled):not(.active) {
+.debug-btn.moderate:hover:not(:disabled):not(.active) {
   background: var(--status-warning);
   color: rgba(0, 0, 0, 0.85);
 }
 
-.debug-btn.warning.active {
+.debug-btn.moderate.active {
   background: var(--status-warning);
   border-color: var(--status-warning);
   color: rgba(0, 0, 0, 0.85);
 }
 
-.debug-btn.critical:hover:not(:disabled):not(.active) {
+.debug-btn.heavy:hover:not(:disabled):not(.active) {
   background: var(--status-critical);
   color: white;
 }
 
-.debug-btn.critical.active {
+.debug-btn.heavy.active {
   background: var(--status-critical);
   border-color: var(--status-critical);
   color: white;

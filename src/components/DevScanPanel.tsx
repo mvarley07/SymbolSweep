@@ -11,7 +11,7 @@ const TIER_CONFIG: Record<ArtifactTier, { label: string; desc: string; className
   Safe: { label: 'SAFE', desc: 'Caches \u2014 regenerate automatically', className: 'tier-safe' },
   Rebuildable: { label: 'REBUILD', desc: 'Build artifacts \u2014 slow to rebuild', className: 'tier-rebuild' },
   SafeWithReinstall: { label: 'SAFE-WITH-REINSTALL', desc: 'npm install to restore', className: 'tier-reinstall' },
-  Ask: { label: 'REVIEW', desc: 'May be shipping artifacts', className: 'tier-ask' },
+  Ask: { label: 'REVIEW', desc: 'May contain shipped output', className: 'tier-ask' },
 };
 
 interface ArtifactRowProps {

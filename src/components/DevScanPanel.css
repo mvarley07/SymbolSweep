@@ -27,9 +27,15 @@
 }
 
 .devscan-panel .back-btn:hover,
-.devscan-panel .rescan-btn:hover {
+.devscan-panel .rescan-btn:hover:not(:disabled) {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.devscan-panel .rescan-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .devscan-panel .back-btn svg,

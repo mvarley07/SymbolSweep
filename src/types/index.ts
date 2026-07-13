@@ -107,14 +107,10 @@ export interface DevDeleteResult {
   errors: string[];
 }
 
-// Debug preset sizes
+// Debug preset sizes (simulate reclaimable for CleanState testing)
 export const DEBUG_SIZES = {
   EMPTY: 0,
-  SMALL: 1 * 1024 * 1024 * 1024,      // 1GB - Normal
-  WARNING: 3 * 1024 * 1024 * 1024,    // 3GB - Warning
-  CRITICAL: 7 * 1024 * 1024 * 1024,  // 7GB - Critical
+  SMALL: 1 * 1024 * 1024 * 1024,      // 1GB
+  MODERATE: 3 * 1024 * 1024 * 1024,   // 3GB
+  HEAVY: 7 * 1024 * 1024 * 1024,      // 7GB
 } as const;
-
-// Threshold constants (should match Rust)
-export const WARNING_THRESHOLD = 2 * 1024 * 1024 * 1024; // 2GB
-export const CRITICAL_THRESHOLD = 5 * 1024 * 1024 * 1024; // 5GB

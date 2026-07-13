@@ -3,16 +3,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { useSettings } from '../hooks/useSettings';
-import { WARNING_THRESHOLD, CRITICAL_THRESHOLD, DEBUG_SIZES } from '../types';
+import { DEBUG_SIZES } from '../types';
 import './SettingsPanel.css';
 
 interface SettingsPanelProps {
   onBack: () => void;
-}
-
-function formatBytes(bytes: number): string {
-  const gb = bytes / (1024 * 1024 * 1024);
-  return `${gb.toFixed(0)}GB`;
 }
 
 function formatInterval(secs: number): string {
@@ -102,9 +97,9 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
 
           <div className="setting-row">
             <div className="setting-info">
-              <label htmlFor="auto-threshold">Clean when cache exceeds threshold</label>
+              <label htmlFor="auto-threshold">Clean when system cache exceeds</label>
               <span className="setting-description">
-                Automatically clean when cache reaches {formatBytes(settings.auto_clean_threshold)}
+                Automatically clean system caches at this size
               </span>
             </div>
             <label className="toggle">
@@ -128,10 +123,10 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                 onChange={(e) => updateSetting('auto_clean_threshold', Number(e.target.value))}
                 disabled={saving}
               >
-                <option value={1 * 1024 * 1024 * 1024}>1GB</option>
-                <option value={WARNING_THRESHOLD}>2GB (Warning)</option>
-                <option value={3 * 1024 * 1024 * 1024}>3GB</option>
-                <option value={CRITICAL_THRESHOLD}>5GB (Critical)</option>
+                <option value={1 * 1024 * 1024 * 1024}>1 GB</option>
+                <option value={2 * 1024 * 1024 * 1024}>2 GB</option>
+                <option value={3 * 1024 * 1024 * 1024}>3 GB</option>
+                <option value={5 * 1024 * 1024 * 1024}>5 GB</option>
               </select>
             </div>
           )}
@@ -184,7 +179,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
             <div className="setting-info">
               <label htmlFor="notifications">Show notifications</label>
               <span className="setting-description">
-                Alert when cache reaches warning or critical levels
+                Alert when reclaimable space builds up
               </span>
             </div>
             <label className="toggle">
@@ -343,15 +338,15 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                     3GB
                   </button>
                   <button
-                    className={`debug-btn warning ${settings.debug_simulated_size === DEBUG_SIZES.WARNING ? 'active' : ''}`}
-                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.WARNING)}
+                    className={`debug-btn moderate ${settings.debug_simulated_size === DEBUG_SIZES.MODERATE ? 'active' : ''}`}
+                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.MODERATE)}
                     disabled={saving}
                   >
                     7GB
                   </button>
                   <button
-                    className={`debug-btn critical ${settings.debug_simulated_size === DEBUG_SIZES.CRITICAL ? 'active' : ''}`}
-                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.CRITICAL)}
+                    className={`debug-btn heavy ${settings.debug_simulated_size === DEBUG_SIZES.HEAVY ? 'active' : ''}`}
+                    onClick={() => updateSetting('debug_simulated_size', DEBUG_SIZES.HEAVY)}
                     disabled={saving}
                   >
                     15GB

@@ -32,10 +32,11 @@ function formatSize(bytes: number): string {
 
 interface StatusIndicatorProps {
   state: CleanState;
-  size: string;
+  value: string | null;
+  label: string;
 }
 
-function StatusIndicator({ state, size }: StatusIndicatorProps) {
+function StatusIndicator({ state, value, label }: StatusIndicatorProps) {
   const stateConfig = {
     Clean: { label: 'All clean' },
     Moderate: { label: 'Moderate' },
@@ -48,12 +49,21 @@ function StatusIndicator({ state, size }: StatusIndicatorProps) {
   return (
     <div className="status-indicator">
       <div className={`status-size ${stateClass}`}>
-        {size}
+        {value ? (
+          <>
+            <span className="hero-value">{value}</span>
+            <span className="hero-label">{label}</span>
+          </>
+        ) : (
+          label
+        )}
       </div>
-      <div className={`status-state ${stateClass}`}>
-        <span className="status-dot" />
-        <span className="status-label">{config.label}</span>
-      </div>
+      {state !== 'Clean' && (
+        <div className={`status-state ${stateClass}`}>
+          <span className="status-dot" />
+          <span className="status-label">{config.label}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -249,24 +259,23 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         </button>
       </header>
 
+      {/* Hero — reclaimable total (pinned above scroll area) */}
+      <StatusIndicator
+        state={appStatus.clean_state}
+        value={appStatus.clean_state === 'Clean' ? null : appStatus.reclaimable_display}
+        label={appStatus.clean_state === 'Clean' ? 'All clean' : 'to clean'}
+      />
+
+      {/* Secondary disk context line */}
+      {appStatus.disk_health === 'Unknown' ? (
+        <span className="disk-context">Disk: unavailable</span>
+      ) : (
+        <span className={`disk-context${appStatus.disk_health !== 'Normal' ? ' disk-low' : ''}`}>
+          {appStatus.disk_free_display} free of {appStatus.disk_total_display}
+        </span>
+      )}
+
       <div className="status-content">
-        {/* Hero — reclaimable total */}
-        <StatusIndicator
-          state={appStatus.clean_state}
-          size={appStatus.clean_state === 'Clean'
-            ? 'All clean'
-            : `${appStatus.reclaimable_display} to clean`}
-        />
-
-        {/* Secondary disk context line */}
-        {appStatus.disk_health === 'Unknown' ? (
-          <span className="disk-context">Disk: unavailable</span>
-        ) : (
-          <span className={`disk-context${appStatus.disk_health !== 'Normal' ? ' disk-low' : ''}`}>
-            {appStatus.disk_free_display} free of {appStatus.disk_total_display}
-          </span>
-        )}
-
         <div className="status-details">
           <div className="detail-row clickable" onClick={handleToggleRecentCleans}>
             <span className="detail-label">Last cleaned</span>

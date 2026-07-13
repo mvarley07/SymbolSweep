@@ -1025,7 +1025,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
-                        hint: Some("May be shipping artifacts \u{2014} verify before deleting".to_string()),
+                        hint: Some("May contain shipped output \u{2014} verify before deleting".to_string()),
                         active_build: false,
                     });
                 }
