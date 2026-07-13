@@ -880,24 +880,28 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
         }
 
         // ── SAFE tier: build/tool caches ──
+        // Only classify as Safe if the parent directory is a recognized project.
+        // A bare .next/.turbo/etc. outside a project is not safe to auto-delete.
         if matches!(
             name_str.as_ref(),
             ".next" | ".turbo" | ".parcel-cache" | ".vite" | "coverage"
         ) {
-            let size = dir_size(&entry_path);
-            if size > 0 {
-                artifacts.push(DevArtifact {
-                    path: entry_path.to_string_lossy().to_string(),
-                    size_bytes: size,
-                    size_display: format_size(size),
-                    tier: ArtifactTier::Safe,
-                    kind: format!("{} cache", name_str),
-                    project: get_project_name(&entry_path),
-                    staleness_days: None,
-                    is_nested: false,
-                    hint: None,
-                    active_build: false,
-                });
+            if looks_like_project(dir) {
+                let size = dir_size(&entry_path);
+                if size > 0 {
+                    artifacts.push(DevArtifact {
+                        path: entry_path.to_string_lossy().to_string(),
+                        size_bytes: size,
+                        size_display: format_size(size),
+                        tier: ArtifactTier::Safe,
+                        kind: format!("{} cache", name_str),
+                        project: get_project_name(&entry_path),
+                        staleness_days: None,
+                        is_nested: false,
+                        hint: None,
+                        active_build: false,
+                    });
+                }
             }
             continue; // Don't descend into matched artifact dirs
         }
@@ -1927,5 +1931,51 @@ mod tests {
                 sys_dir
             );
         }
+    }
+
+    /// Test: .next without a project file (no package.json etc.) is NOT classified Safe.
+    /// A real project's .next (with package.json) still IS classified Safe.
+    #[test]
+    fn test_safe_cache_requires_project_file() {
+        let tmp = std::env::temp_dir().join("ss-project-gate");
+        let _ = fs::remove_dir_all(&tmp);
+
+        // Scenario 1: bare directory with .next but NO project file
+        let bare = tmp.join("notaproject");
+        fs::create_dir_all(bare.join(".next")).unwrap();
+        fs::write(bare.join(".next").join("cache.json"), "{}").unwrap();
+
+        let mut artifacts = Vec::new();
+        scan_project_root(&bare, &mut artifacts, 0);
+
+        let safe_next: Vec<_> = artifacts
+            .iter()
+            .filter(|a| a.path.contains(".next") && a.tier == ArtifactTier::Safe)
+            .collect();
+        assert!(
+            safe_next.is_empty(),
+            "Bare .next without project file must NOT be Safe, but found: {:?}",
+            safe_next.iter().map(|a| &a.path).collect::<Vec<_>>()
+        );
+
+        // Scenario 2: real project with package.json + .next
+        let project = tmp.join("realproject");
+        fs::create_dir_all(project.join(".next")).unwrap();
+        fs::write(project.join("package.json"), r#"{"name":"test"}"#).unwrap();
+        fs::write(project.join(".next").join("cache.json"), "{}").unwrap();
+
+        let mut artifacts2 = Vec::new();
+        scan_project_root(&project, &mut artifacts2, 0);
+
+        let safe_next2: Vec<_> = artifacts2
+            .iter()
+            .filter(|a| a.path.contains(".next") && a.tier == ArtifactTier::Safe)
+            .collect();
+        assert!(
+            !safe_next2.is_empty(),
+            "Real project .next should be Safe, but no Safe artifact found"
+        );
+
+        let _ = fs::remove_dir_all(&tmp);
     }
 }
