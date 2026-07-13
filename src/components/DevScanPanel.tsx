@@ -11,7 +11,7 @@ const TIER_CONFIG: Record<ArtifactTier, { label: string; desc: string; className
   Safe: { label: 'SAFE', desc: 'Caches \u2014 regenerate automatically', className: 'tier-safe' },
   Rebuildable: { label: 'REBUILD', desc: 'Build artifacts \u2014 slow to rebuild', className: 'tier-rebuild' },
   SafeWithReinstall: { label: 'SAFE-WITH-REINSTALL', desc: 'npm install to restore', className: 'tier-reinstall' },
-  Ask: { label: 'ASK', desc: 'May be shipping artifacts', className: 'tier-ask' },
+  Ask: { label: 'REVIEW', desc: 'May be shipping artifacts', className: 'tier-ask' },
 };
 
 interface ArtifactRowProps {
@@ -171,7 +171,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
               <span className="tier-value">{result.safe_with_reinstall_bytes > 0 ? result.safe_with_reinstall_display : 'None found'}</span>
             </div>
             <div className="tier-row tier-ask">
-              <span className="tier-label">ASK</span>
+              <span className="tier-label">REVIEW</span>
               <span className="tier-value">{result.ask_bytes > 0 ? result.ask_display : 'None found'}</span>
             </div>
           </div>

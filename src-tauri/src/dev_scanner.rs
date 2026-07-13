@@ -9,7 +9,7 @@
 //! Classification tiers:
 //! - SAFE: Caches that regenerate automatically (npm cache, .next, .turbo, etc.)
 //! - SAFE-WITH-REINSTALL: node_modules — one `npm install` to restore
-//! - ASK: dist/build/out — some projects ship from these
+//! - REVIEW: dist/build/out — some projects ship from these
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -42,7 +42,7 @@ impl ArtifactTier {
             ArtifactTier::Safe => "SAFE",
             ArtifactTier::Rebuildable => "REBUILD",
             ArtifactTier::SafeWithReinstall => "SAFE-WITH-REINSTALL",
-            ArtifactTier::Ask => "ASK",
+            ArtifactTier::Ask => "REVIEW",
         }
     }
 
@@ -1373,7 +1373,7 @@ mod tests {
         assert_eq!(ArtifactTier::Safe.label(), "SAFE");
         assert_eq!(ArtifactTier::Rebuildable.label(), "REBUILD");
         assert_eq!(ArtifactTier::SafeWithReinstall.label(), "SAFE-WITH-REINSTALL");
-        assert_eq!(ArtifactTier::Ask.label(), "ASK");
+        assert_eq!(ArtifactTier::Ask.label(), "REVIEW");
     }
 
     #[test]
@@ -1421,7 +1421,7 @@ mod tests {
             result.safe_with_reinstall_display, result.safe_with_reinstall_bytes
         );
         println!(
-            "  ASK:                 {} ({} bytes)",
+            "  REVIEW:              {} ({} bytes)",
             result.ask_display, result.ask_bytes
         );
         println!();
