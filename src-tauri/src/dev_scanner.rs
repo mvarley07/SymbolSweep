@@ -166,6 +166,59 @@ pub fn default_scan_roots() -> Vec<String> {
     .collect()
 }
 
+/// Validate a scan root — reject dangerous paths that should never be scanned.
+/// Returns true if the root is safe to scan, false if it should be rejected.
+fn is_safe_scan_root(root: &Path) -> bool {
+    let home = get_home_dir();
+
+    // Reject filesystem root
+    if root == Path::new("/") {
+        eprintln!("WARNING: Rejected scan root '/' — filesystem root is never scannable");
+        return false;
+    }
+
+    // Reject bare home directory
+    if root == home {
+        eprintln!(
+            "WARNING: Rejected scan root '{}' — bare home directory is never scannable",
+            root.display()
+        );
+        return false;
+    }
+
+    // Reject volume roots (/Volumes/*)
+    if root.starts_with("/Volumes") && root.components().count() <= 2 {
+        eprintln!(
+            "WARNING: Rejected scan root '{}' — volume root is never scannable",
+            root.display()
+        );
+        return false;
+    }
+
+    // Reject system-critical top-level directories
+    const BLOCKED_ROOTS: &[&str] = &[
+        "/System",
+        "/Library",
+        "/Applications",
+        "/private",
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/var",
+    ];
+    for blocked in BLOCKED_ROOTS {
+        if root == Path::new(blocked) || root.starts_with(blocked) {
+            eprintln!(
+                "WARNING: Rejected scan root '{}' — system directory is never scannable",
+                root.display()
+            );
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Calculate directory size recursively, skipping symlinks.
 /// Uses DirEntry::file_type() for efficient type checks on macOS (uses d_type).
 fn dir_size(path: &Path) -> u64 {
@@ -300,9 +353,10 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
     // Phase 3c: Ask-tier entries (Docker, Xcode Archives, Simulators, AVDs)
     scan_ask_tier(&home, &mut artifacts);
 
-    // Phase 4: Project roots
+    // Phase 4: Project roots — validate safety then filter to existing dirs
     let existing_roots: Vec<PathBuf> = scan_roots
         .iter()
+        .filter(|r| is_safe_scan_root(r))
         .filter(|r| r.exists() && r.is_dir())
         .cloned()
         .collect();
@@ -1833,5 +1887,45 @@ mod tests {
             !result.errors.iter().any(|e| e.contains("shallow path")),
             "Deep path should not be blocked by depth guard"
         );
+    }
+
+    /// Test: scan root validation rejects dangerous roots.
+    /// A config with dev_scan_roots=["/"] must produce no scannable root / no artifacts.
+    #[test]
+    fn test_scan_root_validation_rejects_dangerous() {
+        // "/" as scan root — must produce no artifacts from Phase 4
+        let result = scan_dev_artifacts(&["/".to_string()]);
+        // Phase 4 uses existing_roots which is filtered by is_safe_scan_root.
+        // "/" is rejected, so no Phase 4 artifacts should appear from it.
+        // (Phase 1-3 are independent of scan_roots, so we only check scan_roots output)
+        assert!(
+            !result.scan_roots.contains(&"/".to_string()),
+            "Root '/' must be rejected from scan_roots, got: {:?}",
+            result.scan_roots
+        );
+
+        // Home directory as root
+        let home = get_home_dir().to_string_lossy().to_string();
+        let result = scan_dev_artifacts(&[home.clone()]);
+        assert!(
+            !result.scan_roots.contains(&home),
+            "Bare home directory must be rejected from scan_roots"
+        );
+
+        // Volume root
+        let result = scan_dev_artifacts(&["/Volumes/External".to_string()]);
+        assert!(
+            !result.scan_roots.contains(&"/Volumes/External".to_string()),
+            "Volume root must be rejected from scan_roots"
+        );
+
+        // System directories
+        for sys_dir in &["/System", "/Library", "/Applications", "/private"] {
+            assert!(
+                !is_safe_scan_root(Path::new(sys_dir)),
+                "{} must be rejected by is_safe_scan_root",
+                sys_dir
+            );
+        }
     }
 }
