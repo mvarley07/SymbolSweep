@@ -139,6 +139,14 @@ fn get_home_dir() -> PathBuf {
     PathBuf::from(home)
 }
 
+/// Check if a path is a symlink (without following it).
+/// Uses symlink_metadata which does NOT resolve symlinks.
+fn is_symlink(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
 /// Default project root directories to scan
 pub fn default_scan_roots() -> Vec<String> {
     let home = get_home_dir();
@@ -366,7 +374,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/.yarn/cache
     let yarn_cache = home.join(".yarn").join("cache");
-    if yarn_cache.exists() && yarn_cache.is_dir() {
+    if !is_symlink(&yarn_cache) && yarn_cache.exists() && yarn_cache.is_dir() {
         let size = dir_size(&yarn_cache);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -386,7 +394,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/.bun/install/cache
     let bun_cache = home.join(".bun").join("install").join("cache");
-    if bun_cache.exists() && bun_cache.is_dir() {
+    if !is_symlink(&bun_cache) && bun_cache.exists() && bun_cache.is_dir() {
         let size = dir_size(&bun_cache);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -406,7 +414,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/.cargo/registry (Rust crate downloads)
     let cargo_registry = home.join(".cargo").join("registry");
-    if cargo_registry.exists() && cargo_registry.is_dir() {
+    if !is_symlink(&cargo_registry) && cargo_registry.exists() && cargo_registry.is_dir() {
         let size = dir_size(&cargo_registry);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -426,7 +434,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/Library/pnpm/store (pnpm content-addressable store)
     let pnpm_store = home.join("Library").join("pnpm").join("store");
-    if pnpm_store.exists() && pnpm_store.is_dir() {
+    if !is_symlink(&pnpm_store) && pnpm_store.exists() && pnpm_store.is_dir() {
         let size = dir_size(&pnpm_store);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -448,6 +456,10 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 /// Check a single home-level cache directory
 fn check_home_cache(home: &Path, dir_name: &str, kind: &str, artifacts: &mut Vec<DevArtifact>) {
     let path = home.join(dir_name);
+    // Skip symlinks — .exists()/.is_dir() resolve them, which could point at real data
+    if is_symlink(&path) {
+        return;
+    }
     if path.exists() && path.is_dir() {
         let size = dir_size(&path);
         if size > 0 {
@@ -550,6 +562,9 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
         .join("Xcode")
         .join("DerivedData");
 
+    if is_symlink(&derived_data) {
+        return;
+    }
     if derived_data.exists() && derived_data.is_dir() {
         let size = dir_size(&derived_data);
         if size > 0 {
@@ -577,7 +592,7 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
     // ~/.gradle/caches (Gradle build caches)
     let gradle_caches = home.join(".gradle").join("caches");
-    if gradle_caches.exists() && gradle_caches.is_dir() {
+    if !is_symlink(&gradle_caches) && gradle_caches.exists() && gradle_caches.is_dir() {
         let size = dir_size(&gradle_caches);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -597,7 +612,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/.m2/repository (Maven local repository)
     let maven_repo = home.join(".m2").join("repository");
-    if maven_repo.exists() && maven_repo.is_dir() {
+    if !is_symlink(&maven_repo) && maven_repo.exists() && maven_repo.is_dir() {
         let size = dir_size(&maven_repo);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -620,7 +635,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
         .map(PathBuf::from)
         .unwrap_or_else(|_| home.join("go"));
     let go_mod_cache = gopath.join("pkg").join("mod");
-    if go_mod_cache.exists() && go_mod_cache.is_dir() {
+    if !is_symlink(&go_mod_cache) && go_mod_cache.exists() && go_mod_cache.is_dir() {
         let size = dir_size(&go_mod_cache);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -646,7 +661,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
     // ~/Library/Containers/com.docker.docker
     let docker = home.join("Library").join("Containers").join("com.docker.docker");
-    if docker.exists() && docker.is_dir() {
+    if !is_symlink(&docker) && docker.exists() && docker.is_dir() {
         let size = dir_size(&docker);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -666,7 +681,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/Library/Developer/Xcode/Archives
     let xcode_archives = home.join("Library").join("Developer").join("Xcode").join("Archives");
-    if xcode_archives.exists() && xcode_archives.is_dir() {
+    if !is_symlink(&xcode_archives) && xcode_archives.exists() && xcode_archives.is_dir() {
         let size = dir_size(&xcode_archives);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -686,7 +701,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/Library/Developer/CoreSimulator
     let core_simulator = home.join("Library").join("Developer").join("CoreSimulator");
-    if core_simulator.exists() && core_simulator.is_dir() {
+    if !is_symlink(&core_simulator) && core_simulator.exists() && core_simulator.is_dir() {
         let size = dir_size(&core_simulator);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -706,7 +721,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 
     // ~/.android/avd (Android emulator images)
     let android_avd = home.join(".android").join("avd");
-    if android_avd.exists() && android_avd.is_dir() {
+    if !is_symlink(&android_avd) && android_avd.exists() && android_avd.is_dir() {
         let size = dir_size(&android_avd);
         if size > 0 {
             artifacts.push(DevArtifact {
@@ -1592,10 +1607,10 @@ mod tests {
         let _ = fs::remove_dir_all(&tmp);
     }
 
-    /// Test: Phase 1 home-level caches — does check_home_cache follow
-    /// a symlinked ~/.npm? (It uses .exists() + .is_dir(), which resolve symlinks)
+    /// Test: Phase 1 home-level caches — symlinked ~/.npm must produce zero artifacts.
+    /// Previously this test documented the gap; now the symlink guard is in place.
     #[test]
-    fn test_home_cache_symlink_picks_up_real_target() {
+    fn test_home_cache_symlink_skipped() {
         use std::os::unix::fs::symlink;
 
         let tmp = std::env::temp_dir().join("ss-home-symlink");
@@ -1604,7 +1619,7 @@ mod tests {
         let fake_home = tmp.join("fakehome");
         fs::create_dir_all(&fake_home).unwrap();
 
-        // Create important data
+        // Create important data that the symlink will point to
         let important = tmp.join("important_project");
         fs::create_dir_all(&important).unwrap();
         fs::write(important.join("main.rs"), "fn main() {}").unwrap();
@@ -1615,23 +1630,55 @@ mod tests {
         let mut artifacts = Vec::new();
         check_home_cache(&fake_home, ".npm", "npm global cache", &mut artifacts);
 
-        // check_home_cache does NOT check for symlinks.
-        // It uses .exists() && .is_dir() which resolve symlinks.
-        // So it WILL pick up the symlinked directory.
-        let picked_up = !artifacts.is_empty();
-        if picked_up {
-            println!(
-                "RISK: check_home_cache followed symlink ~/.npm → {} and listed it as artifact: {}",
-                important.display(),
-                artifacts[0].path
-            );
-            println!("If this artifact were bulk-deleted, the real target would be destroyed.");
-        } else {
-            println!("OK: check_home_cache did not pick up symlinked directory");
-        }
+        // With the symlink guard, check_home_cache must now skip symlinked paths
+        assert!(
+            artifacts.is_empty(),
+            "Phase 1: symlinked ~/.npm must produce zero artifacts, but found: {:?}",
+            artifacts.iter().map(|a| &a.path).collect::<Vec<_>>()
+        );
 
-        // Important: the artifact path will be the SYMLINK path, not the real target.
-        // So the question is: what does remove_dir_all do to it?
+        // Important data must be untouched
+        assert!(important.join("main.rs").exists(), "Important data must survive");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: Phase 3b — symlinked ~/.gradle/caches must produce zero artifacts.
+    #[test]
+    fn test_rebuildable_home_caches_symlink_skipped() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join("ss-phase3b-symlink");
+        let _ = fs::remove_dir_all(&tmp);
+
+        let fake_home = tmp.join("fakehome");
+        let gradle_parent = fake_home.join(".gradle");
+        fs::create_dir_all(&gradle_parent).unwrap();
+
+        // Create important data that the symlink will point to
+        let important = tmp.join("real_gradle_data");
+        fs::create_dir_all(&important).unwrap();
+        fs::write(important.join("build.db"), "critical build data").unwrap();
+
+        // Symlink ~/.gradle/caches → real_gradle_data
+        symlink(&important, gradle_parent.join("caches")).unwrap();
+
+        let mut artifacts = Vec::new();
+        scan_rebuildable_home_caches(&fake_home, &mut artifacts);
+
+        // Symlink guard must prevent this from being listed
+        let gradle_artifacts: Vec<_> = artifacts
+            .iter()
+            .filter(|a| a.path.contains("gradle"))
+            .collect();
+        assert!(
+            gradle_artifacts.is_empty(),
+            "Phase 3b: symlinked ~/.gradle/caches must produce zero artifacts, but found: {:?}",
+            gradle_artifacts.iter().map(|a| &a.path).collect::<Vec<_>>()
+        );
+
+        // Important data must be untouched
+        assert!(important.join("build.db").exists(), "Important data must survive");
 
         let _ = fs::remove_dir_all(&tmp);
     }
