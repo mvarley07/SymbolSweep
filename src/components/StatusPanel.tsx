@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useCacheStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
+import { invoke } from '@tauri-apps/api/core';
+import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
 import type { CacheState, CleanResult } from '../types';
-import { WARNING_THRESHOLD, CRITICAL_THRESHOLD } from '../types';
 import './StatusPanel.css';
 
 /** Format bytes to human-readable string (matches Rust format_size) */
@@ -28,13 +28,6 @@ function formatSize(bytes: number): string {
     return `${bytes} B`;
   }
   return '0 B';
-}
-
-/** Determine cache state from combined byte total */
-function stateFromSize(bytes: number): CacheState {
-  if (bytes >= CRITICAL_THRESHOLD) return 'Critical';
-  if (bytes >= WARNING_THRESHOLD) return 'Warning';
-  return 'Normal';
 }
 
 interface StatusIndicatorProps {
@@ -71,7 +64,7 @@ interface StatusPanelProps {
 }
 
 export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProps) {
-  const { status, loading, error, refresh } = useCacheStatus();
+  const { status: appStatus, loading, error, refresh } = useAppStatus();
   const { clean, dryRun, cleaning } = useCleanCache();
   const { lastCleanTime, refresh: refreshLastClean } = useLastCleanTime();
   const { settings, updateSetting } = useSettings();
@@ -84,6 +77,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [showRecentCleans, setShowRecentCleans] = useState(false);
+  const [recentCleans, setRecentCleans] = useState<string[]>([]);
 
   const showCleanBanner = (message: string) => {
     setBannerMessage(message);
@@ -110,6 +105,18 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       clearTimeout(removeTimer);
     };
   }, [showBanner]);
+
+  const handleToggleRecentCleans = async () => {
+    if (!showRecentCleans) {
+      try {
+        const lines = await invoke<string[]>('get_recent_deletions');
+        setRecentCleans(lines);
+      } catch {
+        setRecentCleans(['Unable to read log']);
+      }
+    }
+    setShowRecentCleans(!showRecentCleans);
+  };
 
   const handleCleanClick = () => {
     if (!settings.first_clean_confirmed) {
@@ -138,17 +145,20 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const performClean = async () => {
     setIsLoading(true);
     try {
+      // Snapshot disk free space BEFORE cleaning
+      const beforeFree = appStatus?.disk_free_bytes ?? 0;
+
       // Clean system cache
       const sysResult = await clean(false);
       let totalFreed = sysResult.bytes_freed;
 
-      // Also clean all dev artifacts
+      // Clean ONLY Safe-tier dev artifacts
       if (devResult) {
-        const cleanablePaths = devResult.artifacts
-          .filter(a => !a.is_nested)
+        const safePaths = devResult.artifacts
+          .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
           .map(a => a.path);
-        if (cleanablePaths.length > 0) {
-          const devDeleteResult = await deleteArtifacts(cleanablePaths);
+        if (safePaths.length > 0) {
+          const devDeleteResult = await deleteArtifacts(safePaths);
           totalFreed += devDeleteResult.bytes_freed;
         }
       }
@@ -156,8 +166,22 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       refresh();
       await refreshLastClean();
 
-      // Show combined result banner
-      if (totalFreed > 0) {
+      // Snapshot disk free space AFTER cleaning (re-fetch from backend)
+      let diskDelta = totalFreed;
+      try {
+        const afterStatus = await invoke<{ disk_free_bytes: number }>('get_app_status');
+        const afterFree = afterStatus.disk_free_bytes;
+        if (afterFree > beforeFree) {
+          diskDelta = afterFree - beforeFree;
+        }
+      } catch {
+        // fall back to reported bytes freed
+      }
+
+      // Show disk-free delta, not just bytes unlinked
+      if (diskDelta > 0) {
+        showCleanBanner(`Freed ${formatSize(diskDelta)} disk space`);
+      } else if (totalFreed > 0) {
         showCleanBanner(`Freed ${formatSize(totalFreed)}`);
       } else {
         showCleanBanner('Already clean');
@@ -200,7 +224,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
-  if (!status) {
+  if (!appStatus) {
     return (
       <div className="status-panel">
         <div className="status-error">No status available</div>
@@ -208,11 +232,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
-  const devBytes = devResult?.total_bytes ?? 0;
-  const combinedBytes = status.size_bytes + devBytes;
-  const combinedState = stateFromSize(combinedBytes);
-  const combinedDisplay = formatSize(combinedBytes);
-  const stateClass = combinedState.toLowerCase();
+  const stateClass = appStatus.health.toLowerCase();
 
   return (
     <div className="status-panel">
@@ -230,22 +250,60 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       </header>
 
       <div className="status-content">
-        <StatusIndicator state={combinedState} size={combinedDisplay} />
+        {appStatus.disk_health === 'Unknown' ? (
+          <>
+            <StatusIndicator state={appStatus.health} size="Disk: unavailable" />
+            <span className="disk-total">statvfs failed</span>
+          </>
+        ) : (
+          <>
+            <StatusIndicator state={appStatus.health} size={`${appStatus.disk_free_display} free`} />
+            <span className="disk-total">of {appStatus.disk_total_display}</span>
+          </>
+        )}
 
         <div className="status-details">
           <div className="detail-row">
-            <span className="detail-label">Items</span>
-            <span className="detail-value">{(status.file_count + (devResult?.artifacts.filter(a => !a.is_nested).length ?? 0)).toLocaleString()}</span>
+            <span className="detail-label">Cleanable by SymbolSweep</span>
+            <span className="detail-value">{appStatus.reclaimable_display}</span>
           </div>
-          <div className="detail-row">
+          <div className="detail-row clickable" onClick={handleToggleRecentCleans}>
             <span className="detail-label">Last cleaned</span>
-            <span className="detail-value">{lastCleanTime}</span>
+            <span className="detail-value">{lastCleanTime} {showRecentCleans ? '\u25B4' : '\u25BE'}</span>
           </div>
         </div>
 
+        {showRecentCleans && (
+          <div className="recent-cleans">
+            <div className="recent-cleans-header">Recent cleans</div>
+            {recentCleans.length === 0 ? (
+              <div className="recent-cleans-empty">No deletions logged yet</div>
+            ) : (
+              <div className="recent-cleans-list">
+                {recentCleans.map((line, i) => (
+                  <div key={i} className="recent-clean-entry">{line}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {appStatus.health !== 'Normal' && appStatus.reclaimable_bytes < 1_000_000_000 && (
+          <div className="gap-banner">
+            <p>SymbolSweep can reclaim {appStatus.reclaimable_display}.</p>
+            <p>Most disk usage is outside SymbolSweep's scope.</p>
+            {appStatus.snapshot_count > 0 && (
+              <p>{appStatus.snapshot_count} local Time Machine snapshot{appStatus.snapshot_count !== 1 ? 's' : ''} detected.</p>
+            )}
+            <button className="gap-banner-btn" onClick={() => invoke('open_storage_settings')}>
+              Manage Storage
+            </button>
+          </div>
+        )}
+
         {showBanner && bannerMessage && (
           <div className={`clean-result${bannerFading ? ' fading-out' : ''}`}>
-            <span className="result-icon">✓</span>
+            <span className="result-icon">&#10003;</span>
             <span>{bannerMessage}</span>
           </div>
         )}
@@ -253,7 +311,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         <button
           className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
           onClick={handleCleanClick}
-          disabled={isLoading || cleaning || !status.exists}
+          disabled={isLoading || cleaning}
         >
           {isLoading ? (
             <span className="loading-text">
@@ -264,17 +322,19 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
           )}
         </button>
 
-        {combinedState === 'Warning' && (
-          <p className="warning-text">Cache getting large -- consider cleaning</p>
+        {appStatus.health === 'Warning' && appStatus.reclaimable_bytes >= 1_000_000_000 && (
+          <p className="warning-text">Disk space getting low -- consider cleaning</p>
         )}
 
-        {combinedState === 'Critical' && (
-          <p className="critical-text">Cache critically large -- clean now!</p>
+        {appStatus.health === 'Critical' && appStatus.reclaimable_bytes >= 1_000_000_000 && (
+          <p className="critical-text">Disk space critically low -- clean now!</p>
         )}
 
-        {devResult && devResult.total_bytes > 0 && (
+        {appStatus.dev_scan_available && (
           <button className="dev-scan-link" onClick={onDevScanClick}>
-            <span className="dev-scan-total">{devResult.total_display} dev artifacts</span>
+            <span className="dev-scan-total">
+              {appStatus.dev_total_bytes > 0 ? `${appStatus.dev_total_display} dev artifacts` : 'Dev artifacts'}
+            </span>
             <span className="dev-scan-arrow">&rsaquo;</span>
           </button>
         )}

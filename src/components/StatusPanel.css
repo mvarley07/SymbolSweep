@@ -68,6 +68,106 @@
   height: 13px;
 }
 
+/* Disk total subtitle */
+.disk-total {
+  text-align: center;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-top: -6px;
+  margin-bottom: 2px;
+}
+
+/* Clickable detail row */
+.detail-row.clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s ease;
+}
+
+.detail-row.clickable:hover {
+  background: var(--bg-hover);
+}
+
+/* Recent cleans log viewer */
+.recent-cleans {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.recent-cleans-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.recent-cleans-empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.recent-cleans-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-clean-entry {
+  font-size: 9px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+/* Gap banner — disk under pressure but little cleanable */
+.gap-banner {
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.gap-banner p {
+  margin: 0 0 4px;
+}
+
+.gap-banner p:last-of-type {
+  margin-bottom: 8px;
+}
+
+.gap-banner-btn {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gap-banner-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Loading & Error States */
 .status-loading,
 .status-error {
