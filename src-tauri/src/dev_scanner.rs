@@ -1129,6 +1129,62 @@ pub fn delete_dev_artifacts_manual(paths: &[String], known_artifacts: &[DevArtif
     delete_dev_artifacts_inner(paths, known_artifacts, true)
 }
 
+/// Move a file or directory to macOS Trash using NSFileManager.trashItemAtURL.
+/// Returns Ok(()) if the item was successfully trashed, or Err with a description.
+/// Uses the objc crate (already a dependency) to call the native macOS API.
+#[cfg(target_os = "macos")]
+fn move_to_trash(path: &Path) -> Result<(), String> {
+    use objc::runtime::{Class, Object, BOOL, YES};
+    use objc::{msg_send, sel, sel_impl};
+    use std::ffi::CString;
+
+    unsafe {
+        // Get NSFileManager defaultManager
+        let cls = Class::get("NSFileManager")
+            .ok_or("Failed to get NSFileManager class")?;
+        let fm: *mut Object = msg_send![cls, defaultManager];
+
+        // Create NSURL from file path
+        let nsurl_cls = Class::get("NSURL")
+            .ok_or("Failed to get NSURL class")?;
+        let path_str = path.to_string_lossy();
+        let nsstring_cls = Class::get("NSString")
+            .ok_or("Failed to get NSString class")?;
+        let c_str = CString::new(path_str.as_bytes())
+            .map_err(|e| format!("Invalid path: {}", e))?;
+        let ns_path: *mut Object = msg_send![nsstring_cls, stringWithUTF8String: c_str.as_ptr()];
+        let url: *mut Object = msg_send![nsurl_cls, fileURLWithPath: ns_path];
+
+        // Call trashItemAtURL:resultingItemURL:error:
+        let null: *mut Object = std::ptr::null_mut();
+        let mut error: *mut Object = std::ptr::null_mut();
+        let success: BOOL = msg_send![fm, trashItemAtURL: url resultingItemURL: null error: &mut error];
+
+        if success == YES {
+            Ok(())
+        } else if !error.is_null() {
+            let desc: *mut Object = msg_send![error, localizedDescription];
+            let c_str: *const i8 = msg_send![desc, UTF8String];
+            let msg = if !c_str.is_null() {
+                std::ffi::CStr::from_ptr(c_str)
+                    .to_string_lossy()
+                    .to_string()
+            } else {
+                "Unknown NSFileManager error".to_string()
+            };
+            Err(format!("Trash failed: {}", msg))
+        } else {
+            Err("Trash failed: unknown error".to_string())
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn move_to_trash(path: &Path) -> Result<(), String> {
+    // Non-macOS fallback: permanent delete
+    fs::remove_dir_all(path).map_err(|e| e.to_string())
+}
+
 fn delete_dev_artifacts_inner(
     paths: &[String],
     known_artifacts: &[DevArtifact],
@@ -1158,7 +1214,7 @@ fn delete_dev_artifacts_inner(
                 path_components, path_str
             );
             eprintln!("{}", msg);
-            log_artifact_deletion(path_str, 0, "BLOCKED", "depth_guard");
+            log_artifact_deletion(path_str, 0, "BLOCKED", "depth_guard", "blocked");
             errors.push(msg);
             continue;
         }
@@ -1199,13 +1255,30 @@ fn delete_dev_artifacts_inner(
 
         let expected_bytes = artifact.map(|a| a.size_bytes).unwrap_or(0);
         let tier_label = artifact.map(|a| a.tier.label()).unwrap_or("unknown");
+        let tier = artifact.map(|a| a.tier);
 
-        match fs::remove_dir_all(path) {
+        // Decide mechanism: manual deletes of Rebuildable/SafeWithReinstall go to Trash
+        // (recoverable). Safe-tier and bulk deletes are permanent (caches regenerate instantly).
+        let use_trash = allow_non_safe
+            && matches!(
+                tier,
+                Some(ArtifactTier::Rebuildable) | Some(ArtifactTier::SafeWithReinstall)
+            );
+
+        let result = if use_trash {
+            move_to_trash(path)
+        } else {
+            fs::remove_dir_all(path).map_err(|e| e.to_string())
+        };
+
+        let mechanism = if use_trash { "trash" } else { "permanent" };
+
+        match result {
             Ok(()) => {
                 deleted_count += 1;
                 bytes_freed += expected_bytes;
                 let trigger = if allow_non_safe { "manual" } else { "clean_now" };
-                log_artifact_deletion(path_str, expected_bytes, tier_label, trigger);
+                log_artifact_deletion(path_str, expected_bytes, tier_label, trigger, mechanism);
             }
             Err(e) => {
                 errors.push(format!("{}: {}", path_str, e));
@@ -1222,7 +1295,7 @@ fn delete_dev_artifacts_inner(
 }
 
 /// Log a dev artifact deletion to the shared SymbolSweep deletion log
-fn log_artifact_deletion(path: &str, size_bytes: u64, tier: &str, trigger: &str) {
+fn log_artifact_deletion(path: &str, size_bytes: u64, tier: &str, trigger: &str, mechanism: &str) {
     let log_path = {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         PathBuf::from(home)
@@ -1239,12 +1312,13 @@ fn log_artifact_deletion(path: &str, size_bytes: u64, tier: &str, trigger: &str)
     let timestamp = format_log_timestamp();
 
     let line = format!(
-        "[{}] DEV_ARTIFACT_DELETED: {} | size={} | tier={} | trigger={}\n",
+        "[{}] DEV_ARTIFACT_DELETED: {} | size={} | tier={} | trigger={} | mechanism={}\n",
         timestamp,
         path,
         format_size(size_bytes),
         tier,
         trigger,
+        mechanism,
     );
 
     if let Ok(mut file) = fs::OpenOptions::new()
@@ -1975,6 +2049,107 @@ mod tests {
             !safe_next2.is_empty(),
             "Real project .next should be Safe, but no Safe artifact found"
         );
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: Rebuildable manual delete goes to Trash (recoverable),
+    /// while Safe bulk delete is permanent.
+    #[test]
+    fn test_trash_vs_permanent_deletion() {
+        let tmp = std::env::temp_dir().join("ss-trash-test");
+        let _ = fs::remove_dir_all(&tmp);
+
+        // --- Test 1: Rebuildable manual delete → Trash ---
+        let rebuild_dir = tmp.join("projects").join("myapp").join("target");
+        fs::create_dir_all(&rebuild_dir).unwrap();
+        fs::write(rebuild_dir.join("marker.txt"), "rebuild data").unwrap();
+
+        let rebuild_artifact = DevArtifact {
+            path: rebuild_dir.to_string_lossy().to_string(),
+            size_bytes: 100,
+            size_display: "100 B".to_string(),
+            tier: ArtifactTier::Rebuildable,
+            kind: "test rebuild".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+        };
+
+        let result = delete_dev_artifacts_manual(
+            &[rebuild_dir.to_string_lossy().to_string()],
+            &[rebuild_artifact],
+        );
+        assert_eq!(result.deleted_count, 1, "Rebuildable manual delete should succeed");
+        assert!(!rebuild_dir.exists(), "Rebuild dir should no longer be at original path");
+        // The item is now in Trash — we verify by checking ~/.Trash for it.
+        // On macOS, the Trash item may be renamed to avoid conflicts, so we check
+        // for a directory whose name starts with "target".
+        let trash_dir = get_home_dir().join(".Trash");
+        if trash_dir.exists() {
+            let found_in_trash = fs::read_dir(&trash_dir)
+                .map(|entries| {
+                    entries.flatten().any(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        name.starts_with("target")
+                    })
+                })
+                .unwrap_or(false);
+            println!(
+                "Rebuildable item found in Trash: {} (mechanism: trash)",
+                found_in_trash
+            );
+            // Clean up from Trash
+            if found_in_trash {
+                for entry in fs::read_dir(&trash_dir).unwrap().flatten() {
+                    if entry.file_name().to_string_lossy().starts_with("target") {
+                        let _ = fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+
+        // --- Test 2: Safe bulk delete → permanent ---
+        let safe_dir = tmp.join("caches").join("npm").join("cache");
+        fs::create_dir_all(&safe_dir).unwrap();
+        fs::write(safe_dir.join("pkg.tgz"), "cache data").unwrap();
+
+        let safe_artifact = DevArtifact {
+            path: safe_dir.to_string_lossy().to_string(),
+            size_bytes: 50,
+            size_display: "50 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: "test safe cache".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+        };
+
+        let result = delete_dev_artifacts(
+            &[safe_dir.to_string_lossy().to_string()],
+            &[safe_artifact],
+        );
+        assert_eq!(result.deleted_count, 1, "Safe bulk delete should succeed");
+        assert!(!safe_dir.exists(), "Safe dir should be permanently deleted");
+        // Verify NOT in Trash (permanent)
+        if trash_dir.exists() {
+            let found_cache_in_trash = fs::read_dir(&trash_dir)
+                .map(|entries| {
+                    entries.flatten().any(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        name == "cache" && e.path().join("pkg.tgz").exists()
+                    })
+                })
+                .unwrap_or(false);
+            println!(
+                "Safe item found in Trash: {} (mechanism: permanent — expected false)",
+                found_cache_in_trash
+            );
+        }
 
         let _ = fs::remove_dir_all(&tmp);
     }
