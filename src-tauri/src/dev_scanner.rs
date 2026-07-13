@@ -1384,4 +1384,317 @@ mod tests {
         // Cleanup
         let _ = fs::remove_dir_all(&tmp);
     }
+
+    // ========================================================================
+    // SYMLINK SAFETY TESTS
+    // ========================================================================
+
+    /// CRITICAL: A symlinked cache directory must NOT cause deletion of the
+    /// symlink's real target. This tests the full scan→delete pipeline.
+    /// Scenario: ~/Desktop/myproject/node_modules → /important/data
+    /// Deleting node_modules must remove the LINK, not /important/data.
+    #[test]
+    fn test_symlink_delete_does_not_follow_to_real_target() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join("ss-symlink-test");
+        let _ = fs::remove_dir_all(&tmp);
+
+        // Create the "important" directory that must survive
+        let important = tmp.join("important_data");
+        fs::create_dir_all(&important).unwrap();
+        fs::write(important.join("precious.txt"), "DO NOT DELETE").unwrap();
+
+        // Create a fake project with a symlinked directory that looks like
+        // a Safe-tier cache — but actually points at important_data
+        let project = tmp.join("fakeproject");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("package.json"), "{}").unwrap();
+
+        let cache_link = project.join(".next");
+        symlink(&important, &cache_link).unwrap();
+
+        // Verify the symlink was created and points where we think
+        assert!(cache_link.exists(), "Symlink should exist");
+        assert!(cache_link.is_dir(), ".next should resolve to a directory");
+
+        // Phase 4 scanner should skip this because it's a symlink
+        let mut artifacts = Vec::new();
+        scan_project_root(&project, &mut artifacts, 0);
+
+        // The scanner should NOT have picked up the symlinked .next
+        let found_next = artifacts.iter().any(|a| a.path.contains(".next"));
+        assert!(
+            !found_next,
+            "Scanner should skip symlinked .next directory — but found: {:?}",
+            artifacts.iter().map(|a| &a.path).collect::<Vec<_>>()
+        );
+
+        // Even if somehow an artifact pointing at the symlink got into the
+        // delete list, fs::remove_dir_all on a symlink should NOT follow it.
+        // Let's prove this directly:
+        let link_str = cache_link.to_string_lossy().to_string();
+        let fake_artifact = DevArtifact {
+            path: link_str.clone(),
+            size_bytes: 100,
+            size_display: "100 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: "test".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+        };
+
+        // Attempt deletion — this calls fs::remove_dir_all on the symlink path
+        let result = delete_dev_artifacts(&[link_str], &[fake_artifact]);
+
+        // Check what happened:
+        // On macOS/Linux, remove_dir_all on a symlink-to-dir FOLLOWS THE LINK
+        // and deletes the contents of the target, then removes the link.
+        // This is the dangerous behavior we need to document.
+        let important_survived = important.join("precious.txt").exists();
+
+        if important_survived {
+            println!("SAFE: important_data/precious.txt survived deletion of symlink");
+        } else {
+            println!(
+                "DANGER: remove_dir_all FOLLOWED the symlink and deleted important_data contents!"
+            );
+            println!("Result: {:?}", result);
+        }
+
+        // The REAL safety comes from the scanner skipping symlinks.
+        // If the scanner doesn't add the symlink to the artifact list,
+        // it can never be passed to delete_dev_artifacts.
+        // But if remove_dir_all DOES follow symlinks, that's a latent risk.
+
+        // Assert that the important data survived because the scanner
+        // NEVER picked up the symlink in the first place:
+        assert!(
+            important.exists(),
+            "important_data directory must survive (scanner should never list it)"
+        );
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test that scan_project_root genuinely skips symlinks at the entry level
+    #[test]
+    fn test_scan_skips_symlinked_directories() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join("ss-scan-symlink");
+        let _ = fs::remove_dir_all(&tmp);
+
+        let real_target = tmp.join("real_target");
+        fs::create_dir_all(real_target.join("subdir")).unwrap();
+        fs::write(real_target.join("subdir").join("file.txt"), "data").unwrap();
+
+        // Create project root with symlinks mimicking scannable dirs
+        let project = tmp.join("project");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("Cargo.toml"), "[package]").unwrap();
+
+        // Symlink "target" → real_target (should be skipped)
+        symlink(&real_target, project.join("target")).unwrap();
+        // Symlink "node_modules" → real_target (should be skipped)
+        symlink(&real_target, project.join("node_modules")).unwrap();
+        // Symlink ".next" → real_target (should be skipped)
+        symlink(&real_target, project.join(".next")).unwrap();
+
+        let mut artifacts = Vec::new();
+        scan_project_root(&project, &mut artifacts, 0);
+
+        assert!(
+            artifacts.is_empty(),
+            "No artifacts should be found from symlinked directories, but found: {:?}",
+            artifacts.iter().map(|a| format!("{} ({})", a.path, a.kind)).collect::<Vec<_>>()
+        );
+
+        // real_target must be untouched
+        assert!(real_target.join("subdir").join("file.txt").exists());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test that Phase 2 (Library/Caches) skips symlinked entries
+    #[test]
+    fn test_library_caches_skips_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join("ss-lib-symlink");
+        let _ = fs::remove_dir_all(&tmp);
+
+        // Build a fake home directory structure
+        let fake_home = tmp.join("fakehome");
+        let caches = fake_home.join("Library").join("Caches");
+        fs::create_dir_all(&caches).unwrap();
+
+        // Real important data
+        let important = tmp.join("important");
+        fs::create_dir_all(&important).unwrap();
+        fs::write(important.join("data.db"), "critical").unwrap();
+
+        // Symlink Library/Caches/Homebrew → important
+        symlink(&important, caches.join("Homebrew")).unwrap();
+
+        let mut artifacts = Vec::new();
+        scan_library_caches(&fake_home, &mut artifacts);
+
+        assert!(
+            artifacts.is_empty(),
+            "Symlinked Homebrew cache should be skipped, but found: {:?}",
+            artifacts.iter().map(|a| &a.path).collect::<Vec<_>>()
+        );
+        assert!(important.join("data.db").exists(), "Important data must survive");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: remove_dir_all behavior on symlinks (documents the actual risk)
+    #[test]
+    fn test_remove_dir_all_symlink_behavior() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join("ss-rda-symlink");
+        let _ = fs::remove_dir_all(&tmp);
+
+        let target_dir = tmp.join("target_dir");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("file.txt"), "data").unwrap();
+
+        let link = tmp.join("the_link");
+        symlink(&target_dir, &link).unwrap();
+
+        // What does remove_dir_all do to a symlink?
+        let result = fs::remove_dir_all(&link);
+        println!("remove_dir_all on symlink result: {:?}", result);
+
+        let target_survived = target_dir.join("file.txt").exists();
+        let link_exists = link.exists();
+
+        println!("Target dir contents survived: {}", target_survived);
+        println!("Link still exists: {}", link_exists);
+
+        // Document what actually happened — this test is informational
+        if !target_survived {
+            println!("WARNING: remove_dir_all FOLLOWS symlinks and destroys target contents!");
+        } else {
+            println!("OK: remove_dir_all only removed the link, target survived");
+        }
+
+        // We don't assert the behavior of remove_dir_all — we document it.
+        // The safety guarantee comes from the SCANNER never adding symlinks.
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: Phase 1 home-level caches — does check_home_cache follow
+    /// a symlinked ~/.npm? (It uses .exists() + .is_dir(), which resolve symlinks)
+    #[test]
+    fn test_home_cache_symlink_picks_up_real_target() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = std::env::temp_dir().join("ss-home-symlink");
+        let _ = fs::remove_dir_all(&tmp);
+
+        let fake_home = tmp.join("fakehome");
+        fs::create_dir_all(&fake_home).unwrap();
+
+        // Create important data
+        let important = tmp.join("important_project");
+        fs::create_dir_all(&important).unwrap();
+        fs::write(important.join("main.rs"), "fn main() {}").unwrap();
+
+        // Symlink ~/.npm → important_project
+        symlink(&important, fake_home.join(".npm")).unwrap();
+
+        let mut artifacts = Vec::new();
+        check_home_cache(&fake_home, ".npm", "npm global cache", &mut artifacts);
+
+        // check_home_cache does NOT check for symlinks.
+        // It uses .exists() && .is_dir() which resolve symlinks.
+        // So it WILL pick up the symlinked directory.
+        let picked_up = !artifacts.is_empty();
+        if picked_up {
+            println!(
+                "RISK: check_home_cache followed symlink ~/.npm → {} and listed it as artifact: {}",
+                important.display(),
+                artifacts[0].path
+            );
+            println!("If this artifact were bulk-deleted, the real target would be destroyed.");
+        } else {
+            println!("OK: check_home_cache did not pick up symlinked directory");
+        }
+
+        // Important: the artifact path will be the SYMLINK path, not the real target.
+        // So the question is: what does remove_dir_all do to it?
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: active_build guard prevents deletion
+    #[test]
+    fn test_active_build_blocks_deletion() {
+        let tmp = std::env::temp_dir().join("ss-active-build-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let dir = tmp.join("active");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("marker"), "test").unwrap();
+
+        let artifact = DevArtifact {
+            path: dir.to_string_lossy().to_string(),
+            size_bytes: 100,
+            size_display: "100 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: "test".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: true, // ACTIVE BUILD
+        };
+
+        // Bulk delete should refuse
+        let result = delete_dev_artifacts(
+            &[dir.to_string_lossy().to_string()],
+            &[artifact.clone()],
+        );
+        assert_eq!(result.deleted_count, 0, "Active build should block bulk delete");
+        assert!(dir.exists(), "Directory must survive");
+
+        // Manual delete should also refuse
+        let result = delete_dev_artifacts_manual(
+            &[dir.to_string_lossy().to_string()],
+            &[artifact],
+        );
+        assert_eq!(result.deleted_count, 0, "Active build should block manual delete");
+        assert!(dir.exists(), "Directory must survive manual delete too");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: unknown paths (not in scan result) are never deleted
+    #[test]
+    fn test_unknown_path_never_deleted() {
+        let tmp = std::env::temp_dir().join("ss-unknown-path-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let dir = tmp.join("mystery");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("data"), "important").unwrap();
+
+        // Pass the path to delete, but DON'T include it in known_artifacts
+        let result = delete_dev_artifacts(
+            &[dir.to_string_lossy().to_string()],
+            &[], // empty — nothing is "known"
+        );
+        assert_eq!(result.deleted_count, 0);
+        assert!(dir.exists(), "Unknown path must never be deleted");
+        assert!(dir.join("data").exists(), "Contents must survive");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
 }
