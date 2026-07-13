@@ -1090,6 +1090,21 @@ fn delete_dev_artifacts_inner(
             continue;
         }
 
+        // Minimum path-depth guard: refuse to delete paths with fewer than 4 components.
+        // This catches /, $HOME, volume roots, and any future scanner bug that produces
+        // dangerously short paths. E.g. /Users/name/something/something = 4 components minimum.
+        let path_components = Path::new(path_str).components().count();
+        if path_components < 4 {
+            let msg = format!(
+                "SAFETY: Refused to delete shallow path ({} components): {}",
+                path_components, path_str
+            );
+            eprintln!("{}", msg);
+            log_artifact_deletion(path_str, 0, "BLOCKED", "depth_guard");
+            errors.push(msg);
+            continue;
+        }
+
         // Look up the artifact for tier check and size
         let artifact = known_artifacts.iter().find(|a| a.path == *path_str);
 
@@ -1743,5 +1758,80 @@ mod tests {
         assert!(dir.join("data").exists(), "Contents must survive");
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Test: minimum path-depth guard refuses to delete /, $HOME, and shallow paths.
+    /// Even if a scanner bug produced such a path, deletion must be blocked.
+    #[test]
+    fn test_path_depth_guard_blocks_shallow_paths() {
+        let home = get_home_dir();
+        let home_str = home.to_string_lossy().to_string();
+
+        // Paths that MUST be blocked (fewer than 4 components)
+        let dangerous_paths = vec![
+            "/".to_string(),                              // 1 component (root)
+            home_str.clone(),                             // 3 components: /Users/<name>
+            "/Volumes/External".to_string(),              // 2 components
+            "/Users/shared".to_string(),                  // 2 components
+        ];
+
+        for path_str in &dangerous_paths {
+            // Create a fake artifact that claims this path is known and Safe
+            let fake_artifact = DevArtifact {
+                path: path_str.clone(),
+                size_bytes: 999,
+                size_display: "999 B".to_string(),
+                tier: ArtifactTier::Safe,
+                kind: "test".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: None,
+                active_build: false,
+            };
+
+            // Bulk delete
+            let result = delete_dev_artifacts(&[path_str.clone()], &[fake_artifact.clone()]);
+            assert_eq!(
+                result.deleted_count, 0,
+                "Depth guard must block bulk deletion of: {}",
+                path_str
+            );
+            assert!(
+                result.errors.iter().any(|e| e.contains("shallow path")),
+                "Error message must mention shallow path for: {}",
+                path_str
+            );
+
+            // Manual delete
+            let result = delete_dev_artifacts_manual(&[path_str.clone()], &[fake_artifact]);
+            assert_eq!(
+                result.deleted_count, 0,
+                "Depth guard must block manual deletion of: {}",
+                path_str
+            );
+        }
+
+        // A valid deep path (4+ components) should NOT be blocked by depth guard
+        // (it may be blocked by existence check, but not by depth)
+        let deep_path = "/Users/test/projects/myapp/target".to_string();
+        let deep_artifact = DevArtifact {
+            path: deep_path.clone(),
+            size_bytes: 100,
+            size_display: "100 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: "test".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+        };
+        let result = delete_dev_artifacts(&[deep_path.clone()], &[deep_artifact]);
+        // Should NOT have a depth-guard error (may have "doesn't exist" skip, that's fine)
+        assert!(
+            !result.errors.iter().any(|e| e.contains("shallow path")),
+            "Deep path should not be blocked by depth guard"
+        );
     }
 }
