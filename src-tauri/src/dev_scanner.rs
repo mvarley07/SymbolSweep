@@ -14,6 +14,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::SystemTime;
 
 use crate::cache_monitor::format_size;
@@ -27,6 +28,8 @@ use crate::cache_monitor::format_size;
 pub enum ArtifactTier {
     /// Caches — regenerate automatically
     Safe,
+    /// Build artifacts — regenerable but slow to rebuild
+    Rebuildable,
     /// node_modules — one npm install to restore
     SafeWithReinstall,
     /// dist/build/out — some projects ship from these
@@ -37,6 +40,7 @@ impl ArtifactTier {
     pub fn label(&self) -> &'static str {
         match self {
             ArtifactTier::Safe => "SAFE",
+            ArtifactTier::Rebuildable => "REBUILD",
             ArtifactTier::SafeWithReinstall => "SAFE-WITH-REINSTALL",
             ArtifactTier::Ask => "ASK",
         }
@@ -45,6 +49,7 @@ impl ArtifactTier {
     pub fn description(&self) -> &'static str {
         match self {
             ArtifactTier::Safe => "Caches — regenerate automatically",
+            ArtifactTier::Rebuildable => "Build artifacts — regenerable but slow to rebuild",
             ArtifactTier::SafeWithReinstall => "node_modules — one npm install to restore",
             ArtifactTier::Ask => "Build outputs — some projects ship from these",
         }
@@ -72,6 +77,11 @@ pub struct DevArtifact {
     /// Used for node_modules/.cache which is a subset of node_modules.
     /// Excluded from tier totals to prevent double-counting.
     pub is_nested: bool,
+    /// Inline guidance for the user (restore cost or safety warning)
+    pub hint: Option<String>,
+    /// True if a build process is actively using this artifact (pgrep / lock-file mtime)
+    #[serde(default)]
+    pub active_build: bool,
 }
 
 /// Complete scan result
@@ -84,6 +94,8 @@ pub struct DevScanResult {
     /// Breakdown by tier (excludes nested items)
     pub safe_bytes: u64,
     pub safe_display: String,
+    pub rebuildable_bytes: u64,
+    pub rebuildable_display: String,
     pub safe_with_reinstall_bytes: u64,
     pub safe_with_reinstall_display: String,
     pub ask_bytes: u64,
@@ -105,6 +117,9 @@ const KNOWN_LIBRARY_CACHES: &[(&str, &str)] = &[
     ("typescript", "TypeScript"),
     ("ms-playwright", "Playwright browsers"),
     ("Homebrew", "Homebrew"),
+    ("pip", "pip"),
+    ("go-build", "Go build"),
+    ("CocoaPods", "CocoaPods"),
 ];
 
 /// Directories to skip when traversing project roots
@@ -221,6 +236,22 @@ fn check_project_staleness(project_dir: &Path) -> Option<u64> {
     })
 }
 
+/// Check if a directory has a sibling file with any of the given extensions
+fn has_sibling_with_ext(dir: &Path, extensions: &[&str]) -> bool {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                for ext in extensions {
+                    if name.ends_with(&format!(".{}", ext)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Get the project name from an artifact path (its parent directory name)
 fn get_project_name(artifact_path: &Path) -> Option<String> {
     artifact_path
@@ -255,6 +286,12 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
     // Phase 3: ~/Library/Developer (DerivedData)
     scan_derived_data(&home, &mut artifacts);
 
+    // Phase 3b: Rebuildable home caches (Gradle, Maven, Go modules)
+    scan_rebuildable_home_caches(&home, &mut artifacts);
+
+    // Phase 3c: Ask-tier entries (Docker, Xcode Archives, Simulators, AVDs)
+    scan_ask_tier(&home, &mut artifacts);
+
     // Phase 4: Project roots
     let existing_roots: Vec<PathBuf> = scan_roots
         .iter()
@@ -273,6 +310,12 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
         .iter()
         .filter(non_nested)
         .filter(|a| a.tier == ArtifactTier::Safe)
+        .map(|a| a.size_bytes)
+        .sum();
+    let rebuildable_bytes: u64 = artifacts
+        .iter()
+        .filter(non_nested)
+        .filter(|a| a.tier == ArtifactTier::Rebuildable)
         .map(|a| a.size_bytes)
         .sum();
     let safe_with_reinstall_bytes: u64 = artifacts
@@ -299,6 +342,8 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
         total_display: format_size(total_bytes),
         safe_bytes,
         safe_display: format_size(safe_bytes),
+        rebuildable_bytes,
+        rebuildable_display: format_size(rebuildable_bytes),
         safe_with_reinstall_bytes,
         safe_with_reinstall_display: format_size(safe_with_reinstall_bytes),
         ask_bytes,
@@ -333,6 +378,8 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
+                hint: None,
+                active_build: false,
             });
         }
     }
@@ -351,6 +398,8 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
+                hint: None,
+                active_build: false,
             });
         }
     }
@@ -369,6 +418,28 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
+                hint: None,
+                active_build: false,
+            });
+        }
+    }
+
+    // ~/Library/pnpm/store (pnpm content-addressable store)
+    let pnpm_store = home.join("Library").join("pnpm").join("store");
+    if pnpm_store.exists() && pnpm_store.is_dir() {
+        let size = dir_size(&pnpm_store);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: pnpm_store.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Rebuildable,
+                kind: "pnpm content store".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Clean via pnpm store prune — removes only orphaned packages".to_string()),
+                active_build: false,
             });
         }
     }
@@ -389,6 +460,8 @@ fn check_home_cache(home: &Path, dir_name: &str, kind: &str, artifacts: &mut Vec
                 project: None,
                 staleness_days: None,
                 is_nested: false,
+                hint: None,
+                active_build: false,
             });
         }
     }
@@ -437,6 +510,8 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                         project: None,
                         staleness_days: None,
                         is_nested: false,
+                        hint: None,
+                        active_build: false,
                     });
                 }
                 break;
@@ -456,6 +531,8 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                     project: None,
                     staleness_days: None,
                     is_nested: false,
+                    hint: None,
+                    active_build: false,
                 });
             }
         }
@@ -476,18 +553,219 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
     if derived_data.exists() && derived_data.is_dir() {
         let size = dir_size(&derived_data);
         if size > 0 {
+            let building = is_active_build(&derived_data, "DerivedData");
             artifacts.push(DevArtifact {
                 path: derived_data.to_string_lossy().to_string(),
                 size_bytes: size,
                 size_display: format_size(size),
-                tier: ArtifactTier::Safe,
+                tier: ArtifactTier::Rebuildable,
                 kind: "Xcode DerivedData".to_string(),
                 project: None,
                 staleness_days: None,
                 is_nested: false,
+                hint: Some("Rebuilds on next Xcode build".to_string()),
+                active_build: building,
             });
         }
     }
+}
+
+// ============================================================================
+// Phase 3b: Home-level rebuildable caches
+// ============================================================================
+
+fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
+    // ~/.gradle/caches (Gradle build caches)
+    let gradle_caches = home.join(".gradle").join("caches");
+    if gradle_caches.exists() && gradle_caches.is_dir() {
+        let size = dir_size(&gradle_caches);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: gradle_caches.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Rebuildable,
+                kind: "Gradle caches".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Re-downloads on next gradle build — needs network".to_string()),
+                active_build: false,
+            });
+        }
+    }
+
+    // ~/.m2/repository (Maven local repository)
+    let maven_repo = home.join(".m2").join("repository");
+    if maven_repo.exists() && maven_repo.is_dir() {
+        let size = dir_size(&maven_repo);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: maven_repo.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Rebuildable,
+                kind: "Maven local repository".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Re-downloads on next mvn build — needs network".to_string()),
+                active_build: false,
+            });
+        }
+    }
+
+    // ~/go/pkg/mod or $GOPATH/pkg/mod (Go module cache)
+    let gopath = std::env::var("GOPATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home.join("go"));
+    let go_mod_cache = gopath.join("pkg").join("mod");
+    if go_mod_cache.exists() && go_mod_cache.is_dir() {
+        let size = dir_size(&go_mod_cache);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: go_mod_cache.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Rebuildable,
+                kind: "Go module cache".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Re-downloads on next go build — needs network".to_string()),
+                active_build: false,
+            });
+        }
+    }
+}
+
+// ============================================================================
+// Phase 3c: Ask-tier entries (report only, no auto-delete)
+// ============================================================================
+
+fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
+    // ~/Library/Containers/com.docker.docker
+    let docker = home.join("Library").join("Containers").join("com.docker.docker");
+    if docker.exists() && docker.is_dir() {
+        let size = dir_size(&docker);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: docker.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Ask,
+                kind: "Docker".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("May contain databases \u{2014} use docker system prune".to_string()),
+                active_build: false,
+            });
+        }
+    }
+
+    // ~/Library/Developer/Xcode/Archives
+    let xcode_archives = home.join("Library").join("Developer").join("Xcode").join("Archives");
+    if xcode_archives.exists() && xcode_archives.is_dir() {
+        let size = dir_size(&xcode_archives);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: xcode_archives.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Ask,
+                kind: "Xcode Archives".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Contains dSYMs for shipped builds \u{2014} not regenerable".to_string()),
+                active_build: false,
+            });
+        }
+    }
+
+    // ~/Library/Developer/CoreSimulator
+    let core_simulator = home.join("Library").join("Developer").join("CoreSimulator");
+    if core_simulator.exists() && core_simulator.is_dir() {
+        let size = dir_size(&core_simulator);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: core_simulator.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Ask,
+                kind: "iOS Simulators".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
+                active_build: false,
+            });
+        }
+    }
+
+    // ~/.android/avd (Android emulator images)
+    let android_avd = home.join(".android").join("avd");
+    if android_avd.exists() && android_avd.is_dir() {
+        let size = dir_size(&android_avd);
+        if size > 0 {
+            artifacts.push(DevArtifact {
+                path: android_avd.to_string_lossy().to_string(),
+                size_bytes: size,
+                size_display: format_size(size),
+                tier: ArtifactTier::Ask,
+                kind: "Android emulator images".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: Some("Delete via Android Studio \u{2192} Device Manager".to_string()),
+                active_build: false,
+            });
+        }
+    }
+}
+
+// ============================================================================
+// Active build detection
+// ============================================================================
+
+/// Check if a build process is currently running that would use this directory.
+/// Uses pgrep to detect cargo/xcodebuild and lock-file mtime to detect recent builds.
+fn is_active_build(dir: &Path, artifact_name: &str) -> bool {
+    match artifact_name {
+        "target" => {
+            // Check for Cargo.lock mtime < 5 minutes (indicates recent/active build)
+            let cargo_lock = dir.join("Cargo.lock");
+            if cargo_lock.exists() {
+                if let Ok(meta) = fs::metadata(&cargo_lock) {
+                    if let Ok(modified) = meta.modified() {
+                        if let Ok(elapsed) = modified.elapsed() {
+                            if elapsed < std::time::Duration::from_secs(300) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            // Also check if cargo is running
+            is_process_running("cargo")
+        }
+        "DerivedData" => {
+            // Check if xcodebuild is running
+            is_process_running("xcodebuild")
+        }
+        _ => false,
+    }
+}
+
+/// Check if a named process is currently running via pgrep
+fn is_process_running(name: &str) -> bool {
+    Command::new("pgrep")
+        .arg("-x")
+        .arg(name)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 // ============================================================================
@@ -548,24 +826,112 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
+                    hint: None,
+                    active_build: false,
                 });
             }
             continue; // Don't descend into matched artifact dirs
         }
 
-        // ── SAFE tier: DerivedData inside project dirs ──
-        if name_str == "DerivedData" {
+        // ── REBUILDABLE tier: Rust target/ directories ──
+        // These are massive (5–20 GB) and regenerable with `cargo build`,
+        // but rebuilds can be slow. Only flag if parent contains Cargo.toml.
+        if name_str == "target" && dir.join("Cargo.toml").exists() {
+            let size = dir_size(&entry_path);
+            if size > 0 {
+                let building = is_active_build(dir, "target");
+                artifacts.push(DevArtifact {
+                    path: entry_path.to_string_lossy().to_string(),
+                    size_bytes: size,
+                    size_display: format_size(size),
+                    tier: ArtifactTier::Rebuildable,
+                    kind: "Rust target (build artifacts)".to_string(),
+                    project: get_project_name(&entry_path),
+                    staleness_days: check_project_staleness(dir),
+                    is_nested: false,
+                    hint: Some("Rebuilds on next cargo build \u{2014} takes minutes, needs network".to_string()),
+                    active_build: building,
+                });
+            }
+            continue;
+        }
+
+        // ── REBUILDABLE tier: .NET build output (bin/ or obj/) ──
+        if (name_str == "bin" || name_str == "obj") && has_sibling_with_ext(dir, &["csproj", "sln", "fsproj"]) {
             let size = dir_size(&entry_path);
             if size > 0 {
                 artifacts.push(DevArtifact {
                     path: entry_path.to_string_lossy().to_string(),
                     size_bytes: size,
                     size_display: format_size(size),
-                    tier: ArtifactTier::Safe,
+                    tier: ArtifactTier::Rebuildable,
+                    kind: format!(".NET {} output", name_str),
+                    project: get_project_name(&entry_path),
+                    staleness_days: None,
+                    is_nested: false,
+                    hint: Some("Rebuilds on next dotnet build".to_string()),
+                    active_build: false,
+                });
+            }
+            continue;
+        }
+
+        // ── REBUILDABLE tier: Unity Library/ ──
+        if name_str == "Library" && dir.join("Assets").exists() && dir.join("ProjectSettings").exists() {
+            let size = dir_size(&entry_path);
+            if size > 0 {
+                artifacts.push(DevArtifact {
+                    path: entry_path.to_string_lossy().to_string(),
+                    size_bytes: size,
+                    size_display: format_size(size),
+                    tier: ArtifactTier::Rebuildable,
+                    kind: "Unity Library".to_string(),
+                    project: get_project_name(&entry_path),
+                    staleness_days: None,
+                    is_nested: false,
+                    hint: Some("Rebuilds when Unity reimports the project".to_string()),
+                    active_build: false,
+                });
+            }
+            continue;
+        }
+
+        // ── REBUILDABLE tier: Unreal DerivedDataCache/ ──
+        if name_str == "DerivedDataCache" && has_sibling_with_ext(dir, &["uproject"]) {
+            let size = dir_size(&entry_path);
+            if size > 0 {
+                artifacts.push(DevArtifact {
+                    path: entry_path.to_string_lossy().to_string(),
+                    size_bytes: size,
+                    size_display: format_size(size),
+                    tier: ArtifactTier::Rebuildable,
+                    kind: "Unreal DerivedDataCache".to_string(),
+                    project: get_project_name(&entry_path),
+                    staleness_days: None,
+                    is_nested: false,
+                    hint: Some("Rebuilds on next Unreal Editor launch".to_string()),
+                    active_build: false,
+                });
+            }
+            continue;
+        }
+
+        // ── REBUILDABLE tier: DerivedData inside project dirs ──
+        if name_str == "DerivedData" {
+            let size = dir_size(&entry_path);
+            if size > 0 {
+                let building = is_active_build(dir, "DerivedData");
+                artifacts.push(DevArtifact {
+                    path: entry_path.to_string_lossy().to_string(),
+                    size_bytes: size,
+                    size_display: format_size(size),
+                    tier: ArtifactTier::Rebuildable,
                     kind: "Xcode DerivedData".to_string(),
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
+                    hint: Some("Rebuilds on next Xcode build".to_string()),
+                    active_build: building,
                 });
             }
             continue;
@@ -586,6 +952,8 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
+                        hint: Some("May be shipping artifacts \u{2014} verify before deleting".to_string()),
+                        active_build: false,
                     });
                 }
             }
@@ -615,6 +983,8 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
                 project: get_project_name(nm_path),
                 staleness_days: None,
                 is_nested: true, // Size is included in parent node_modules total
+                hint: None,
+                active_build: false,
             });
         }
     }
@@ -633,6 +1003,8 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
             project: get_project_name(nm_path),
             staleness_days: staleness,
             is_nested: false,
+            hint: Some("Restore with npm install".to_string()),
+            active_build: false,
         });
     }
 }
@@ -671,7 +1043,24 @@ pub struct DevDeleteResult {
 
 /// Delete specific dev artifacts by path.
 /// Only deletes paths that were found in the most recent scan result (safety check).
+/// Bulk callers (Clean Now, auto-clean) should only pass Safe-tier paths.
+/// For explicit per-item deletion by the user, use `delete_dev_artifacts_manual`.
 pub fn delete_dev_artifacts(paths: &[String], known_artifacts: &[DevArtifact]) -> DevDeleteResult {
+    delete_dev_artifacts_inner(paths, known_artifacts, false)
+}
+
+/// Delete specific dev artifacts by path with tier override.
+/// Used for explicit per-item deletion from the DevScanPanel where the
+/// user clicks individual delete buttons on Rebuildable/SafeWithReinstall items.
+pub fn delete_dev_artifacts_manual(paths: &[String], known_artifacts: &[DevArtifact]) -> DevDeleteResult {
+    delete_dev_artifacts_inner(paths, known_artifacts, true)
+}
+
+fn delete_dev_artifacts_inner(
+    paths: &[String],
+    known_artifacts: &[DevArtifact],
+    allow_non_safe: bool,
+) -> DevDeleteResult {
     let known_paths: std::collections::HashSet<&str> =
         known_artifacts.iter().map(|a| a.path.as_str()).collect();
 
@@ -686,22 +1075,49 @@ pub fn delete_dev_artifacts(paths: &[String], known_artifacts: &[DevArtifact]) -
             continue;
         }
 
+        // Look up the artifact for tier check and size
+        let artifact = known_artifacts.iter().find(|a| a.path == *path_str);
+
+        // Active build guard: never delete artifacts with an active build
+        if let Some(a) = artifact {
+            if a.active_build {
+                errors.push(format!("Skipped active-build artifact: {}", path_str));
+                continue;
+            }
+        }
+
+        // Tier guard: bulk operations only delete Safe tier
+        if !allow_non_safe {
+            if let Some(a) = artifact {
+                if a.tier != ArtifactTier::Safe {
+                    errors.push(format!("Skipped non-Safe artifact: {}", path_str));
+                    continue;
+                }
+            }
+        } else {
+            // Manual deletion: allow Safe, Rebuildable, SafeWithReinstall but never Ask
+            if let Some(a) = artifact {
+                if a.tier == ArtifactTier::Ask {
+                    errors.push(format!("Skipped Ask-tier artifact: {}", path_str));
+                    continue;
+                }
+            }
+        }
+
         let path = std::path::Path::new(path_str);
         if !path.exists() {
             continue;
         }
 
-        // Look up expected size from artifacts
-        let expected_bytes = known_artifacts
-            .iter()
-            .find(|a| a.path == *path_str)
-            .map(|a| a.size_bytes)
-            .unwrap_or(0);
+        let expected_bytes = artifact.map(|a| a.size_bytes).unwrap_or(0);
+        let tier_label = artifact.map(|a| a.tier.label()).unwrap_or("unknown");
 
         match fs::remove_dir_all(path) {
             Ok(()) => {
                 deleted_count += 1;
                 bytes_freed += expected_bytes;
+                let trigger = if allow_non_safe { "manual" } else { "clean_now" };
+                log_artifact_deletion(path_str, expected_bytes, tier_label, trigger);
             }
             Err(e) => {
                 errors.push(format!("{}: {}", path_str, e));
@@ -717,6 +1133,71 @@ pub fn delete_dev_artifacts(paths: &[String], known_artifacts: &[DevArtifact]) -
     }
 }
 
+/// Log a dev artifact deletion to the shared SymbolSweep deletion log
+fn log_artifact_deletion(path: &str, size_bytes: u64, tier: &str, trigger: &str) {
+    let log_path = {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        PathBuf::from(home)
+            .join("Library")
+            .join("Logs")
+            .join("SymbolSweep")
+            .join("deletions.log")
+    };
+
+    if let Some(parent) = log_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    let timestamp = format_log_timestamp();
+
+    let line = format!(
+        "[{}] DEV_ARTIFACT_DELETED: {} | size={} | tier={} | trigger={}\n",
+        timestamp,
+        path,
+        format_size(size_bytes),
+        tier,
+        trigger,
+    );
+
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        use std::io::Write;
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
+/// Format a UTC timestamp for log entries (matches cache_cleaner format)
+fn format_log_timestamp() -> String {
+    let now = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let secs_per_day = 86400u64;
+    let secs_per_hour = 3600u64;
+    let secs_per_min = 60u64;
+
+    let days_since_epoch = now / secs_per_day;
+    let time_of_day = now % secs_per_day;
+
+    let hours = time_of_day / secs_per_hour;
+    let minutes = (time_of_day % secs_per_hour) / secs_per_min;
+    let seconds = time_of_day % secs_per_min;
+
+    let years = 1970 + (days_since_epoch / 365);
+    let remaining_days = days_since_epoch % 365;
+    let months = remaining_days / 30 + 1;
+    let days = remaining_days % 30 + 1;
+
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        years, months, days, hours, minutes, seconds
+    )
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -728,6 +1209,7 @@ mod tests {
     #[test]
     fn test_artifact_tier_labels() {
         assert_eq!(ArtifactTier::Safe.label(), "SAFE");
+        assert_eq!(ArtifactTier::Rebuildable.label(), "REBUILD");
         assert_eq!(ArtifactTier::SafeWithReinstall.label(), "SAFE-WITH-REINSTALL");
         assert_eq!(ArtifactTier::Ask.label(), "ASK");
     }
@@ -769,6 +1251,10 @@ mod tests {
             result.safe_display, result.safe_bytes
         );
         println!(
+            "  REBUILD:             {} ({} bytes)",
+            result.rebuildable_display, result.rebuildable_bytes
+        );
+        println!(
             "  SAFE-WITH-REINSTALL: {} ({} bytes)",
             result.safe_with_reinstall_display, result.safe_with_reinstall_bytes
         );
@@ -796,5 +1282,106 @@ mod tests {
             println!("    {}", artifact.path);
         }
         println!("{:-<80}", "");
+    }
+
+    /// Verify that bulk delete (Clean Now / auto-clean) rejects non-Safe tiers,
+    /// and that manual delete rejects Ask tier but allows others.
+    #[test]
+    fn test_bulk_delete_rejects_non_safe() {
+        use std::fs;
+
+        // Create temp dirs for each tier
+        let tmp = std::env::temp_dir().join("ss-tier-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let safe_dir = tmp.join("safe-cache");
+        let rebuild_dir = tmp.join("rebuild-target");
+        let reinstall_dir = tmp.join("reinstall-nm");
+        let ask_dir = tmp.join("ask-dist");
+
+        for d in [&safe_dir, &rebuild_dir, &reinstall_dir, &ask_dir] {
+            fs::create_dir_all(d).unwrap();
+            // Write a marker file so the dir isn't empty
+            fs::write(d.join("marker.txt"), "test").unwrap();
+        }
+
+        let artifacts = vec![
+            DevArtifact {
+                path: safe_dir.to_string_lossy().to_string(),
+                size_bytes: 100,
+                size_display: "100 B".to_string(),
+                tier: ArtifactTier::Safe,
+                kind: "test safe".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: None,
+                active_build: false,
+            },
+            DevArtifact {
+                path: rebuild_dir.to_string_lossy().to_string(),
+                size_bytes: 200,
+                size_display: "200 B".to_string(),
+                tier: ArtifactTier::Rebuildable,
+                kind: "test rebuild".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: None,
+                active_build: false,
+            },
+            DevArtifact {
+                path: reinstall_dir.to_string_lossy().to_string(),
+                size_bytes: 300,
+                size_display: "300 B".to_string(),
+                tier: ArtifactTier::SafeWithReinstall,
+                kind: "test reinstall".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: None,
+                active_build: false,
+            },
+            DevArtifact {
+                path: ask_dir.to_string_lossy().to_string(),
+                size_bytes: 400,
+                size_display: "400 B".to_string(),
+                tier: ArtifactTier::Ask,
+                kind: "test ask".to_string(),
+                project: None,
+                staleness_days: None,
+                is_nested: false,
+                hint: None,
+                active_build: false,
+            },
+        ];
+
+        let all_paths: Vec<String> = artifacts.iter().map(|a| a.path.clone()).collect();
+
+        // --- Test 1: Bulk delete (allow_non_safe = false) should only delete Safe ---
+        let result = delete_dev_artifacts(&all_paths, &artifacts);
+        assert_eq!(result.deleted_count, 1, "Bulk should only delete 1 (Safe)");
+        assert_eq!(result.bytes_freed, 100);
+        assert!(!safe_dir.exists(), "Safe dir should be deleted");
+        assert!(rebuild_dir.exists(), "Rebuildable dir should survive bulk delete");
+        assert!(reinstall_dir.exists(), "SafeWithReinstall dir should survive bulk delete");
+        assert!(ask_dir.exists(), "Ask dir should survive bulk delete");
+        assert_eq!(result.errors.len(), 3, "Should have 3 skip errors");
+
+        // Recreate safe dir for manual test
+        fs::create_dir_all(&safe_dir).unwrap();
+        fs::write(safe_dir.join("marker.txt"), "test").unwrap();
+
+        // --- Test 2: Manual delete should allow Safe + Rebuildable + SafeWithReinstall but reject Ask ---
+        let result = delete_dev_artifacts_manual(&all_paths, &artifacts);
+        assert_eq!(result.deleted_count, 3, "Manual should delete 3 (Safe+Rebuild+Reinstall)");
+        assert_eq!(result.bytes_freed, 600); // 100 + 200 + 300
+        assert!(!safe_dir.exists(), "Safe dir should be deleted by manual");
+        assert!(!rebuild_dir.exists(), "Rebuildable dir should be deleted by manual");
+        assert!(!reinstall_dir.exists(), "SafeWithReinstall dir should be deleted by manual");
+        assert!(ask_dir.exists(), "Ask dir should survive even manual delete");
+        assert_eq!(result.errors.len(), 1, "Should have 1 skip error for Ask");
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&tmp);
     }
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
+import { useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import type { ArtifactTier, DevArtifact } from '../types';
 import './DevScanPanel.css';
 
@@ -9,6 +9,7 @@ interface DevScanPanelProps {
 
 const TIER_CONFIG: Record<ArtifactTier, { label: string; desc: string; className: string }> = {
   Safe: { label: 'SAFE', desc: 'Caches \u2014 regenerate automatically', className: 'tier-safe' },
+  Rebuildable: { label: 'REBUILD', desc: 'Build artifacts \u2014 slow to rebuild', className: 'tier-rebuild' },
   SafeWithReinstall: { label: 'SAFE-WITH-REINSTALL', desc: 'npm install to restore', className: 'tier-reinstall' },
   Ask: { label: 'ASK', desc: 'May be shipping artifacts', className: 'tier-ask' },
 };
@@ -25,22 +26,25 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
     ? `${artifact.staleness_days}d stale`
     : null;
 
+  // No delete button for nested items, Ask-tier items, or active builds
+  const showDelete = !artifact.is_nested && artifact.tier !== 'Ask' && !artifact.active_build;
+
   return (
-    <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''}`}>
+    <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''} ${artifact.active_build ? 'active-build' : ''}`}>
       <div className="artifact-main">
         <span className={`artifact-tier-badge ${config.className}`}>
-          {config.label}
+          {artifact.active_build ? 'BUILDING' : config.label}
         </span>
         <div className="artifact-main-right">
           <span className="artifact-size">{artifact.size_display}</span>
-          {!artifact.is_nested && (
+          {showDelete && (
             <button
               className="artifact-delete-btn"
               onClick={() => onDelete(artifact.path)}
               disabled={deleting}
               title="Delete"
             >
-              ×
+              &times;
             </button>
           )}
         </div>
@@ -54,6 +58,9 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
           <span className="artifact-staleness">{staleness}</span>
         )}
       </div>
+      {artifact.hint && (
+        <div className="artifact-hint">{artifact.hint}</div>
+      )}
       <div className="artifact-path" title={artifact.path}>
         {artifact.path.replace(/^\/Users\/[^/]+/, '~')}
       </div>
@@ -63,12 +70,14 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
 
 export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const { result, scanning, error, scan } = useDevScan();
-  const { deleteArtifacts, deleting } = useDeleteDevArtifacts();
+  const { deleteArtifacts: bulkDeleteArtifacts, deleting: bulkDeleting } = useDeleteDevArtifacts();
+  const { deleteArtifacts: manualDeleteArtifacts, deleting: manualDeleting } = useDeleteDevArtifactsManual();
+  const deleting = bulkDeleting || manualDeleting;
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
 
   const handleDeleteOne = async (path: string) => {
     try {
-      const res = await deleteArtifacts([path]);
+      const res = await manualDeleteArtifacts([path]);
       if (res.deleted_count > 0) {
         setDeleteMessage(`Freed ${res.bytes_freed_display}`);
         setTimeout(() => setDeleteMessage(null), 3000);
@@ -85,11 +94,11 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const handleCleanSafe = async () => {
     if (!result) return;
     const safePaths = result.artifacts
-      .filter(a => a.tier === 'Safe' && !a.is_nested)
+      .filter(a => a.tier === 'Safe' && !a.is_nested && !a.active_build)
       .map(a => a.path);
     if (safePaths.length === 0) return;
     try {
-      const res = await deleteArtifacts(safePaths);
+      const res = await bulkDeleteArtifacts(safePaths);
       if (res.deleted_count > 0) {
         setDeleteMessage(`Freed ${res.bytes_freed_display} (${res.deleted_count} items)`);
         setTimeout(() => setDeleteMessage(null), 4000);
@@ -151,15 +160,19 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           <div className="tier-breakdown">
             <div className="tier-row tier-safe">
               <span className="tier-label">SAFE</span>
-              <span className="tier-value">{result.safe_display}</span>
+              <span className="tier-value">{result.safe_bytes > 0 ? result.safe_display : 'None found'}</span>
+            </div>
+            <div className="tier-row tier-rebuild">
+              <span className="tier-label">REBUILD</span>
+              <span className="tier-value">{result.rebuildable_bytes > 0 ? result.rebuildable_display : 'None found'}</span>
             </div>
             <div className="tier-row tier-reinstall">
               <span className="tier-label">REINSTALL</span>
-              <span className="tier-value">{result.safe_with_reinstall_display}</span>
+              <span className="tier-value">{result.safe_with_reinstall_bytes > 0 ? result.safe_with_reinstall_display : 'None found'}</span>
             </div>
             <div className="tier-row tier-ask">
               <span className="tier-label">ASK</span>
-              <span className="tier-value">{result.ask_display}</span>
+              <span className="tier-value">{result.ask_bytes > 0 ? result.ask_display : 'None found'}</span>
             </div>
           </div>
 
@@ -175,7 +188,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
 
           {deleteMessage && (
             <div className="delete-message">
-              <span className="result-icon">✓</span>
+              <span className="result-icon">&#10003;</span>
               <span>{deleteMessage}</span>
             </div>
           )}

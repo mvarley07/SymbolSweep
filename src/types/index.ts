@@ -47,8 +47,27 @@ export interface Settings {
   dev_scan_roots: string[];
 }
 
+// Unified app status — single source of truth for tray and popup
+export type DiskHealth = 'Normal' | 'Warning' | 'Critical' | 'Unknown';
+
+export interface AppStatus {
+  disk_free_bytes: number;
+  disk_free_display: string;
+  disk_total_bytes: number;
+  disk_total_display: string;
+  disk_health: DiskHealth;
+  cache: CacheStatus;
+  dev_total_bytes: number;
+  dev_total_display: string;
+  dev_scan_available: boolean;
+  reclaimable_bytes: number;
+  reclaimable_display: string;
+  health: CacheState;
+  snapshot_count: number;
+}
+
 // Dev artifact scanning types
-export type ArtifactTier = 'Safe' | 'SafeWithReinstall' | 'Ask';
+export type ArtifactTier = 'Safe' | 'Rebuildable' | 'SafeWithReinstall' | 'Ask';
 
 export interface DevArtifact {
   path: string;
@@ -59,6 +78,8 @@ export interface DevArtifact {
   project: string | null;
   staleness_days: number | null;
   is_nested: boolean;
+  hint: string | null;
+  active_build: boolean;
 }
 
 export interface DevScanResult {
@@ -67,6 +88,8 @@ export interface DevScanResult {
   total_display: string;
   safe_bytes: number;
   safe_display: string;
+  rebuildable_bytes: number;
+  rebuildable_display: string;
   safe_with_reinstall_bytes: number;
   safe_with_reinstall_display: string;
   ask_bytes: number;
