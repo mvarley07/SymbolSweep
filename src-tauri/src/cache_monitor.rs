@@ -39,6 +39,42 @@ impl CacheState {
     }
 }
 
+/// Cleanup state — driven by reclaimable size, not disk pressure.
+/// This is a cleanup signal ("here's what's piled up"), not a data-risk alarm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CleanState {
+    /// < 1 GB reclaimable — nothing meaningful to sweep
+    Clean,
+    /// 1–10 GB reclaimable — some junk, actionable
+    Moderate,
+    /// >= 10 GB reclaimable — significant junk, worth a sweep
+    Heavy,
+}
+
+/// Reclaimable size thresholds for cleanup states
+pub const CLEAN_MODERATE_THRESHOLD: u64 = 1 * 1024 * 1024 * 1024; // 1 GB
+pub const CLEAN_HEAVY_THRESHOLD: u64 = 10 * 1024 * 1024 * 1024; // 10 GB
+
+impl CleanState {
+    pub fn from_reclaimable(bytes: u64) -> Self {
+        if bytes >= CLEAN_HEAVY_THRESHOLD {
+            CleanState::Heavy
+        } else if bytes >= CLEAN_MODERATE_THRESHOLD {
+            CleanState::Moderate
+        } else {
+            CleanState::Clean
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CleanState::Clean => "clean",
+            CleanState::Moderate => "moderate",
+            CleanState::Heavy => "heavy",
+        }
+    }
+}
+
 /// Disk health based on free space
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DiskHealth {
@@ -58,15 +94,6 @@ impl DiskHealth {
             DiskHealth::Warning
         } else {
             DiskHealth::Normal
-        }
-    }
-
-    /// Convert to CacheState for comparison (Unknown → Warning to fail safe)
-    pub fn to_cache_state(self) -> CacheState {
-        match self {
-            DiskHealth::Normal => CacheState::Normal,
-            DiskHealth::Warning | DiskHealth::Unknown => CacheState::Warning,
-            DiskHealth::Critical => CacheState::Critical,
         }
     }
 }
@@ -92,8 +119,10 @@ pub struct AppStatus {
     /// Combined reclaimable (cache + dev)
     pub reclaimable_bytes: u64,
     pub reclaimable_display: String,
-    /// Overall health = worst of disk_health vs reclaimable-based state
-    pub health: CacheState,
+    /// Cleanup state — driven by reclaimable size, not disk pressure
+    pub clean_state: CleanState,
+    /// Whether the disk-gap banner should show (disk low + SS can't fix most of it)
+    pub show_gap_banner: bool,
     /// Number of local APFS snapshots detected
     pub snapshot_count: u32,
 }
@@ -106,11 +135,17 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64) -> AppStatus {
     let disk_health = DiskHealth::from_free_bytes(disk_free);
 
     let reclaimable = cache.size_bytes + dev_total;
-    let reclaimable_state = CacheState::from_size(reclaimable);
 
-    // Overall health is the WORSE of disk-free-based and reclaimable-based
-    let disk_as_state = disk_health.to_cache_state();
-    let health = worse_state(disk_as_state, reclaimable_state);
+    // Cleanup state driven by reclaimable size — not disk pressure.
+    // A power user with a large steady-state dev cache should see an
+    // informational "here's what's available" signal, not a panic state.
+    let clean_state = CleanState::from_reclaimable(reclaimable);
+
+    // Gap banner: disk is genuinely low AND SS can't fix most of it.
+    // On a healthy disk (>= 25 GB free), the banner never fires regardless
+    // of reclaimable size.
+    let show_gap_banner = matches!(disk_health, DiskHealth::Warning | DiskHealth::Critical)
+        && reclaimable < 1_000_000_000;
 
     let snapshot_count = get_snapshot_count();
 
@@ -131,22 +166,15 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64) -> AppStatus {
         cache: cache.clone(),
         dev_total_bytes: dev_total,
         dev_total_display: format_size(dev_total),
-        dev_scan_available: dev_total > 0 || true, // always available after first scan
+        dev_scan_available: true,
         reclaimable_bytes: reclaimable,
         reclaimable_display: format_size(reclaimable),
-        health,
+        clean_state,
+        show_gap_banner,
         snapshot_count,
     }
 }
 
-/// Return the worse (more severe) of two states
-fn worse_state(a: CacheState, b: CacheState) -> CacheState {
-    match (a, b) {
-        (CacheState::Critical, _) | (_, CacheState::Critical) => CacheState::Critical,
-        (CacheState::Warning, _) | (_, CacheState::Warning) => CacheState::Warning,
-        _ => CacheState::Normal,
-    }
-}
 
 /// Get available disk space on the root volume via statvfs
 pub fn get_disk_free_bytes() -> u64 {
@@ -403,9 +431,8 @@ mod tests {
         assert_eq!(format_size(1048576), "1 MB");
         assert_eq!(format_size(500 * 1024 * 1024), "500 MB");
         assert_eq!(format_size(999 * 1024 * 1024), "999 MB");
-        // 1000 MB should show as GB (threshold)
         assert_eq!(format_size(1000 * 1024 * 1024), "1 GB");
-        assert_eq!(format_size(1073741824), "1 GB"); // 1024 MB = 1 GB
+        assert_eq!(format_size(1073741824), "1 GB");
         assert_eq!(format_size(5368709120), "5 GB");
     }
 
@@ -420,78 +447,118 @@ mod tests {
     }
 
     #[test]
+    fn test_clean_state_from_reclaimable() {
+        // Clean: < 1 GB
+        assert_eq!(CleanState::from_reclaimable(0), CleanState::Clean);
+        assert_eq!(CleanState::from_reclaimable(500 * 1024 * 1024), CleanState::Clean);
+        // Moderate: 1-10 GB
+        assert_eq!(CleanState::from_reclaimable(1 * 1024 * 1024 * 1024), CleanState::Moderate);
+        assert_eq!(CleanState::from_reclaimable(5 * 1024 * 1024 * 1024), CleanState::Moderate);
+        assert_eq!(CleanState::from_reclaimable(9 * 1024 * 1024 * 1024), CleanState::Moderate);
+        // Heavy: >= 10 GB
+        assert_eq!(CleanState::from_reclaimable(10 * 1024 * 1024 * 1024), CleanState::Heavy);
+        assert_eq!(CleanState::from_reclaimable(13 * 1024 * 1024 * 1024), CleanState::Heavy);
+        assert_eq!(CleanState::from_reclaimable(50 * 1024 * 1024 * 1024), CleanState::Heavy);
+    }
+
+    #[test]
     fn test_disk_health_thresholds() {
-        // Normal: >= 25GB free
         assert_eq!(DiskHealth::from_free_bytes(30 * 1024 * 1024 * 1024), DiskHealth::Normal);
         assert_eq!(DiskHealth::from_free_bytes(25 * 1024 * 1024 * 1024), DiskHealth::Normal);
-        // Warning: 10-25GB free
         assert_eq!(DiskHealth::from_free_bytes(24 * 1024 * 1024 * 1024), DiskHealth::Warning);
         assert_eq!(DiskHealth::from_free_bytes(10 * 1024 * 1024 * 1024), DiskHealth::Warning);
-        // Critical: <10GB free
         assert_eq!(DiskHealth::from_free_bytes(9 * 1024 * 1024 * 1024), DiskHealth::Critical);
         assert_eq!(DiskHealth::from_free_bytes(1 * 1024 * 1024 * 1024), DiskHealth::Critical);
         assert_eq!(DiskHealth::from_free_bytes(0), DiskHealth::Critical);
-        // Unknown: u64::MAX (statvfs failure sentinel)
         assert_eq!(DiskHealth::from_free_bytes(u64::MAX), DiskHealth::Unknown);
     }
 
     #[test]
-    fn test_statvfs_failure_maps_to_warning_not_normal() {
-        let unknown = DiskHealth::Unknown;
-        // Unknown must NOT map to Normal — it should fail safe (Warning)
-        assert_eq!(unknown.to_cache_state(), CacheState::Warning);
-        assert_ne!(unknown.to_cache_state(), CacheState::Normal);
-    }
-
-    #[test]
-    fn test_compute_app_status_statvfs_failure() {
-        // Simulate statvfs failure by constructing what compute_app_status
-        // would produce with disk_free = u64::MAX
+    fn test_statvfs_failure_display() {
         let disk_health = DiskHealth::from_free_bytes(u64::MAX);
         assert_eq!(disk_health, DiskHealth::Unknown);
 
-        // Display should say "unavailable", not a huge formatted number
-        // (This tests the display logic extracted from compute_app_status)
         let display = if disk_health == DiskHealth::Unknown {
             "unavailable".to_string()
         } else {
             format_size(u64::MAX)
         };
         assert_eq!(display, "unavailable");
-
-        // Health should be at least Warning (not Normal)
-        let health = disk_health.to_cache_state();
-        assert_eq!(health, CacheState::Warning);
     }
 
     #[test]
-    fn test_critical_badge_renders_when_disk_low() {
-        // Simulate a disk with only 5GB free — should be Critical (<10GB)
-        let fake_free: u64 = 5 * 1024 * 1024 * 1024;
-        let disk_health = DiskHealth::from_free_bytes(fake_free);
+    fn test_48gb_free_13gb_reclaimable_calm_actionable() {
+        // Scenario: healthy disk (48 GB free), lots of reclaimable junk (13 GB)
+        let disk_free: u64 = 48 * 1024 * 1024 * 1024;
+        let reclaimable: u64 = 13 * 1024 * 1024 * 1024;
+
+        // Badge must be Heavy (calm actionable), NOT any panic state
+        let clean_state = CleanState::from_reclaimable(reclaimable);
+        assert_eq!(clean_state, CleanState::Heavy,
+            "13 GB reclaimable should be Heavy (calm actionable), not any panic state");
+
+        // Disk health is Normal — disk is fine
+        let disk_health = DiskHealth::from_free_bytes(disk_free);
+        assert_eq!(disk_health, DiskHealth::Normal);
+
+        // Gap banner must NOT fire (disk is healthy)
+        let gap_banner = matches!(disk_health, DiskHealth::Warning | DiskHealth::Critical)
+            && reclaimable < 1_000_000_000;
+        assert!(!gap_banner, "Gap banner must NOT fire with 48 GB free");
+    }
+
+    #[test]
+    fn test_8gb_free_13gb_reclaimable_actionable_no_gap_banner() {
+        // Scenario: low disk (8 GB free), but SS has plenty to clean (13 GB)
+        let disk_free: u64 = 8 * 1024 * 1024 * 1024;
+        let reclaimable: u64 = 13 * 1024 * 1024 * 1024;
+
+        // Badge: 13 GB reclaimable -> Heavy
+        let clean_state = CleanState::from_reclaimable(reclaimable);
+        assert_eq!(clean_state, CleanState::Heavy,
+            "13 GB reclaimable should be Heavy");
+
+        // Disk health: 8 GB free -> Critical (disk is genuinely low)
+        let disk_health = DiskHealth::from_free_bytes(disk_free);
         assert_eq!(disk_health, DiskHealth::Critical);
-        assert_eq!(disk_health.to_cache_state(), CacheState::Critical);
 
-        // With minimal reclaimable, overall health is still Critical
-        let reclaimable = CacheState::from_size(100); // tiny reclaimable = Normal
-        let overall = worse_state(disk_health.to_cache_state(), reclaimable);
-        assert_eq!(overall, CacheState::Critical);
+        // Gap banner must NOT fire — SS has plenty to offer (13 GB >= 1 GB)
+        let gap_banner = matches!(disk_health, DiskHealth::Warning | DiskHealth::Critical)
+            && reclaimable < 1_000_000_000;
+        assert!(!gap_banner,
+            "Gap banner must NOT fire when SS has 13 GB to clean — SS can help");
 
-        // Gap banner condition: health != Normal && reclaimable < 1GB
-        assert!(overall != CacheState::Normal);
-        assert!(100u64 < 1_000_000_000);
-        // Both true → gap banner would render in the UI
+        // Disk-free line SHOULD show low state (disk_health != Normal)
+        assert_ne!(disk_health, DiskHealth::Normal,
+            "Disk-free context line should show low-state coloring");
+    }
+
+    #[test]
+    fn test_8gb_free_200mb_reclaimable_gap_banner_fires() {
+        // Scenario: low disk (8 GB free), SS can't help much (200 MB)
+        let disk_free: u64 = 8 * 1024 * 1024 * 1024;
+        let reclaimable: u64 = 200 * 1024 * 1024;
+
+        let clean_state = CleanState::from_reclaimable(reclaimable);
+        assert_eq!(clean_state, CleanState::Clean);
+
+        let disk_health = DiskHealth::from_free_bytes(disk_free);
+        assert_eq!(disk_health, DiskHealth::Critical);
+
+        // Gap banner SHOULD fire — disk low AND SS can't fix it
+        let gap_banner = matches!(disk_health, DiskHealth::Warning | DiskHealth::Critical)
+            && reclaimable < 1_000_000_000;
+        assert!(gap_banner,
+            "Gap banner should fire when disk is low and SS has little to clean");
     }
 
     #[test]
     fn test_live_disk_free_reports_correctly() {
-        // Run against real disk — just verify we get a non-zero, non-u64::MAX value
         let free = get_disk_free_bytes();
         assert_ne!(free, 0, "Disk free should not be zero");
         assert_ne!(free, u64::MAX, "statvfs should succeed on a real system");
 
         let health = DiskHealth::from_free_bytes(free);
-        // On a dev machine, should have at least some disk space
         assert_ne!(health, DiskHealth::Unknown);
     }
 }

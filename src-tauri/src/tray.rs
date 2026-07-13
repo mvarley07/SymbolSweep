@@ -7,7 +7,7 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
-use crate::cache_monitor::{AppStatus, CacheState};
+use crate::cache_monitor::{AppStatus, CleanState};
 
 /// Activate the macOS app so it receives first-click events
 #[cfg(target_os = "macos")]
@@ -141,27 +141,27 @@ pub fn update_tray<R: Runtime>(
     status: &AppStatus,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        match status.health {
-            CacheState::Normal => {
-                // Icon only — minimal menu bar footprint
+        match status.clean_state {
+            CleanState::Clean => {
+                // Icon only — nothing meaningful to clean
                 tray.set_title(Some(""))?;
             }
-            CacheState::Warning | CacheState::Critical => {
-                // Show disk free space (same value as popup hero)
-                tray.set_title(Some(&format!("{} free", status.disk_free_display)))?;
+            CleanState::Moderate | CleanState::Heavy => {
+                // Show reclaimable total (same value as popup hero)
+                tray.set_title(Some(&format!("{} to clean", status.reclaimable_display)))?;
             }
         }
 
         // Tooltip always shows full breakdown
         let tooltip = format!(
-            "SymbolSweep\nDisk: {} free of {}\nReclaimable: {}\nStatus: {}",
+            "SymbolSweep\nReclaimable: {}\nDisk: {} free of {}\nStatus: {}",
+            status.reclaimable_display,
             status.disk_free_display,
             status.disk_total_display,
-            status.reclaimable_display,
-            match status.health {
-                CacheState::Normal => "Healthy",
-                CacheState::Warning => "Warning",
-                CacheState::Critical => "Critical",
+            match status.clean_state {
+                CleanState::Clean => "All clean",
+                CleanState::Moderate => "Moderate",
+                CleanState::Heavy => "Heavy",
             }
         );
         tray.set_tooltip(Some(&tooltip))?;

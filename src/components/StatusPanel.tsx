@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
-import type { CacheState, CleanResult } from '../types';
+import type { CleanState, CleanResult } from '../types';
 import './StatusPanel.css';
 
 /** Format bytes to human-readable string (matches Rust format_size) */
@@ -31,15 +31,15 @@ function formatSize(bytes: number): string {
 }
 
 interface StatusIndicatorProps {
-  state: CacheState;
+  state: CleanState;
   size: string;
 }
 
 function StatusIndicator({ state, size }: StatusIndicatorProps) {
   const stateConfig = {
-    Normal: { label: 'Healthy' },
-    Warning: { label: 'Warning' },
-    Critical: { label: 'Critical' },
+    Clean: { label: 'All clean' },
+    Moderate: { label: 'Moderate' },
+    Heavy: { label: 'Heavy' },
   };
 
   const config = stateConfig[state];
@@ -232,7 +232,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
-  const stateClass = appStatus.health.toLowerCase();
+  const stateClass = appStatus.clean_state.toLowerCase();
 
   return (
     <div className="status-panel">
@@ -250,23 +250,24 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       </header>
 
       <div className="status-content">
+        {/* Hero — reclaimable total */}
+        <StatusIndicator
+          state={appStatus.clean_state}
+          size={appStatus.clean_state === 'Clean'
+            ? 'All clean'
+            : `${appStatus.reclaimable_display} to clean`}
+        />
+
+        {/* Secondary disk context line */}
         {appStatus.disk_health === 'Unknown' ? (
-          <>
-            <StatusIndicator state={appStatus.health} size="Disk: unavailable" />
-            <span className="disk-total">statvfs failed</span>
-          </>
+          <span className="disk-context">Disk: unavailable</span>
         ) : (
-          <>
-            <StatusIndicator state={appStatus.health} size={`${appStatus.disk_free_display} free`} />
-            <span className="disk-total">of {appStatus.disk_total_display}</span>
-          </>
+          <span className={`disk-context${appStatus.disk_health !== 'Normal' ? ' disk-low' : ''}`}>
+            {appStatus.disk_free_display} free of {appStatus.disk_total_display}
+          </span>
         )}
 
         <div className="status-details">
-          <div className="detail-row">
-            <span className="detail-label">Cleanable by SymbolSweep</span>
-            <span className="detail-value">{appStatus.reclaimable_display}</span>
-          </div>
           <div className="detail-row clickable" onClick={handleToggleRecentCleans}>
             <span className="detail-label">Last cleaned</span>
             <span className="detail-value">{lastCleanTime} {showRecentCleans ? '\u25B4' : '\u25BE'}</span>
@@ -288,10 +289,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
           </div>
         )}
 
-        {appStatus.health !== 'Normal' && appStatus.reclaimable_bytes < 1_000_000_000 && (
+        {appStatus.show_gap_banner && (
           <div className="gap-banner">
-            <p>SymbolSweep can reclaim {appStatus.reclaimable_display}.</p>
-            <p>Most disk usage is outside SymbolSweep's scope.</p>
+            <p>Disk space is low and most usage is outside SymbolSweep's scope.</p>
             {appStatus.snapshot_count > 0 && (
               <p>{appStatus.snapshot_count} local Time Machine snapshot{appStatus.snapshot_count !== 1 ? 's' : ''} detected.</p>
             )}
@@ -321,14 +321,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             'Clean Now'
           )}
         </button>
-
-        {appStatus.health === 'Warning' && appStatus.reclaimable_bytes >= 1_000_000_000 && (
-          <p className="warning-text">Disk space getting low -- consider cleaning</p>
-        )}
-
-        {appStatus.health === 'Critical' && appStatus.reclaimable_bytes >= 1_000_000_000 && (
-          <p className="critical-text">Disk space critically low -- clean now!</p>
-        )}
 
         {appStatus.dev_scan_available && (
           <button className="dev-scan-link" onClick={onDevScanClick}>

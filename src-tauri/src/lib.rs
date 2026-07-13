@@ -615,23 +615,23 @@ pub fn run() {
                     // Uses unified health state, not just cache state
                     let show_notifications = settings.lock().unwrap().show_notifications;
                     if show_notifications && !should_auto_clean {
-                        match app_status.health {
-                            cache_monitor::CacheState::Warning => {
+                        match app_status.clean_state {
+                            cache_monitor::CleanState::Moderate => {
                                 if !warning_notified {
                                     send_notification(
                                         &app_handle,
-                                        "SymbolSweep - Warning",
-                                        &format!("Disk free: {} - consider cleaning", app_status.disk_free_display),
+                                        "SymbolSweep",
+                                        &format!("{} reclaimable — consider cleaning", app_status.reclaimable_display),
                                     );
                                     warning_notified = true;
                                 }
                             }
-                            cache_monitor::CacheState::Critical => {
+                            cache_monitor::CleanState::Heavy => {
                                 if !critical_notified {
                                     send_notification(
                                         &app_handle,
-                                        "SymbolSweep - Critical",
-                                        &format!("Disk free: {} - cleaning recommended!", app_status.disk_free_display),
+                                        "SymbolSweep",
+                                        &format!("{} piled up — a good time to sweep", app_status.reclaimable_display),
                                     );
                                     critical_notified = true;
                                 }
@@ -640,8 +640,8 @@ pub fn run() {
                         }
                     }
 
-                    // Reset notification flags when back to normal
-                    if matches!(app_status.health, cache_monitor::CacheState::Normal) {
+                    // Reset notification flags when back to clean
+                    if matches!(app_status.clean_state, cache_monitor::CleanState::Clean) {
                         warning_notified = false;
                         critical_notified = false;
                     }

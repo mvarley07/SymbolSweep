@@ -1,6 +1,7 @@
 // Type definitions for SymbolSweep
 
 export type CacheState = 'Normal' | 'Warning' | 'Critical';
+export type CleanState = 'Clean' | 'Moderate' | 'Heavy';
 
 export interface CacheStatus {
   size_bytes: number;
@@ -62,7 +63,8 @@ export interface AppStatus {
   dev_scan_available: boolean;
   reclaimable_bytes: number;
   reclaimable_display: string;
-  health: CacheState;
+  clean_state: CleanState;
+  show_gap_banner: boolean;
   snapshot_count: number;
 }
 
