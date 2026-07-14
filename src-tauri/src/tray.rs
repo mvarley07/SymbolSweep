@@ -69,7 +69,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
         .icon(icon)
         .icon_as_template(true)
         .menu(&menu)
-        .title("0 B") // Initial title - will be updated
+        .title("") // Empty until first status update — prevents "0 B" flash
         .tooltip("SymbolSweep - Cache Monitor")
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {
