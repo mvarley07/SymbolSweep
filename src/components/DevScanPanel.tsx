@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
-import type { ArtifactTier, DevArtifact } from '../types';
+import type { ArtifactTier, DevArtifact, SsTrashInfo, PurgeResult } from '../types';
 import './DevScanPanel.css';
 
 const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
@@ -148,6 +149,10 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const { deleteArtifacts: manualDeleteArtifacts, deleting: manualDeleting } = useDeleteDevArtifactsManual();
   const deleting = bulkDeleting || manualDeleting;
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [deletedToTrash, setDeletedToTrash] = useState(false);
+  const [trashInfo, setTrashInfo] = useState<SsTrashInfo | null>(null);
+  const [purging, setPurging] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
   // Legend: expanded once on first-ever visit, collapsed by default thereafter.
   // "?" in header toggles it open/closed within a session without re-persisting.
   const [legendExpanded, setLegendExpanded] = useState(() => {
@@ -161,15 +166,58 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const [confirmReinstall, setConfirmReinstall] = useState(false);
 
-  const showResult = (msg: string) => {
+  const refreshTrashInfo = useCallback(async () => {
+    try {
+      const info = await invoke<SsTrashInfo>('get_ss_trash_info');
+      setTrashInfo(info.count > 0 ? info : null);
+    } catch {
+      setTrashInfo(null);
+    }
+  }, []);
+
+  // Check for SS items in Trash on mount and after deletes
+  useEffect(() => { refreshTrashInfo(); }, [refreshTrashInfo]);
+
+  const handlePurgeSsTrash = async () => {
+    setConfirmPurge(false);
+    setPurging(true);
+    try {
+      const res = await invoke<PurgeResult>('purge_ss_trash');
+      if (res.purged_count > 0) {
+        showResult(`Freed ${res.bytes_freed_display} from Trash (${res.purged_count} items)`);
+      } else if (res.errors.length > 0) {
+        showResult(`Error: ${res.errors[0]}`);
+      } else {
+        showResult('Trash already empty');
+      }
+      setTrashInfo(null);
+    } catch {
+      showResult('Error emptying Trash');
+    } finally {
+      setPurging(false);
+    }
+  };
+
+  const showResult = (msg: string, trashed = false) => {
     setDeleteMessage(msg);
-    setTimeout(() => setDeleteMessage(null), 4000);
+    setDeletedToTrash(trashed);
+    setTimeout(() => { setDeleteMessage(null); setDeletedToTrash(false); }, 4000);
   };
 
   const handleDeleteOne = async (path: string) => {
     try {
+      const artifact = result?.artifacts.find(a => a.path === path);
+      const trashed = artifact?.tier === 'Rebuildable' || artifact?.tier === 'SafeWithReinstall';
       const res = await manualDeleteArtifacts([path]);
-      if (res.deleted_count > 0) showResult(`Freed ${res.bytes_freed_display}`);
+      if (res.deleted_count > 0) {
+        showResult(
+          trashed
+            ? `Moved ${res.bytes_freed_display} to Trash`
+            : `Freed ${res.bytes_freed_display}`,
+          trashed,
+        );
+        if (trashed) refreshTrashInfo();
+      }
       if (res.errors.length > 0) showResult(`Error: ${res.errors[0]}`);
     } catch {
       // error state handled by hook
@@ -199,7 +247,10 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     if (paths.length === 0) return;
     try {
       const res = await manualDeleteArtifacts(paths);
-      if (res.deleted_count > 0) showResult(`Freed ${res.bytes_freed_display} (${res.deleted_count} items)`);
+      if (res.deleted_count > 0) {
+        showResult(`Moved ${res.bytes_freed_display} to Trash (${res.deleted_count} items)`, true);
+        refreshTrashInfo();
+      }
     } catch {
       // error state handled by hook
     }
@@ -214,7 +265,10 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     if (paths.length === 0) return;
     try {
       const res = await manualDeleteArtifacts(paths);
-      if (res.deleted_count > 0) showResult(`Freed ${res.bytes_freed_display} (${res.deleted_count} items)`);
+      if (res.deleted_count > 0) {
+        showResult(`Moved ${res.bytes_freed_display} to Trash (${res.deleted_count} items)`, true);
+        refreshTrashInfo();
+      }
     } catch {
       // error state handled by hook
     }
@@ -372,6 +426,33 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             <div className="delete-message">
               <span className="result-icon">&#10003;</span>
               <span>{deleteMessage}</span>
+            </div>
+          )}
+
+          {trashInfo && !purging && (
+            <div className="ss-trash-banner">
+              <div className="ss-trash-text">
+                <span className="ss-trash-size">{trashInfo.total_display}</span> in Trash ({trashInfo.count} {trashInfo.count === 1 ? 'item' : 'items'}) — recoverable
+              </div>
+              {confirmPurge ? (
+                <div className="confirm-strip tier-purge">
+                  <span className="confirm-text">
+                    Permanently delete {trashInfo.count} {trashInfo.count === 1 ? 'item' : 'items'} ({trashInfo.total_display}) from Trash? This cannot be undone.
+                  </span>
+                  <button className="confirm-yes" onClick={handlePurgeSsTrash}>Empty</button>
+                  <button className="confirm-no" onClick={() => setConfirmPurge(false)}>Cancel</button>
+                </div>
+              ) : (
+                <button className="ss-trash-purge-btn" onClick={() => setConfirmPurge(true)}>
+                  Empty SS Trash to reclaim space
+                </button>
+              )}
+            </div>
+          )}
+
+          {purging && (
+            <div className="delete-message">
+              <span>Emptying Trash...</span>
             </div>
           )}
 

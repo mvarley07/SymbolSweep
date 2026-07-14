@@ -268,6 +268,51 @@
 }
 
 /* ============================================================
+   SS Trash banner — shows when SS items are sitting in Trash
+   ============================================================ */
+.ss-trash-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  animation: slideIn 0.2s ease-out;
+}
+
+.ss-trash-text {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.ss-trash-size {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-feature-settings: 'tnum' 1;
+}
+
+.ss-trash-purge-btn {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: var(--badge-radius);
+  background: rgba(251, 191, 36, 0.1);
+  color: rgba(251, 191, 36, 0.9);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ss-trash-purge-btn:hover {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+/* ============================================================
    Artifact rows — chrome-stripped, divider-separated
    ============================================================ */
 .artifacts-list {

@@ -1114,6 +1114,137 @@ pub struct DevDeleteResult {
     pub errors: Vec<String>,
 }
 
+// ============================================================================
+// SS Trash Manifest — track items SS moved to Trash for selective purge
+// ============================================================================
+
+/// A single item that SS moved to macOS Trash
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrashedItem {
+    pub original_path: String,
+    pub trash_path: String,
+    pub size_bytes: u64,
+    pub timestamp: u64,
+}
+
+/// Summary of SS items currently in Trash
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SsTrashInfo {
+    pub count: usize,
+    pub total_bytes: u64,
+    pub total_display: String,
+}
+
+/// Result of purging SS items from Trash
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PurgeResult {
+    pub purged_count: usize,
+    pub bytes_freed: u64,
+    pub bytes_freed_display: String,
+    pub errors: Vec<String>,
+}
+
+fn trash_manifest_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home)
+        .join("Library/Application Support/com.mvarley07.symbolsweep")
+        .join("trash_manifest.json")
+}
+
+fn load_trash_manifest() -> Vec<TrashedItem> {
+    let path = trash_manifest_path();
+    match fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn save_trash_manifest(items: &[TrashedItem]) {
+    let path = trash_manifest_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(items) {
+        let _ = fs::write(&path, json);
+    }
+}
+
+fn record_trashed_item(original_path: &str, trash_path: &Path, size_bytes: u64) {
+    let mut manifest = load_trash_manifest();
+    let timestamp = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    manifest.push(TrashedItem {
+        original_path: original_path.to_string(),
+        trash_path: trash_path.to_string_lossy().to_string(),
+        size_bytes,
+        timestamp,
+    });
+    save_trash_manifest(&manifest);
+}
+
+/// Get info about SS items still sitting in Trash (validates they still exist)
+pub fn get_ss_trash_info() -> SsTrashInfo {
+    let manifest = load_trash_manifest();
+    // Filter to items that still exist in Trash
+    let live: Vec<&TrashedItem> = manifest.iter().filter(|i| Path::new(&i.trash_path).exists()).collect();
+    let total_bytes: u64 = live.iter().map(|i| i.size_bytes).sum();
+    SsTrashInfo {
+        count: live.len(),
+        total_bytes,
+        total_display: format_size(total_bytes),
+    }
+}
+
+/// Permanently delete only the items SS moved to Trash. Never touches other Trash contents.
+///
+/// SAFETY: Only deletes paths inside ~/.Trash. Manifest entries pointing
+/// elsewhere are rejected and logged as errors (defense against corruption).
+pub fn purge_ss_trash() -> PurgeResult {
+    let trash_dir = get_home_dir().join(".Trash");
+    let manifest = load_trash_manifest();
+    let mut purged_count = 0usize;
+    let mut bytes_freed = 0u64;
+    let mut errors = Vec::new();
+    let mut remaining = Vec::new();
+
+    for item in &manifest {
+        let path = Path::new(&item.trash_path);
+
+        // SAFETY GUARD: only delete inside ~/.Trash — reject anything else
+        if !path.starts_with(&trash_dir) {
+            errors.push(format!("SAFETY: refused to delete path outside Trash: {}", item.trash_path));
+            remaining.push(item.clone());
+            continue;
+        }
+
+        if !path.exists() {
+            // Already gone (user emptied Trash manually) — drop from manifest
+            continue;
+        }
+        match fs::remove_dir_all(path) {
+            Ok(()) => {
+                purged_count += 1;
+                bytes_freed += item.size_bytes;
+            }
+            Err(e) => {
+                errors.push(format!("{}: {}", item.trash_path, e));
+                remaining.push(item.clone());
+            }
+        }
+    }
+
+    save_trash_manifest(&remaining);
+
+    PurgeResult {
+        purged_count,
+        bytes_freed,
+        bytes_freed_display: format_size(bytes_freed),
+        errors,
+    }
+}
+
 /// Delete specific dev artifacts by path.
 /// Only deletes paths that were found in the most recent scan result (safety check).
 /// Bulk callers (Clean Now, auto-clean) should only pass Safe-tier paths.
@@ -1130,10 +1261,10 @@ pub fn delete_dev_artifacts_manual(paths: &[String], known_artifacts: &[DevArtif
 }
 
 /// Move a file or directory to macOS Trash using NSFileManager.trashItemAtURL.
-/// Returns Ok(()) if the item was successfully trashed, or Err with a description.
-/// Uses the objc crate (already a dependency) to call the native macOS API.
+/// Returns Ok(trash_path) with the actual path in ~/.Trash where the item landed,
+/// or Err with a description. Uses the objc crate (already a dependency).
 #[cfg(target_os = "macos")]
-fn move_to_trash(path: &Path) -> Result<(), String> {
+fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
     use objc::runtime::{Class, Object, BOOL, YES};
     use objc::{msg_send, sel, sel_impl};
     use std::ffi::CString;
@@ -1156,12 +1287,27 @@ fn move_to_trash(path: &Path) -> Result<(), String> {
         let url: *mut Object = msg_send![nsurl_cls, fileURLWithPath: ns_path];
 
         // Call trashItemAtURL:resultingItemURL:error:
-        let null: *mut Object = std::ptr::null_mut();
+        // Capture resultingItemURL to know exactly where the item landed in Trash
+        let mut result_url: *mut Object = std::ptr::null_mut();
         let mut error: *mut Object = std::ptr::null_mut();
-        let success: BOOL = msg_send![fm, trashItemAtURL: url resultingItemURL: null error: &mut error];
+        let success: BOOL = msg_send![fm, trashItemAtURL: url resultingItemURL: &mut result_url error: &mut error];
 
         if success == YES {
-            Ok(())
+            // Extract the resulting path from the URL
+            if !result_url.is_null() {
+                let path_obj: *mut Object = msg_send![result_url, path];
+                if !path_obj.is_null() {
+                    let path_cstr: *const i8 = msg_send![path_obj, UTF8String];
+                    if !path_cstr.is_null() {
+                        let trash_path = PathBuf::from(
+                            std::ffi::CStr::from_ptr(path_cstr).to_string_lossy().to_string()
+                        );
+                        return Ok(trash_path);
+                    }
+                }
+            }
+            // Trashed successfully but couldn't capture the result path
+            Ok(PathBuf::new())
         } else if !error.is_null() {
             let desc: *mut Object = msg_send![error, localizedDescription];
             let c_str: *const i8 = msg_send![desc, UTF8String];
@@ -1180,9 +1326,9 @@ fn move_to_trash(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn move_to_trash(path: &Path) -> Result<(), String> {
-    // Non-macOS fallback: permanent delete
-    fs::remove_dir_all(path).map_err(|e| e.to_string())
+fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
+    // Non-macOS fallback: permanent delete (no trash path)
+    fs::remove_dir_all(path).map_err(|e| e.to_string()).map(|_| PathBuf::new())
 }
 
 fn delete_dev_artifacts_inner(
@@ -1265,13 +1411,22 @@ fn delete_dev_artifacts_inner(
                 Some(ArtifactTier::Rebuildable) | Some(ArtifactTier::SafeWithReinstall)
             );
 
+        let mechanism = if use_trash { "trash" } else { "permanent" };
+
         let result = if use_trash {
-            move_to_trash(path)
+            match move_to_trash(path) {
+                Ok(trash_path) => {
+                    // Record in manifest so we can selectively purge later
+                    if !trash_path.as_os_str().is_empty() {
+                        record_trashed_item(path_str, &trash_path, expected_bytes);
+                    }
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
         } else {
             fs::remove_dir_all(path).map_err(|e| e.to_string())
         };
-
-        let mechanism = if use_trash { "trash" } else { "permanent" };
 
         match result {
             Ok(()) => {
@@ -2150,6 +2305,158 @@ mod tests {
                 found_cache_in_trash
             );
         }
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ================================================================
+    // Trash Manifest — purge_ss_trash safety tests
+    // ================================================================
+
+    /// Helper: back up the real manifest, install a test one, return the backup.
+    fn install_test_manifest(items: &[TrashedItem]) -> Vec<TrashedItem> {
+        let backup = load_trash_manifest();
+        save_trash_manifest(items);
+        backup
+    }
+
+    /// Helper: restore the real manifest from a backup.
+    fn restore_manifest(backup: &[TrashedItem]) {
+        save_trash_manifest(backup);
+    }
+
+    /// SCOPE: purge deletes ONLY SS-manifest items, not other Trash content.
+    #[test]
+    fn test_purge_only_deletes_manifest_items() {
+        // Use a sub-dir inside ~/.Trash so the path guard accepts it
+        let trash_dir = get_home_dir().join(".Trash");
+        let test_dir = trash_dir.join("_ss_purge_scope_test");
+        let _ = fs::remove_dir_all(&test_dir);
+        fs::create_dir_all(&test_dir).unwrap();
+
+        // "SS item" — recorded in manifest
+        let ss_item = test_dir.join("ss_trashed_target");
+        fs::create_dir_all(&ss_item).unwrap();
+        fs::write(ss_item.join("data.bin"), vec![0u8; 512]).unwrap();
+
+        // "Non-SS item" — NOT in manifest (simulates other user Trash content)
+        let non_ss_item = test_dir.join("user_photo_backup");
+        fs::create_dir_all(&non_ss_item).unwrap();
+        fs::write(non_ss_item.join("photo.jpg"), vec![0xFFu8; 256]).unwrap();
+
+        assert!(ss_item.exists(), "SS item should exist before purge");
+        assert!(non_ss_item.exists(), "Non-SS item should exist before purge");
+
+        let backup = install_test_manifest(&[TrashedItem {
+            original_path: "/some/original/path".to_string(),
+            trash_path: ss_item.to_string_lossy().to_string(),
+            size_bytes: 512,
+            timestamp: 0,
+        }]);
+
+        let result = purge_ss_trash();
+        restore_manifest(&backup);
+
+        assert!(!ss_item.exists(), "SS item should be deleted by purge");
+        assert!(
+            non_ss_item.exists(),
+            "SAFETY FAILURE: non-SS item was deleted — purge escaped manifest scope!"
+        );
+        assert_eq!(result.purged_count, 1);
+        assert!(result.errors.is_empty());
+
+        println!(
+            "PASS: purge deleted 1 SS item, non-SS item survived ({})",
+            non_ss_item.display()
+        );
+
+        let _ = fs::remove_dir_all(&test_dir);
+    }
+
+    /// STALE MANIFEST: missing/restored entries handled gracefully.
+    #[test]
+    fn test_purge_handles_stale_entries() {
+        let trash_dir = get_home_dir().join(".Trash");
+        let test_dir = trash_dir.join("_ss_purge_stale_test");
+        let _ = fs::remove_dir_all(&test_dir);
+        fs::create_dir_all(&test_dir).unwrap();
+
+        // One item that exists
+        let existing = test_dir.join("still_in_trash");
+        fs::create_dir_all(&existing).unwrap();
+        fs::write(existing.join("f.txt"), b"data").unwrap();
+
+        // Stale entry — path does NOT exist (user already emptied or restored)
+        let stale_path = test_dir.join("already_gone");
+        assert!(!stale_path.exists());
+
+        let backup = install_test_manifest(&[
+            TrashedItem {
+                original_path: "/original/existing".to_string(),
+                trash_path: existing.to_string_lossy().to_string(),
+                size_bytes: 100,
+                timestamp: 0,
+            },
+            TrashedItem {
+                original_path: "/original/gone".to_string(),
+                trash_path: stale_path.to_string_lossy().to_string(),
+                size_bytes: 999,
+                timestamp: 0,
+            },
+        ]);
+
+        let result = purge_ss_trash();
+        let post_manifest = load_trash_manifest();
+        restore_manifest(&backup);
+
+        assert!(!existing.exists(), "Existing item should be purged");
+        assert_eq!(result.purged_count, 1, "Only 1 item actually deleted");
+        assert!(result.errors.is_empty(), "Stale entries should not produce errors");
+        assert!(post_manifest.is_empty(), "Manifest should be clean after purge");
+
+        println!("PASS: stale manifest entry handled gracefully, no errors");
+
+        let _ = fs::remove_dir_all(&test_dir);
+    }
+
+    /// PATH GUARD: manifest entry pointing OUTSIDE ~/.Trash is rejected.
+    #[test]
+    fn test_purge_rejects_paths_outside_trash() {
+        let tmp = std::env::temp_dir().join("_ss_purge_guard_test");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+
+        // Create a real directory outside ~/.Trash
+        let outside_item = tmp.join("important_data");
+        fs::create_dir_all(&outside_item).unwrap();
+        fs::write(outside_item.join("precious.txt"), b"do not delete").unwrap();
+        assert!(outside_item.exists());
+
+        // Craft a manifest with a path outside ~/.Trash (simulates corruption)
+        let backup = install_test_manifest(&[TrashedItem {
+            original_path: "/original/path".to_string(),
+            trash_path: outside_item.to_string_lossy().to_string(),
+            size_bytes: 42,
+            timestamp: 0,
+        }]);
+
+        let result = purge_ss_trash();
+        restore_manifest(&backup);
+
+        // The item must SURVIVE — guard should have rejected it
+        assert!(
+            outside_item.exists(),
+            "SAFETY FAILURE: purge deleted a path outside ~/.Trash!"
+        );
+        assert_eq!(result.purged_count, 0, "Nothing should have been purged");
+        assert_eq!(result.errors.len(), 1, "Should report one safety rejection");
+        assert!(
+            result.errors[0].contains("SAFETY"),
+            "Error should mention SAFETY: got '{}'",
+            result.errors[0]
+        );
+
+        println!("PASS: path outside ~/.Trash rejected — item survived, error reported");
 
         let _ = fs::remove_dir_all(&tmp);
     }

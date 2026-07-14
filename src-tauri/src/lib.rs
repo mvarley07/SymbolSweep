@@ -15,7 +15,7 @@ use cache_monitor::{
     compute_app_status, get_cache_status, get_combined_cache_status, get_simulated_status,
     is_daemon_running, AppStatus, CacheStatus,
 };
-use dev_scanner::{DevDeleteResult, DevScanResult};
+use dev_scanner::{DevDeleteResult, DevScanResult, PurgeResult, SsTrashInfo};
 use scheduler::{time_since_last_clean, Settings};
 use tray::{create_tray, send_notification, update_tray};
 
@@ -425,6 +425,31 @@ fn open_storage_settings() {
     }
 }
 
+/// Open the Trash folder in Finder
+#[tauri::command]
+fn open_trash() {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg(std::path::Path::new(&std::env::var("HOME").unwrap_or_default()).join(".Trash"))
+            .spawn();
+    }
+}
+
+/// Get info about SS items still sitting in Trash
+#[tauri::command]
+fn get_ss_trash_info() -> SsTrashInfo {
+    dev_scanner::get_ss_trash_info()
+}
+
+/// Permanently delete only the items SS moved to Trash — never touches other Trash contents
+#[tauri::command]
+async fn purge_ss_trash() -> Result<PurgeResult, String> {
+    tauri::async_runtime::spawn_blocking(dev_scanner::purge_ss_trash)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ============================================================================
 // App Entry Point
 // ============================================================================
@@ -743,6 +768,9 @@ pub fn run() {
             test_notification,
             open_notification_settings,
             open_storage_settings,
+            open_trash,
+            get_ss_trash_info,
+            purge_ss_trash,
             scan_dev,
             get_dev_scan_result,
             delete_dev_artifacts,

@@ -108,6 +108,19 @@ export interface DevDeleteResult {
   errors: string[];
 }
 
+export interface SsTrashInfo {
+  count: number;
+  total_bytes: number;
+  total_display: string;
+}
+
+export interface PurgeResult {
+  purged_count: number;
+  bytes_freed: number;
+  bytes_freed_display: string;
+  errors: string[];
+}
+
 // Debug preset sizes (simulate reclaimable for CleanState testing)
 export const DEBUG_SIZES = {
   EMPTY: 0,
