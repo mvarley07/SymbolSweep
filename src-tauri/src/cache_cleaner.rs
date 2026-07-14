@@ -418,3 +418,181 @@ pub fn clean_cache(dry_run: bool) -> Result<CleanResult, CleanError> {
 pub fn get_log_file_path() -> String {
     get_log_path().to_string_lossy().to_string()
 }
+
+// ============================================================================
+// Tests — run with: cargo test --lib -- --test-threads=1
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// Helper: create a dummy file inside the coresymbolicationd cache directory.
+    fn create_dummy_content(name: &str, size: usize) -> PathBuf {
+        let cache_path = get_safe_cache_path();
+        fs::create_dir_all(&cache_path).unwrap();
+        let file_path = cache_path.join(name);
+        let content = vec![0xABu8; size];
+        fs::write(&file_path, &content).unwrap();
+        file_path
+    }
+
+    // ----------------------------------------------------------------
+    // Test 1: autoclean deletes dummy content (before / after proof)
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_clean_deletes_dummy_content() {
+        // Arrange: create dummy files in coresymbolicationd
+        let file1 = create_dummy_content("_test_dummy_1.dat", 1024);
+        let file2 = create_dummy_content("_test_dummy_2.dat", 2048);
+
+        assert!(file1.exists(), "BEFORE: dummy file 1 must exist");
+        assert!(file2.exists(), "BEFORE: dummy file 2 must exist");
+
+        // Act: trigger autoclean (same code path as scheduler)
+        let result = clean_cache(false).expect("clean_cache should succeed");
+
+        // Assert: files are gone, bytes freed
+        assert!(!file1.exists(), "AFTER: dummy file 1 should be deleted");
+        assert!(!file2.exists(), "AFTER: dummy file 2 should be deleted");
+        assert!(result.bytes_freed > 0, "Should have freed >0 bytes, got {}", result.bytes_freed);
+        assert!(result.files_removed > 0, "Should have removed >0 items");
+        assert!(result.success);
+        assert!(!result.was_dry_run);
+
+        println!("PASS: clean deleted dummy content. bytes_freed={}, files_removed={}",
+            result.bytes_freed, result.files_removed);
+    }
+
+    // ----------------------------------------------------------------
+    // Test 2: threshold – fires over, doesn't fire under
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_threshold_respected() {
+        use crate::scheduler::{Scheduler, Settings};
+
+        // Create dummy content so the cache is non-empty
+        let dummy = create_dummy_content("_test_threshold.dat", 10 * 1024); // 10 KB
+        assert!(dummy.exists());
+
+        // --- Under threshold: set threshold way above actual size → must NOT fire ---
+        let mut settings_under = Settings::default();
+        settings_under.auto_clean_on_threshold = true;
+        settings_under.auto_clean_threshold = 100 * 1024 * 1024 * 1024; // 100 GB
+        let sched_under = Scheduler::new(settings_under);
+        assert!(
+            !sched_under.should_auto_clean_threshold(),
+            "Must NOT auto-clean when cache is under threshold"
+        );
+
+        // --- Over threshold: set threshold to 1 byte → must fire ---
+        let mut settings_over = Settings::default();
+        settings_over.auto_clean_on_threshold = true;
+        settings_over.auto_clean_threshold = 1; // 1 byte
+        let sched_over = Scheduler::new(settings_over);
+        assert!(
+            sched_over.should_auto_clean_threshold(),
+            "MUST auto-clean when cache is over threshold"
+        );
+
+        // Clean up
+        let _ = fs::remove_file(&dummy);
+        println!("PASS: threshold respected (fires over, doesn't fire under)");
+    }
+
+    // ----------------------------------------------------------------
+    // Test 3: CANNOT reach Rebuildable / Reinstall / Review or other caches
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_cannot_reach_other_caches() {
+        let home = std::env::var("HOME").unwrap();
+
+        // Every path that autoclean must NEVER accept
+        let forbidden_paths: Vec<PathBuf> = vec![
+            // Package-manager caches (Safe tier – manual Clean Now only)
+            PathBuf::from(&home).join("Library/Caches/Homebrew"),
+            PathBuf::from(&home).join(".npm/_cacache"),
+            PathBuf::from(&home).join(".cargo/registry"),
+            PathBuf::from(&home).join("Library/Caches/pip"),
+            // Rebuildable tier
+            PathBuf::from(&home).join("Library/Caches/com.apple.dt.Xcode"),
+            PathBuf::from(&home).join("Library/Developer/Xcode/DerivedData"),
+            // Reinstall tier
+            PathBuf::from("/Applications"),
+            // Review tier
+            PathBuf::from(&home).join("Documents"),
+            PathBuf::from(&home).join("Desktop"),
+            // Other system caches
+            PathBuf::from(&home).join("Library/Caches"),
+            PathBuf::from(&home).join("Library/Caches/com.apple.Safari"),
+            // Traversal / escape attempts
+            PathBuf::from(&home).join("Library/Caches/com.apple.coresymbolicationd/../.."),
+            PathBuf::from("/tmp"),
+            PathBuf::from("/"),
+        ];
+
+        for path in &forbidden_paths {
+            let result = verify_safe_path(&path.clone());
+            assert!(
+                result.is_err(),
+                "SAFETY FAILURE: verify_safe_path accepted forbidden path '{}'",
+                path.display()
+            );
+            match result {
+                Err(CleanError::SafetyViolation(_)) => { /* correct */ }
+                other => panic!(
+                    "Expected SafetyViolation for '{}', got: {:?}",
+                    path.display(),
+                    other
+                ),
+            }
+        }
+
+        // Also verify the ONLY accepted path is coresymbolicationd
+        let ok_path = get_safe_cache_path();
+        if ok_path.exists() {
+            assert!(
+                verify_safe_path(&ok_path).is_ok(),
+                "The real coresymbolicationd path should be accepted"
+            );
+        }
+
+        println!("PASS: {} forbidden paths correctly rejected", forbidden_paths.len());
+    }
+
+    // ----------------------------------------------------------------
+    // Test 4: logs only when bytes_freed > 0
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_no_log_when_nothing_to_clean() {
+        // First clean to ensure the cache is empty
+        let _ = clean_cache(false);
+
+        // Count cache-cleaner log lines (=== ... ===) BEFORE the no-op clean.
+        // We check these specific markers rather than total file size because
+        // dev_scanner tests share the same log file and may write concurrently.
+        let log_path = get_log_path();
+        let count_markers = |contents: &str| -> usize {
+            contents.lines().filter(|l| l.contains("=== CLEAN OPERATION")).count()
+        };
+        let log_before = fs::read_to_string(&log_path).unwrap_or_default();
+        let markers_before = count_markers(&log_before);
+
+        // Clean again – cache is empty, so nothing should happen
+        let result = clean_cache(false).expect("clean_cache should succeed on empty dir");
+        assert_eq!(result.bytes_freed, 0, "Should free 0 bytes on empty cache");
+        assert_eq!(result.files_removed, 0, "Should remove 0 files on empty cache");
+
+        // No new CLEAN OPERATION markers should have been written
+        let log_after = fs::read_to_string(&log_path).unwrap_or_default();
+        let markers_after = count_markers(&log_after);
+        assert_eq!(
+            markers_before, markers_after,
+            "No clean-operation log entries should be written when nothing was cleaned (before={}, after={})",
+            markers_before, markers_after
+        );
+
+        println!("PASS: no log entry when bytes_freed = 0");
+    }
+}

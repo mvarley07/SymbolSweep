@@ -93,14 +93,16 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
         <section className="settings-section">
           <h2>Auto-Clean</h2>
           <p className="section-description">
-            Cleans system and package-manager caches. Never touches build artifacts or project files.
+            Automatically manages the macOS symbolication cache (coresymbolicationd),
+            which can grow very large and cause disk issues.
+            Does not auto-clean package caches or build artifacts — use Clean Now for those.
           </p>
 
           <div className="setting-row">
             <div className="setting-info">
-              <label htmlFor="auto-threshold">Clean when system cache exceeds</label>
+              <label htmlFor="auto-threshold">Auto-clear symbolication cache when it exceeds</label>
               <span className="setting-description">
-                Automatically clean system caches at this size
+                Clears coresymbolicationd when it exceeds this size
               </span>
             </div>
             <label className="toggle">
@@ -134,9 +136,9 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
 
           <div className="setting-row">
             <div className="setting-info">
-              <label htmlFor="auto-scheduled">Scheduled cleaning</label>
+              <label htmlFor="auto-scheduled">Scheduled symbolication cleanup</label>
               <span className="setting-description">
-                Clean every {formatInterval(settings.auto_clean_interval_secs)}
+                Clear coresymbolicationd every {formatInterval(settings.auto_clean_interval_secs)}
               </span>
             </div>
             <label className="toggle">
