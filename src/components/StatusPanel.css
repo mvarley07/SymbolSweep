@@ -110,7 +110,7 @@
 .scan-shell {
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  height: 100vh;
 }
 
 .scan-logo-container {
