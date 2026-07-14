@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
-use cache_cleaner::{clean_cache, get_log_file_path, reindex_spotlight, CleanResult};
+use cache_cleaner::{clean_cache, get_log_file_path, CleanResult};
 use cache_monitor::{
     compute_app_status, get_cache_status, get_combined_cache_status, get_simulated_status,
     is_daemon_running, AppStatus, CacheStatus,
@@ -150,12 +150,6 @@ fn get_recent_deletions() -> Vec<String> {
         }
         Err(_) => Vec::new(),
     }
-}
-
-/// Reindex Spotlight (requires password)
-#[tauri::command]
-fn reindex() -> Result<(), String> {
-    reindex_spotlight().map_err(|e| e.to_string())
 }
 
 // ============================================================================
@@ -731,7 +725,6 @@ pub fn run() {
             get_daemon_status,
             clean,
             get_log_path,
-            reindex,
             get_settings,
             update_settings,
             get_last_clean_time,

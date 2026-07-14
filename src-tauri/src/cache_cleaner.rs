@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cache_monitor::format_size;
@@ -79,8 +78,6 @@ pub struct DeletionItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CleanError {
     SafetyViolation(String),
-    PermissionDenied(String),
-    DaemonKillFailed(String),
     CacheNotFound(String),
     RemovalFailed(String),
     Unknown(String),
@@ -90,8 +87,6 @@ impl std::fmt::Display for CleanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CleanError::SafetyViolation(msg) => write!(f, "SAFETY VIOLATION: {}", msg),
-            CleanError::PermissionDenied(msg) => write!(f, "Permission denied: {}", msg),
-            CleanError::DaemonKillFailed(msg) => write!(f, "Failed to stop daemon: {}", msg),
             CleanError::CacheNotFound(msg) => write!(f, "Cache not found: {}", msg),
             CleanError::RemovalFailed(msg) => write!(f, "Failed to remove cache: {}", msg),
             CleanError::Unknown(msg) => write!(f, "Unknown error: {}", msg),
@@ -167,57 +162,6 @@ fn current_timestamp() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs()
-}
-
-// ============================================================================
-// Daemon Control
-// ============================================================================
-
-/// Stop the coresymbolicationd daemon
-fn stop_daemon() -> Result<(), CleanError> {
-    let result = Command::new("killall")
-        .arg("-9")
-        .arg("coresymbolicationd")
-        .output();
-
-    match result {
-        Ok(output) => {
-            if output.status.success() || output.status.code() == Some(1) {
-                log_deletion("Stopped coresymbolicationd daemon");
-                Ok(())
-            } else {
-                stop_daemon_with_privileges()
-            }
-        }
-        Err(e) => Err(CleanError::DaemonKillFailed(e.to_string())),
-    }
-}
-
-/// Stop daemon using osascript with administrator privileges
-fn stop_daemon_with_privileges() -> Result<(), CleanError> {
-    let script = r#"do shell script "killall -9 coresymbolicationd 2>/dev/null || true" with administrator privileges"#;
-
-    let result = Command::new("osascript")
-        .arg("-e")
-        .arg(script)
-        .output();
-
-    match result {
-        Ok(output) => {
-            if output.status.success() {
-                log_deletion("Stopped coresymbolicationd daemon (with privileges)");
-                Ok(())
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if stderr.contains("User canceled") {
-                    Err(CleanError::PermissionDenied("User cancelled authentication".to_string()))
-                } else {
-                    Err(CleanError::DaemonKillFailed(stderr.to_string()))
-                }
-            }
-        }
-        Err(e) => Err(CleanError::DaemonKillFailed(e.to_string())),
-    }
 }
 
 // ============================================================================
@@ -389,15 +333,6 @@ pub fn clean_cache(dry_run: bool) -> Result<CleanResult, CleanError> {
         });
     }
 
-    // ACTUAL DELETION - Stop daemon first
-    if let Err(e) = stop_daemon() {
-        log_deletion(&format!("Warning: Could not stop daemon: {}", e));
-        // Continue anyway - daemon might not be running
-    }
-
-    // Wait for daemon to stop
-    std::thread::sleep(std::time::Duration::from_secs(1));
-
     // Delete each item individually (no recursive wildcards)
     let mut bytes_freed: u64 = 0;
     let mut files_removed: u64 = 0;
@@ -477,35 +412,6 @@ pub fn clean_cache(dry_run: bool) -> Result<CleanResult, CleanError> {
         was_dry_run: false,
         items_found: items,
     })
-}
-
-/// Reindex Spotlight (optional, helps clean orphaned APFS document IDs)
-pub fn reindex_spotlight() -> Result<(), CleanError> {
-    log_deletion("Requesting Spotlight reindex");
-
-    let script = r#"do shell script "mdutil -E /" with administrator privileges"#;
-
-    let result = Command::new("osascript")
-        .arg("-e")
-        .arg(script)
-        .output();
-
-    match result {
-        Ok(output) => {
-            if output.status.success() {
-                log_deletion("Spotlight reindex initiated");
-                Ok(())
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if stderr.contains("User canceled") {
-                    Err(CleanError::PermissionDenied("User cancelled authentication".to_string()))
-                } else {
-                    Ok(()) // Don't fail on this - it's optional
-                }
-            }
-        }
-        Err(_) => Ok(()), // Don't fail on this - it's optional
-    }
 }
 
 /// Get the log file path (for UI display)

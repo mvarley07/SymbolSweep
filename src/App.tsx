@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { StatusPanel } from './components/StatusPanel';
@@ -10,17 +10,20 @@ import './App.css';
 
 type View = 'welcome' | 'status' | 'settings' | 'devscan';
 
-// Window heights for different views
-const VIEW_HEIGHTS = {
+const WINDOW_WIDTH = 280;
+
+// Max heights — caps for views with scrollable content
+const MAX_HEIGHTS: Record<View, number> = {
   welcome: 320,
-  status: 345,
-  settings: 400,
+  status: 400,
+  settings: 420,
   devscan: 520,
 };
 
 function App() {
   const { settings, loading, updateSettings } = useSettings();
   const [view, setView] = useState<View>('status');
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Determine initial view based on first_run_completed
   useEffect(() => {
@@ -29,12 +32,33 @@ function App() {
     }
   }, [loading, settings.first_run_completed]);
 
-  // Resize window when view changes
-  useEffect(() => {
-    const appWindow = getCurrentWindow();
-    const height = VIEW_HEIGHTS[view];
-    appWindow.setSize(new LogicalSize(280, height));
+  // Resize window to match actual content height
+  const syncWindowHeight = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // scrollHeight = full content height, ignoring any overflow clipping
+    const contentHeight = el.scrollHeight;
+    const maxHeight = MAX_HEIGHTS[view];
+    const height = Math.min(contentHeight, maxHeight);
+    getCurrentWindow().setSize(new LogicalSize(WINDOW_WIDTH, height));
   }, [view]);
+
+  // Observe content size changes and resize window accordingly
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    // Initial sync after a frame (let layout settle)
+    const raf = requestAnimationFrame(syncWindowHeight);
+
+    const observer = new ResizeObserver(syncWindowHeight);
+    observer.observe(el);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, [syncWindowHeight]);
 
   // Handle Escape key and click outside to close window
   useEffect(() => {
@@ -79,7 +103,7 @@ function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container" ref={containerRef}>
       {view === 'welcome' && (
         <WelcomeScreen onComplete={handleWelcomeComplete} />
       )}
