@@ -319,14 +319,14 @@ select option {
 }
 
 .debug-btn.heavy:hover:not(:disabled):not(.active) {
-  background: var(--status-critical);
-  color: white;
+  background: var(--heavy-color);
+  color: rgba(0, 0, 0, 0.85);
 }
 
 .debug-btn.heavy.active {
-  background: var(--status-critical);
-  border-color: var(--status-critical);
-  color: white;
+  background: var(--heavy-color);
+  border-color: var(--heavy-color);
+  color: rgba(0, 0, 0, 0.85);
 }
 
 .debug-btn:disabled {

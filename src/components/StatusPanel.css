@@ -101,7 +101,7 @@
 }
 
 .status-size.heavy {
-  color: #c9a96b;
+  color: var(--heavy-color);
 }
 
 /* ============================================================
@@ -191,8 +191,8 @@
 }
 
 .status-state.heavy {
-  color: #c9a96b;
-  background: rgba(201, 169, 107, 0.08);
+  color: var(--heavy-color);
+  background: rgba(212, 167, 44, 0.08);
 }
 
 .status-dot {
@@ -432,16 +432,16 @@
   transition: box-shadow 0.06s ease;
 }
 
-/* Heavy state — warm sand */
+/* Heavy state — amber warning */
 .clean-btn.heavy {
-  background: #c9a96b;
+  background: var(--heavy-color);
   color: rgba(0, 0, 0, 0.85);
-  box-shadow: 0 1px 4px rgba(201, 169, 107, 0.2);
+  box-shadow: 0 1px 4px rgba(212, 167, 44, 0.2);
 }
 
 .clean-btn.heavy:hover:not(:disabled):not(.loading) {
-  background: #b8956a;
-  box-shadow: 0 2px 8px rgba(201, 169, 107, 0.3);
+  background: var(--heavy-hover);
+  box-shadow: 0 2px 8px rgba(212, 167, 44, 0.3);
 }
 
 .clean-btn.heavy:active:not(:disabled):not(.loading) {
