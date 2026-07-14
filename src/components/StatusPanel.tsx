@@ -299,11 +299,14 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       <StatusIndicator
         state={appStatus.clean_state}
         value={appStatus.clean_state === 'Clean' ? null : appStatus.reclaimable_display}
-        label={appStatus.clean_state === 'Clean' ? 'All clean' : 'to clean'}
+        label={
+          appStatus.clean_state !== 'Clean'
+            ? 'to clean'
+            : appStatus.show_gap_banner
+              ? 'Nothing to clean'
+              : 'All clean'
+        }
       />
-      {appStatus.clean_state === 'Clean' && appStatus.show_gap_banner && (
-        <span className="hero-scope">Nothing left for SymbolSweep to clean</span>
-      )}
 
       {/* Secondary disk context line */}
       {appStatus.disk_health === 'Unknown' ? (
@@ -354,12 +357,14 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         <button
           className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
           onClick={handleCleanClick}
-          disabled={isLoading || cleaning}
+          disabled={isLoading || cleaning || appStatus.clean_state === 'Clean'}
         >
           {isLoading ? (
             <span className="loading-text">
               Cleaning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
             </span>
+          ) : appStatus.clean_state === 'Clean' ? (
+            'Nothing to clean'
           ) : (
             'Clean Now'
           )}

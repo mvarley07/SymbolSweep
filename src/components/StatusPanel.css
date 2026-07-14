@@ -202,16 +202,6 @@
   background: currentColor;
 }
 
-/* Hero scope qualifier — shown when All Clean + disk low */
-.hero-scope {
-  display: block;
-  text-align: center;
-  font-size: var(--font-caption);
-  color: var(--text-tertiary);
-  margin-top: calc(-1 * var(--space-xs));
-  letter-spacing: 0.01em;
-}
-
 /* ============================================================
    Disk context (secondary line beneath hero)
    ============================================================ */
