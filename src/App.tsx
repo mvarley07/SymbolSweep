@@ -12,10 +12,10 @@ type View = 'welcome' | 'status' | 'settings' | 'devscan';
 
 const WINDOW_WIDTH = 280;
 
-// Fixed heights per view — all content is stable, no dynamic measurement.
+// Fixed heights per view. Status uses dynamic measurement (see StatusPanel).
 const VIEW_HEIGHTS: Record<View, number> = {
   welcome: 320,
-  status: 300,
+  status: 300,  // initial; StatusPanel self-sizes via ResizeObserver
   settings: 420,
   devscan: 520,
 };

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
@@ -87,6 +88,25 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Auto-resize window to fit panel content
+  const resizeWindow = useCallback(() => {
+    if (!panelRef.current) return;
+    const height = Math.ceil(panelRef.current.scrollHeight);
+    if (height > 0) {
+      getCurrentWindow().setSize(new LogicalSize(280, height));
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => resizeWindow());
+    observer.observe(el);
+    resizeWindow();
+    return () => observer.disconnect();
+  }, [resizeWindow]);
 
   // Delayed scanning indicator: only show after 350ms of !dev_scan_complete.
   // If the scan finishes faster, the user sees nothing — straight to results.
@@ -229,7 +249,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   if (loading) {
     return (
-      <div className="status-panel">
+      <div className="status-panel" ref={panelRef}>
         <div className="status-loading">Loading...</div>
       </div>
     );
@@ -237,7 +257,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   if (error) {
     return (
-      <div className="status-panel">
+      <div className="status-panel" ref={panelRef}>
         <div className="status-error">
           <p>Error: {error}</p>
           <button onClick={refresh}>Retry</button>
@@ -248,7 +268,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   if (!appStatus) {
     return (
-      <div className="status-panel">
+      <div className="status-panel" ref={panelRef}>
         <div className="status-error">No status available</div>
       </div>
     );
@@ -260,7 +280,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   //        Add `|| true` to the `scanPending` condition in the useEffect to hold open.
   if (!appStatus.dev_scan_complete) {
     return (
-      <div className="status-panel scan-shell">
+      <div className="status-panel scan-shell" ref={panelRef}>
         {showScanning && (
           <div className="scan-logo-container">
             <div className="scan-logo-broom" aria-hidden="true" />
@@ -281,7 +301,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     : null;
 
   return (
-    <div className="status-panel">
+    <div className="status-panel" ref={panelRef}>
       <header className="panel-header">
         <div className="header-logo">
           <div className="logo-icon" aria-hidden="true" />
