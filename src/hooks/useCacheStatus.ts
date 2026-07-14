@@ -183,16 +183,22 @@ export function useDeleteDevArtifactsManual() {
 
 export function useLastCleanTime() {
   const [lastCleanTime, setLastCleanTime] = useState<string>('Loading...');
+  const [lastCleanFreed, setLastCleanFreed] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchLastCleanTime = useCallback(async () => {
     try {
-      const result = await invoke<string>('get_last_clean_time');
-      setLastCleanTime(result);
-      return result;
+      const [timeResult, freedResult] = await Promise.all([
+        invoke<string>('get_last_clean_time'),
+        invoke<string>('get_last_clean_freed'),
+      ]);
+      setLastCleanTime(timeResult);
+      setLastCleanFreed(freedResult);
+      return timeResult;
     } catch {
       setLastCleanTime('Unknown');
+      setLastCleanFreed('');
       return 'Unknown';
     }
   }, []);
@@ -225,5 +231,5 @@ export function useLastCleanTime() {
     };
   }, [fetchLastCleanTime, refreshTrigger]);
 
-  return { lastCleanTime, refresh };
+  return { lastCleanTime, lastCleanFreed, refresh };
 }

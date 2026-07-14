@@ -76,7 +76,7 @@ interface StatusPanelProps {
 export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProps) {
   const { status: appStatus, loading, error, refresh } = useAppStatus();
   const { clean, dryRun, cleaning } = useCleanCache();
-  const { lastCleanTime, refresh: refreshLastClean } = useLastCleanTime();
+  const { lastCleanTime, lastCleanFreed, refresh: refreshLastClean } = useLastCleanTime();
   const { settings, updateSetting } = useSettings();
   const { result: devResult } = useDevScan();
   const { deleteArtifacts } = useDeleteDevArtifacts();
@@ -87,8 +87,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
-  const [showRecentCleans, setShowRecentCleans] = useState(false);
-  const [recentCleans, setRecentCleans] = useState<string[]>([]);
 
   const showCleanBanner = (message: string) => {
     setBannerMessage(message);
@@ -115,18 +113,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       clearTimeout(removeTimer);
     };
   }, [showBanner]);
-
-  const handleToggleRecentCleans = async () => {
-    if (!showRecentCleans) {
-      try {
-        const lines = await invoke<string[]>('get_recent_deletions');
-        setRecentCleans(lines);
-      } catch {
-        setRecentCleans(['Unable to read log']);
-      }
-    }
-    setShowRecentCleans(!showRecentCleans);
-  };
 
   const handleCleanClick = () => {
     if (!settings.first_clean_confirmed) {
@@ -244,6 +230,11 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const stateClass = appStatus.clean_state.toLowerCase();
 
+  // Build the last-clean summary: "Last clean freed 1.2 GB" or "No recent cleans"
+  const lastCleanSummary = lastCleanFreed
+    ? `Last clean freed ${lastCleanFreed}`
+    : null;
+
   return (
     <div className="status-panel">
       <header className="panel-header">
@@ -259,7 +250,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         </button>
       </header>
 
-      {/* Hero — reclaimable total (pinned above scroll area) */}
+      {/* Hero -- reclaimable total */}
       <StatusIndicator
         state={appStatus.clean_state}
         value={appStatus.clean_state === 'Clean' ? null : appStatus.reclaimable_display}
@@ -276,24 +267,16 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       )}
 
       <div className="status-content">
-        <div className="status-details">
-          <div className="detail-row clickable" onClick={handleToggleRecentCleans}>
-            <span className="detail-label">Last cleaned</span>
-            <span className="detail-value">{lastCleanTime} {showRecentCleans ? '\u25B4' : '\u25BE'}</span>
-          </div>
-        </div>
-
-        {showRecentCleans && (
-          <div className="recent-cleans">
-            <div className="recent-cleans-header">Recent cleans</div>
-            {recentCleans.length === 0 ? (
-              <div className="recent-cleans-empty">No deletions logged yet</div>
-            ) : (
-              <div className="recent-cleans-list">
-                {recentCleans.map((line, i) => (
-                  <div key={i} className="recent-clean-entry">{line}</div>
-                ))}
-              </div>
+        {/* Last clean summary — single line, no expand */}
+        {lastCleanTime !== 'Never' && lastCleanTime !== 'Loading...' && (
+          <div className="last-clean-summary">
+            <span className="last-clean-label">Last cleaned</span>
+            <span className="last-clean-time">{lastCleanTime}</span>
+            {lastCleanSummary && (
+              <>
+                <span className="last-clean-sep">&middot;</span>
+                <span className="last-clean-freed">{lastCleanSummary}</span>
+              </>
             )}
           </div>
         )}
@@ -316,7 +299,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             <span>{bannerMessage}</span>
           </div>
         )}
+      </div>
 
+      <div className="status-footer">
         <button
           className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
           onClick={handleCleanClick}

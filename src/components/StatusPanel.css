@@ -6,6 +6,7 @@
   padding: 12px 14px 14px;
   box-sizing: border-box;
   height: 100%;
+  overflow-x: hidden;
 }
 
 /* Header */
@@ -13,7 +14,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .header-logo {
@@ -68,7 +69,90 @@
   height: 13px;
 }
 
-/* Disk free context line (secondary, beneath hero) */
+/* ============================================================
+   Hero — Status Indicator
+   ============================================================ */
+.status-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 4px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.status-size {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-align: center;
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+.status-size.clean {
+  color: var(--text-primary);
+}
+
+.status-size.moderate {
+  color: var(--text-primary);
+}
+
+.status-size.heavy {
+  color: #c9a96b;
+}
+
+/* Hero split: big number + small descriptor */
+.hero-value {
+  display: block;
+}
+
+.hero-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* Status Badge — gets its own breathing room */
+.status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+}
+
+.status-state.moderate {
+  color: var(--accent);
+  background: rgba(20, 184, 166, 0.10);
+}
+
+.status-state.heavy {
+  color: #c9a96b;
+  background: rgba(201, 169, 107, 0.08);
+}
+
+.status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ============================================================
+   Disk context (secondary line beneath hero)
+   ============================================================ */
 .disk-context {
   text-align: center;
   font-size: var(--font-xs);
@@ -80,67 +164,64 @@
   letter-spacing: 0.01em;
 }
 
-/* Colored when disk is genuinely low (Warning/Critical from statvfs) */
 .disk-context.disk-low {
   color: var(--status-warning);
 }
 
-/* Clickable detail row */
-.detail-row.clickable {
-  cursor: pointer;
-  border-radius: 4px;
-  padding: 2px 4px;
-  margin: -2px -4px;
-  transition: background 0.15s ease;
-}
-
-.detail-row.clickable:hover {
-  background: var(--bg-hover);
-}
-
-/* Recent cleans log viewer */
-.recent-cleans {
-  margin-top: 8px;
-  padding: 8px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.recent-cleans-header {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 6px;
-}
-
-.recent-cleans-empty {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-
-.recent-cleans-list {
+/* ============================================================
+   Content area (below divider)
+   ============================================================ */
+.status-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
 }
 
-.recent-clean-entry {
+/* ============================================================
+   Last clean summary — single quiet line
+   ============================================================ */
+.last-clean-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.last-clean-label {
+  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   font-size: 9px;
-  font-family: 'SF Mono', 'Menlo', monospace;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  word-break: break-all;
 }
 
-/* Gap banner — disk under pressure but little cleanable */
+.last-clean-time {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.last-clean-sep {
+  opacity: 0.4;
+}
+
+.last-clean-freed {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Gap banner — disk under pressure but little cleanable
+   ============================================================ */
 .gap-banner {
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -176,7 +257,9 @@
   color: var(--accent);
 }
 
-/* Loading & Error States */
+/* ============================================================
+   Loading & Error States
+   ============================================================ */
 .status-loading,
 .status-error {
   display: flex;
@@ -188,123 +271,16 @@
   color: var(--text-secondary);
 }
 
-/* Main Content */
-.status-content {
+/* ============================================================
+   Footer — button + dev link, pushed to bottom
+   ============================================================ */
+.status-footer {
+  margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  overflow-y: auto;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 8px;
-}
-
-/* Status Indicator - The Hero Element */
-.status-indicator {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 0 8px;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
-}
-
-.status-size {
-  font-size: 42px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  text-align: center;
-  font-feature-settings: 'tnum' 1;
-  font-variant-numeric: tabular-nums;
-  transition: color 0.3s ease;
-}
-
-.status-size.clean {
-  color: var(--text-primary);
-}
-
-.status-size.moderate {
-  color: var(--text-primary);
-}
-
-.status-size.heavy {
-  color: #c9a96b;
-}
-
-/* Hero split: big number + small descriptor */
-.hero-value {
-  display: block;
-}
-
-.hero-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-top: 3px;
-}
-
-/* Status Badge (hidden in Clean state — hero says it all) */
-.status-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  transition: all 0.3s ease;
-}
-
-.status-state.moderate {
-  color: var(--accent);
-  background: rgba(20, 184, 166, 0.10);
-}
-
-.status-state.heavy {
-  color: #c9a96b;
-  background: rgba(201, 169, 107, 0.08);
-}
-
-.status-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-/* Status Details */
-.status-details {
-  /* No card chrome — clean rows */
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 5px 2px;
-  transition: background 0.15s ease;
-}
-
-.detail-label {
-  font-size: var(--font-xs);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 500;
-}
-
-.detail-value {
-  font-size: var(--font-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
-  font-feature-settings: 'tnum' 1;
-  font-variant-numeric: tabular-nums;
+  padding-top: 12px;
 }
 
 /* Skeleton loader */
@@ -325,7 +301,7 @@
 
 .skeleton-loader.size-loader {
   width: 80px;
-  height: 42px;
+  height: 36px;
   border-radius: var(--radius-sm);
 }
 
@@ -402,13 +378,14 @@
   animation: fadeOut 0.3s ease-out forwards;
 }
 
-/* The Clean Button */
+/* ============================================================
+   The Clean Button
+   ============================================================ */
 .clean-btn {
   position: relative;
   width: 100%;
   height: 36px;
   padding: 0 16px;
-  margin-top: auto;
   font-size: var(--font-sm);
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -476,7 +453,6 @@
   align-items: center;
   width: 100%;
   padding: 7px 10px;
-  margin-top: 2px;
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
