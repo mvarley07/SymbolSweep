@@ -1,6 +1,7 @@
 /* StatusPanel */
 
 .status-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: var(--space-md) var(--gutter) var(--gutter);
@@ -344,14 +345,21 @@
   50% { opacity: 0.65; }
 }
 
-/* Clean Result Banner */
+/* Clean Result Banner — overlay toast, doesn't affect layout */
 .clean-result {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: calc(var(--btn-height) + var(--space-sm) + var(--space-lg) + 38px);
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  background: rgba(20, 184, 166, 0.06);
-  border: 1px solid rgba(20, 184, 166, 0.12);
+  background: rgba(20, 184, 166, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(20, 184, 166, 0.15);
   border-radius: var(--radius-sm);
   font-size: var(--font-xs);
   font-weight: 500;

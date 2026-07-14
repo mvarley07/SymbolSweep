@@ -334,13 +334,14 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
           </div>
         )}
 
-        {showBanner && bannerMessage && (
-          <div className={`clean-result${bannerFading ? ' fading-out' : ''}`}>
-            <span className="result-icon">&#10003;</span>
-            <span>{bannerMessage}</span>
-          </div>
-        )}
       </div>
+
+      {showBanner && bannerMessage && (
+        <div className={`clean-result${bannerFading ? ' fading-out' : ''}`}>
+          <span className="result-icon">&#10003;</span>
+          <span>{bannerMessage}</span>
+        </div>
+      )}
 
       <div className="status-footer">
         <button
