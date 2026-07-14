@@ -66,6 +66,7 @@ export interface AppStatus {
   clean_state: CleanState;
   show_gap_banner: boolean;
   snapshot_count: number;
+  dev_scan_complete: boolean;
 }
 
 // Dev artifact scanning types

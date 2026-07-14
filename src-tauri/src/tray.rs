@@ -141,30 +141,36 @@ pub fn update_tray<R: Runtime>(
     status: &AppStatus,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        match status.clean_state {
-            CleanState::Clean => {
-                // Icon only — nothing meaningful to clean
-                tray.set_title(Some(""))?;
-            }
-            CleanState::Moderate | CleanState::Heavy => {
-                // Show reclaimable total (same value as popup hero)
-                tray.set_title(Some(&format!("{} to clean", status.reclaimable_display)))?;
-            }
-        }
-
-        // Tooltip always shows full breakdown
-        let tooltip = format!(
-            "SymbolSweep\nReclaimable: {}\nDisk: {} free of {}\nStatus: {}",
-            status.reclaimable_display,
-            status.disk_free_display,
-            status.disk_total_display,
+        if !status.dev_scan_complete {
+            // Pre-scan: don't assert any clean state
+            tray.set_title(Some(""))?;
+            tray.set_tooltip(Some("SymbolSweep \u{2014} Scanning\u{2026}"))?;
+        } else {
             match status.clean_state {
-                CleanState::Clean => "All clean",
-                CleanState::Moderate => "Moderate",
-                CleanState::Heavy => "Heavy",
+                CleanState::Clean => {
+                    // Icon only — nothing meaningful to clean
+                    tray.set_title(Some(""))?;
+                }
+                CleanState::Moderate | CleanState::Heavy => {
+                    // Show reclaimable total (same value as popup hero)
+                    tray.set_title(Some(&format!("{} to clean", status.reclaimable_display)))?;
+                }
             }
-        );
-        tray.set_tooltip(Some(&tooltip))?;
+
+            // Tooltip always shows full breakdown
+            let tooltip = format!(
+                "SymbolSweep\nReclaimable: {}\nDisk: {} free of {}\nStatus: {}",
+                status.reclaimable_display,
+                status.disk_free_display,
+                status.disk_total_display,
+                match status.clean_state {
+                    CleanState::Clean => "All clean",
+                    CleanState::Moderate => "Moderate",
+                    CleanState::Heavy => "Heavy",
+                }
+            );
+            tray.set_tooltip(Some(&tooltip))?;
+        }
     }
 
     Ok(())

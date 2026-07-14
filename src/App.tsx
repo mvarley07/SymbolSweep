@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { StatusPanel } from './components/StatusPanel';
@@ -12,25 +12,17 @@ type View = 'welcome' | 'status' | 'settings' | 'devscan';
 
 const WINDOW_WIDTH = 280;
 
-// Max heights — caps for views with scrollable content
-const MAX_HEIGHTS: Record<View, number> = {
+// Fixed heights per view — all content is stable, no dynamic measurement.
+const VIEW_HEIGHTS: Record<View, number> = {
   welcome: 320,
-  status: 400,
+  status: 300,
   settings: 420,
   devscan: 520,
 };
 
-// Views where the content has an intrinsic height and the observer should
-// measure scrollHeight to fit the window.  Views NOT listed here use
-// height:100% with internal scroll — giving them to the observer creates a
-// feedback loop (observer shrinks window → height:100% shrinks content →
-// observer shrinks window again → collapse to zero).
-const CONTENT_SIZED_VIEWS: Set<View> = new Set(['status', 'welcome']);
-
 function App() {
   const { settings, loading, updateSettings } = useSettings();
   const [view, setView] = useState<View>('status');
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Determine initial view based on first_run_completed
   useEffect(() => {
@@ -39,42 +31,12 @@ function App() {
     }
   }, [loading, settings.first_run_completed]);
 
-  // Resize window to match actual content height (content-sized views only)
-  const syncWindowHeight = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const contentHeight = el.scrollHeight;
-    const maxHeight = MAX_HEIGHTS[view];
-    const height = Math.min(contentHeight, maxHeight);
-    getCurrentWindow().setSize(new LogicalSize(WINDOW_WIDTH, height));
-  }, [view]);
-
-  // Manage window height per view type:
-  // - Content-sized views (status, welcome): ResizeObserver measures and fits
-  // - Fixed-height views (settings, devscan): jump to MAX_HEIGHT, no observer
+  // Set window size immediately on view change — fixed heights, no observer
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    if (!CONTENT_SIZED_VIEWS.has(view)) {
-      // Fixed-height view — set size directly, skip observer
-      getCurrentWindow().setSize(
-        new LogicalSize(WINDOW_WIDTH, MAX_HEIGHTS[view]),
-      );
-      return;
-    }
-
-    // Content-sized view — observe and fit
-    const raf = requestAnimationFrame(syncWindowHeight);
-
-    const observer = new ResizeObserver(syncWindowHeight);
-    observer.observe(el);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      observer.disconnect();
-    };
-  }, [view, syncWindowHeight]);
+    getCurrentWindow().setSize(
+      new LogicalSize(WINDOW_WIDTH, VIEW_HEIGHTS[view]),
+    );
+  }, [view]);
 
   // Handle Escape key and click outside to close window
   useEffect(() => {
@@ -119,7 +81,7 @@ function App() {
   }
 
   return (
-    <div className="app-container" ref={containerRef}>
+    <div className="app-container">
       {view === 'welcome' && (
         <WelcomeScreen onComplete={handleWelcomeComplete} />
       )}

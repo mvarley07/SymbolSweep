@@ -3,7 +3,7 @@
 .status-panel {
   display: flex;
   flex-direction: column;
-  padding: 12px 14px 14px;
+  padding: var(--space-md) var(--gutter) var(--gutter);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -13,13 +13,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xs);
 }
 
 .logo-icon {
@@ -36,7 +36,7 @@
 }
 
 .logo-text {
-  font-size: 13px;
+  font-size: var(--font-base);
   font-weight: 700;
   color: var(--accent);
   line-height: 1;
@@ -75,8 +75,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0 4px;
-  gap: 8px;
+  padding: var(--space-sm) 0 var(--space-xs);
+  gap: var(--space-sm);
   flex-shrink: 0;
 }
 
@@ -103,6 +103,12 @@
   color: #c9a96b;
 }
 
+.status-size.scanning {
+  color: var(--text-tertiary);
+  font-size: 20px;
+  font-weight: 500;
+}
+
 /* Hero split: big number + small descriptor */
 .hero-value {
   display: block;
@@ -110,22 +116,22 @@
 
 .hero-label {
   display: block;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 500;
   color: var(--text-tertiary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
-/* Status Badge — gets its own breathing room */
+/* Status Badge — hero scale, intentionally distinct from dense badges */
 .status-state {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: var(--badge-radius);
+  font-size: var(--font-xs);
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -156,15 +162,11 @@
   text-align: center;
   font-size: var(--font-xs);
   color: var(--text-tertiary);
-  margin-top: 0;
+  margin-top: var(--space-xs);
   margin-bottom: 0;
-  padding-bottom: 4px;
+  padding-bottom: var(--space-sm);
   flex-shrink: 0;
   letter-spacing: 0.01em;
-}
-
-.disk-context.disk-low {
-  color: var(--status-warning);
 }
 
 /* ============================================================
@@ -173,10 +175,10 @@
 .status-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   overflow: hidden;
   border-top: 1px solid var(--border-subtle);
-  padding-top: 8px;
+  padding-top: var(--space-sm);
 }
 
 /* ============================================================
@@ -185,9 +187,9 @@
 .last-clean-summary {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 2px;
-  font-size: 10px;
+  gap: var(--space-xs);
+  padding: 0;
+  font-size: var(--font-xs);
   color: var(--text-tertiary);
   letter-spacing: 0.01em;
   line-height: 1;
@@ -197,7 +199,7 @@
   text-transform: uppercase;
   font-weight: 500;
   letter-spacing: 0.04em;
-  font-size: 9px;
+  font-size: var(--font-caption);
 }
 
 .last-clean-time {
@@ -218,7 +220,7 @@
    Gap banner — disk under pressure but little cleanable
    ============================================================ */
 .gap-banner {
-  padding: 8px 12px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -228,16 +230,16 @@
 }
 
 .gap-banner p {
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-xs);
 }
 
 .gap-banner p:last-of-type {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 
 .gap-banner-btn {
   width: 100%;
-  padding: 6px 12px;
+  padding: var(--space-sm) var(--space-md);
   font-size: var(--font-xs);
   font-weight: 500;
   background: var(--bg-secondary);
@@ -264,7 +266,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  gap: 8px;
+  gap: var(--space-sm);
   color: var(--text-secondary);
 }
 
@@ -274,9 +276,9 @@
 .status-footer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-shrink: 0;
-  padding-top: 16px;
+  padding-top: var(--space-lg);
 }
 
 /* Skeleton loader */
@@ -292,12 +294,12 @@
   );
   background-size: 200% 100%;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
-  border-radius: 4px;
+  border-radius: var(--badge-radius);
 }
 
 .skeleton-loader.size-loader {
   width: 80px;
-  height: 36px;
+  height: var(--btn-height);
   border-radius: var(--radius-sm);
 }
 
@@ -346,8 +348,8 @@
 .clean-result {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   background: rgba(20, 184, 166, 0.06);
   border: 1px solid rgba(20, 184, 166, 0.12);
   border-radius: var(--radius-sm);
@@ -380,10 +382,10 @@
 .clean-btn {
   position: relative;
   width: 100%;
-  height: 36px;
-  padding: 0 16px;
-  font-size: var(--font-sm);
-  font-weight: 600;
+  height: var(--btn-height);
+  padding: 0 var(--space-lg);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
   letter-spacing: 0.01em;
   border: none;
   border-radius: var(--radius-sm);
@@ -394,7 +396,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
@@ -448,7 +450,7 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 7px 10px;
+  padding: var(--space-sm) var(--space-md);
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -469,7 +471,7 @@
 }
 
 .dev-scan-arrow {
-  font-size: 14px;
+  font-size: var(--font-md);
   color: var(--text-tertiary);
   font-weight: 300;
 }

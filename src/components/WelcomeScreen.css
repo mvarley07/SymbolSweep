@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px;
+  padding: var(--gutter);
   box-sizing: border-box;
 }
 
@@ -12,7 +12,7 @@
 .welcome-arrow {
   display: flex;
   justify-content: center;
-  padding: 4px 0 8px;
+  padding: var(--space-xs) 0 var(--space-sm);
   animation: float 2s ease-in-out infinite;
 }
 
@@ -33,14 +33,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 /* Header with icon */
 .welcome-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .welcome-icon {
@@ -70,7 +70,7 @@
 
 .welcome-screen h1 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-xl);
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -84,7 +84,7 @@
 
 /* Description */
 .welcome-description {
-  font-size: 13px;
+  font-size: var(--font-base);
   line-height: 1.5;
   color: var(--text-secondary);
   margin: 0;
@@ -94,8 +94,8 @@
 .welcome-features {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--space-sm);
+  padding: var(--space-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -104,7 +104,7 @@
 .feature-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm);
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -116,9 +116,9 @@
   align-items: center;
   justify-content: center;
   background: var(--accent-subtle);
-  border-radius: 4px;
+  border-radius: var(--badge-radius);
   color: var(--accent);
-  font-size: 10px;
+  font-size: var(--font-xs);
   flex-shrink: 0;
 }
 
@@ -126,8 +126,8 @@
 .welcome-toggle {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--gutter);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -177,16 +177,16 @@
 }
 
 .toggle-label {
-  font-size: 13px;
+  font-size: var(--font-base);
   font-weight: 500;
   color: var(--text-primary);
 }
 
-/* Button */
+/* Button — intentionally CTA-scale, excluded from btn token unification */
 .welcome-button {
   width: 100%;
-  padding: 12px 20px;
-  font-size: 14px;
+  padding: var(--space-md) var(--space-xl);
+  font-size: var(--font-md);
   font-weight: 600;
   border: none;
   border-radius: var(--radius-md);

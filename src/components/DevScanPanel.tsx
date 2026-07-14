@@ -10,7 +10,7 @@ interface DevScanPanelProps {
 const TIER_CONFIG: Record<ArtifactTier, { label: string; desc: string; className: string }> = {
   Safe: { label: 'SAFE', desc: 'Caches \u2014 regenerate automatically', className: 'tier-safe' },
   Rebuildable: { label: 'REBUILD', desc: 'Build artifacts \u2014 slow to rebuild', className: 'tier-rebuild' },
-  SafeWithReinstall: { label: 'SAFE-WITH-REINSTALL', desc: 'npm install to restore', className: 'tier-reinstall' },
+  SafeWithReinstall: { label: 'REINSTALL', desc: 'npm install to restore', className: 'tier-reinstall' },
   Ask: { label: 'REVIEW', desc: 'May contain shipped output', className: 'tier-ask' },
 };
 
@@ -20,10 +20,14 @@ interface ArtifactRowProps {
   deleting: boolean;
 }
 
+const STALE_THRESHOLD_DAYS = 14;
+
 function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
   const config = TIER_CONFIG[artifact.tier];
-  const staleness = artifact.staleness_days != null
-    ? `${artifact.staleness_days}d stale`
+
+  // Only show staleness for genuinely unused artifacts (14+ days)
+  const staleness = artifact.staleness_days != null && artifact.staleness_days >= STALE_THRESHOLD_DAYS
+    ? `${artifact.staleness_days}d unused`
     : null;
 
   // No delete button for nested items, Ask-tier items, or active builds
@@ -35,19 +39,7 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
         <span className={`artifact-tier-badge ${config.className}`}>
           {artifact.active_build ? 'BUILDING' : config.label}
         </span>
-        <div className="artifact-main-right">
-          <span className="artifact-size">{artifact.size_display}</span>
-          {showDelete && (
-            <button
-              className="artifact-delete-btn"
-              onClick={() => onDelete(artifact.path)}
-              disabled={deleting}
-              title="Delete"
-            >
-              &times;
-            </button>
-          )}
-        </div>
+        <span className="artifact-size">{artifact.size_display}</span>
       </div>
       <div className="artifact-details">
         <span className="artifact-kind">{artifact.kind}</span>
@@ -64,6 +56,18 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
       <div className="artifact-path" title={artifact.path}>
         {artifact.path.replace(/^\/Users\/[^/]+/, '~')}
       </div>
+      {showDelete && (
+        <button
+          className="artifact-delete-btn"
+          onClick={() => onDelete(artifact.path)}
+          disabled={deleting}
+          title="Move to Trash"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M2.5 4.5h11M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4 4.5l.5 8.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1l.5-8.5" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

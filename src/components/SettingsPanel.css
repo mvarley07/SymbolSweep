@@ -3,7 +3,7 @@
 .settings-panel {
   display: flex;
   flex-direction: column;
-  padding: 14px 16px 10px;
+  padding: var(--gutter) var(--gutter) var(--space-sm);
   box-sizing: border-box;
   height: 100%;
 }
@@ -11,14 +11,14 @@
 .settings-header {
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .settings-header h1 {
   margin: 0;
-  font-size: var(--font-md);
+  font-size: var(--font-base);
   font-weight: 600;
   flex: 1;
   text-align: center;
@@ -27,7 +27,7 @@
 .back-btn {
   background: none;
   border: none;
-  padding: 4px;
+  padding: var(--space-xs);
   cursor: pointer;
   color: var(--text-tertiary);
   transition: all 0.15s ease;
@@ -62,27 +62,27 @@
 
 /* Sections */
 .settings-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 
 .settings-section:last-of-type {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 
 .settings-section h2 {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--label-spacing);
   color: var(--text-tertiary);
-  margin: 0 0 8px 0;
-  padding-left: 2px;
+  margin: 0 0 var(--space-sm) 0;
+  padding-left: 0;
 }
 
 .section-description {
-  font-size: 10px;
+  font-size: var(--font-caption);
   color: var(--text-tertiary);
-  margin: -4px 0 10px 2px;
+  margin: -4px 0 var(--space-md) 0;
   line-height: 1.4;
 }
 
@@ -91,8 +91,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  gap: 12px;
+  padding: var(--space-sm) 0;
+  gap: var(--space-md);
 }
 
 .setting-row:not(:last-child) {
@@ -100,8 +100,8 @@
 }
 
 .setting-row.nested {
-  padding: 9px 14px;
-  margin: 0 -14px;
+  padding: var(--space-sm) var(--gutter);
+  margin: 0 calc(-1 * var(--gutter));
   background: var(--bg-secondary);
   border-bottom: none;
 }
@@ -131,7 +131,7 @@
 }
 
 .setting-description {
-  font-size: 10px;
+  font-size: var(--font-caption);
   color: var(--text-tertiary);
   line-height: 1.3;
 }
@@ -194,7 +194,7 @@
 
 /* Select / Dropdown */
 select {
-  padding: 5px 24px 5px 8px;
+  padding: 5px 24px 5px var(--space-sm);
   font-size: var(--font-xs);
   font-weight: 500;
   border: 1px solid var(--border-medium);
@@ -202,7 +202,7 @@ select {
   background-color: var(--bg-secondary);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
+  background-position: right var(--space-sm) center;
   color: var(--text-primary);
   cursor: pointer;
   min-width: 100px;
@@ -234,8 +234,8 @@ select option {
 
 /* Update check button */
 .update-check-btn {
-  padding: 5px 10px;
-  font-size: 10px;
+  padding: 5px var(--space-sm);
+  font-size: var(--font-xs);
   font-weight: 500;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
@@ -257,11 +257,11 @@ select option {
   cursor: not-allowed;
 }
 
-/* Debug Section */
+/* Debug Section — intentionally dashed border to signal dev-only */
 .debug-section {
   border-top: 1px dashed var(--border-medium);
-  padding-top: 12px;
-  margin-top: 8px;
+  padding-top: var(--space-md);
+  margin-top: var(--space-sm);
 }
 
 .debug-section h2 {
@@ -269,24 +269,24 @@ select option {
 }
 
 .debug-sizes {
-  padding: 8px 0;
+  padding: var(--space-sm) 0;
 }
 
 .debug-label {
-  font-size: 10px;
+  font-size: var(--font-xs);
   color: var(--text-tertiary);
-  margin: 0 0 6px 0;
+  margin: 0 0 var(--space-sm) 0;
 }
 
 .debug-buttons {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .debug-btn {
-  padding: 6px 4px;
-  font-size: 10px;
+  padding: var(--space-sm) var(--space-xs);
+  font-size: var(--font-xs);
   font-weight: 600;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -335,9 +335,9 @@ select option {
 }
 
 .debug-btn.test-notification {
-  margin-top: 12px;
-  padding: 6px 12px;
-  font-size: 10px;
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-xs);
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
@@ -352,7 +352,7 @@ select option {
 .settings-footer {
   display: flex;
   justify-content: center;
-  padding: 16px 0 4px;
+  padding: var(--space-lg) 0 var(--space-xs);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -361,7 +361,7 @@ select option {
 .footer-logo {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xs);
   opacity: 0.4;
   transition: opacity 0.2s ease;
 }
@@ -384,7 +384,7 @@ select option {
 }
 
 .footer-logo-text {
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--accent);
   letter-spacing: -0.02em;
@@ -397,13 +397,13 @@ select option {
 
 .debug-badge {
   display: inline-block;
-  margin-left: 6px;
-  padding: 2px 6px;
-  font-size: 8px;
-  font-weight: 700;
+  margin-left: var(--space-sm);
+  padding: var(--badge-padding);
+  font-size: var(--badge-size);
+  font-weight: var(--badge-weight);
   background: var(--status-warning);
   color: rgba(0, 0, 0, 0.85);
-  border-radius: 4px;
+  border-radius: var(--badge-radius);
   vertical-align: middle;
   letter-spacing: 0.02em;
 }
@@ -411,19 +411,19 @@ select option {
 /* Notification hint */
 .notification-hint {
   flex-wrap: wrap;
-  gap: 8px !important;
+  gap: var(--space-sm) !important;
 }
 
 .notification-hint .hint-text {
-  font-size: 10px;
+  font-size: var(--font-xs);
   color: var(--text-tertiary);
   flex: 1;
   min-width: 120px;
 }
 
 .notification-hint .hint-btn {
-  padding: 5px 10px;
-  font-size: 10px;
+  padding: 5px var(--space-sm);
+  font-size: var(--font-xs);
   font-weight: 500;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);

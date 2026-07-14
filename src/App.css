@@ -1,6 +1,9 @@
 /* SymbolSweep - Premium Menu Bar App */
 
 :root {
+  /* Layout */
+  --gutter: 14px;
+
   /* Spacing scale */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -51,8 +54,10 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+  --badge-radius: 4px;
 
   /* Typography Scale */
+  --font-caption: 9px;
   --font-xs: 10px;
   --font-sm: 11px;
   --font-base: 13px;
@@ -60,6 +65,17 @@
   --font-lg: 15px;
   --font-xl: 16px;
   --font-hero: 44px;
+
+  /* Role tokens — section headers, badges, buttons */
+  --label-size: var(--font-xs);
+  --label-weight: 600;
+  --label-spacing: 0.06em;
+  --badge-size: 8px;
+  --badge-weight: 700;
+  --badge-padding: 2px 6px;
+  --btn-height: 36px;
+  --btn-size: var(--font-sm);
+  --btn-weight: 600;
 
   /* Typography */
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;

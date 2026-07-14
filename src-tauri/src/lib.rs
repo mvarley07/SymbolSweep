@@ -70,13 +70,13 @@ fn get_app_status(state: tauri::State<AppState>) -> AppStatus {
             get_cache_status()
         }
     };
-    let dev_total = state
+    let (dev_total, dev_scan_complete) = state
         .dev_scan_result
         .lock()
         .ok()
-        .and_then(|s| s.as_ref().map(|r| r.total_bytes))
-        .unwrap_or(0);
-    compute_app_status(&cache, dev_total)
+        .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
+        .unwrap_or((0, false));
+    compute_app_status(&cache, dev_total, dev_scan_complete)
 }
 
 /// Check if coresymbolicationd daemon is running
@@ -111,11 +111,11 @@ fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) ->
                     let s = state.settings.lock().unwrap();
                     if s.debug_mode { get_simulated_status(s.debug_simulated_size) } else { get_cache_status() }
                 };
-                let dev_total = state.dev_scan_result.lock()
+                let (dev_total, dev_scan_complete) = state.dev_scan_result.lock()
                     .ok()
-                    .and_then(|s| s.as_ref().map(|r| r.total_bytes))
-                    .unwrap_or(0);
-                let app_status = compute_app_status(&cache, dev_total);
+                    .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
+                    .unwrap_or((0, false));
+                let app_status = compute_app_status(&cache, dev_total, dev_scan_complete);
                 let _ = update_tray(&app, &app_status);
                 let _ = app.emit("app-status-update", &app_status);
             }
@@ -196,7 +196,7 @@ fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevS
             get_cache_status()
         }
     };
-    let app_status = compute_app_status(&cache_status, result.total_bytes);
+    let app_status = compute_app_status(&cache_status, result.total_bytes, true);
     let _ = update_tray(&app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -277,7 +277,7 @@ fn delete_dev_artifacts_inner(
             get_cache_status()
         }
     };
-    let app_status = compute_app_status(&cache_status, new_scan.total_bytes);
+    let app_status = compute_app_status(&cache_status, new_scan.total_bytes, true);
     let _ = update_tray(app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -320,11 +320,11 @@ fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, mut set
     } else {
         get_cache_status()
     };
-    let dev_total = state.dev_scan_result.lock()
+    let (dev_total, dev_scan_complete) = state.dev_scan_result.lock()
         .ok()
-        .and_then(|s| s.as_ref().map(|r| r.total_bytes))
-        .unwrap_or(0);
-    let app_status = compute_app_status(&cache, dev_total);
+        .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
+        .unwrap_or((0, false));
+    let app_status = compute_app_status(&cache, dev_total, dev_scan_complete);
     let _ = update_tray(&app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -471,8 +471,8 @@ pub fn run() {
                         get_cache_status()
                     }
                 };
-                // Emit unified AppStatus (dev_total=0 until scan completes)
-                let app_status = compute_app_status(&initial_cache, 0);
+                // Emit unified AppStatus (dev_total=0, scan not yet complete)
+                let app_status = compute_app_status(&initial_cache, 0, false);
                 let _ = update_tray(&app_handle_init, &app_status);
                 let _ = app_handle_init.emit("app-status-update", &app_status);
 
@@ -500,7 +500,7 @@ pub fn run() {
                     }
 
                     // Re-compute and emit unified AppStatus with dev total
-                    let app_status = compute_app_status(&initial_cache, dev_total);
+                    let app_status = compute_app_status(&initial_cache, dev_total, true);
                     let _ = update_tray(&app_handle_init, &app_status);
                     let _ = app_handle_init.emit("app-status-update", &app_status);
 
@@ -556,13 +556,13 @@ pub fn run() {
                     };
 
                     // Compute unified AppStatus and update both tray + frontend
-                    let dev_total = dev_result_monitor
+                    let (dev_total, dev_scan_complete) = dev_result_monitor
                         .lock()
                         .unwrap()
                         .as_ref()
-                        .map(|r| r.total_bytes)
-                        .unwrap_or(0);
-                    let app_status = compute_app_status(&cache_status, dev_total);
+                        .map(|r| (r.total_bytes, true))
+                        .unwrap_or((0, false));
+                    let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete);
                     let _ = update_tray(&app_handle, &app_status);
                     let _ = app_handle.emit("app-status-update", &app_status);
 
@@ -600,7 +600,7 @@ pub fn run() {
 
                             // Re-compute and emit unified AppStatus after clean
                             let clean_cache = get_cache_status();
-                            let post_clean_status = compute_app_status(&clean_cache, dev_total);
+                            let post_clean_status = compute_app_status(&clean_cache, dev_total, dev_scan_complete);
                             let _ = update_tray(&app_handle, &post_clean_status);
                             let _ = app_handle.emit("app-status-update", &post_clean_status);
 

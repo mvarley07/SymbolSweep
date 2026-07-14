@@ -125,11 +125,13 @@ pub struct AppStatus {
     pub show_gap_banner: bool,
     /// Number of local APFS snapshots detected
     pub snapshot_count: u32,
+    /// Whether the first dev artifact scan has completed
+    pub dev_scan_complete: bool,
 }
 
 /// Compute the unified app status from cache + dev scan data.
 /// Both tray and popup read from this same struct.
-pub fn compute_app_status(cache: &CacheStatus, dev_total: u64) -> AppStatus {
+pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete: bool) -> AppStatus {
     let disk_free = get_disk_free_bytes();
     let disk_total = get_disk_total_bytes();
     let disk_health = DiskHealth::from_free_bytes(disk_free);
@@ -172,6 +174,7 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64) -> AppStatus {
         clean_state,
         show_gap_banner,
         snapshot_count,
+        dev_scan_complete,
     }
 }
 

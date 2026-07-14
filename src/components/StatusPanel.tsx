@@ -228,6 +228,44 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
+  // Pre-scan: show scanning state, never "All clean"
+  if (!appStatus.dev_scan_complete) {
+    return (
+      <div className="status-panel">
+        <header className="panel-header">
+          <div className="header-logo">
+            <div className="logo-icon" aria-hidden="true" />
+            <span className="logo-text">SymbolSweep</span>
+          </div>
+          <button className="settings-btn" onClick={onSettingsClick} title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="status-indicator">
+          <div className="status-size scanning">
+            <span className="loading-text">
+              Scanning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
+            </span>
+          </div>
+        </div>
+
+        {appStatus.disk_health !== 'Unknown' && (
+          <span className={`disk-context${appStatus.disk_health !== 'Normal' ? ' disk-low' : ''}`}>
+            {appStatus.disk_free_display} free of {appStatus.disk_total_display}
+          </span>
+        )}
+
+        <div className="status-footer">
+          <div className="skeleton-loader size-loader" />
+        </div>
+      </div>
+    );
+  }
+
   const stateClass = appStatus.clean_state.toLowerCase();
 
   // Build the last-clean summary: "Last clean freed 1.2 GB" or "No recent cleans"
