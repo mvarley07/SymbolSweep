@@ -182,7 +182,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       } else if (totalFreed > 0) {
         showCleanBanner(`Freed ${formatSize(totalFreed)}`);
       } else {
-        showCleanBanner('Already clean');
+        const devRemaining = appStatus?.dev_total_bytes ?? 0;
+        showCleanBanner(devRemaining > 0 ? 'Caches already clean' : 'Already clean');
       }
     } catch (err) {
       console.error('Clean failed:', err);

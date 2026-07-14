@@ -3,7 +3,7 @@ import { useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '
 import type { ArtifactTier, DevArtifact } from '../types';
 import './DevScanPanel.css';
 
-const LEGEND_DISMISSED_KEY = 'symbolsweep:tier-legend-dismissed';
+const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
 
 interface DevScanPanelProps {
   onBack: () => void;
@@ -151,21 +151,18 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const { deleteArtifacts: manualDeleteArtifacts, deleting: manualDeleting } = useDeleteDevArtifactsManual();
   const deleting = bulkDeleting || manualDeleting;
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
-  const [legendDismissed, setLegendDismissed] = useState(() =>
-    localStorage.getItem(LEGEND_DISMISSED_KEY) === 'true'
-  );
+  // Legend: expanded once on first-ever visit, collapsed by default thereafter.
+  // "?" in header toggles it open/closed within a session without re-persisting.
+  const [legendExpanded, setLegendExpanded] = useState(() => {
+    // First-ever open: show expanded, then mark as seen
+    if (localStorage.getItem(LEGEND_SEEN_KEY) !== 'true') {
+      localStorage.setItem(LEGEND_SEEN_KEY, 'true');
+      return true;
+    }
+    return false;
+  });
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const [confirmReinstall, setConfirmReinstall] = useState(false);
-
-  const dismissLegend = () => {
-    setLegendDismissed(true);
-    localStorage.setItem(LEGEND_DISMISSED_KEY, 'true');
-  };
-
-  const showLegend = () => {
-    setLegendDismissed(false);
-    localStorage.removeItem(LEGEND_DISMISSED_KEY);
-  };
 
   const showResult = (msg: string) => {
     setDeleteMessage(msg);
@@ -235,15 +232,17 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           </svg>
         </button>
         <span className="header-title">Dev Artifacts</span>
-        {legendDismissed && (
-          <button className="legend-help-btn" onClick={showLegend} title="Show tier guide">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="8" cy="8" r="6.5" />
-              <path d="M6.5 6.5a1.5 1.5 0 1 1 1.5 1.5v1" />
-              <circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
-            </svg>
-          </button>
-        )}
+        <button
+          className={`legend-help-btn${legendExpanded ? ' active' : ''}`}
+          onClick={() => setLegendExpanded(v => !v)}
+          title={legendExpanded ? 'Hide tier guide' : 'Show tier guide'}
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="8" cy="8" r="6.5" />
+            <path d="M6.5 6.5a1.5 1.5 0 1 1 1.5 1.5v1" />
+            <circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
         <button
           className="rescan-btn"
           onClick={() => scan()}
@@ -263,16 +262,8 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
         </button>
       </header>
 
-      {!legendDismissed && (
+      {legendExpanded && (
         <div className="tier-legend">
-          <div className="tier-legend-header">
-            <span className="tier-legend-title">Tier guide</span>
-            <button className="tier-legend-dismiss" onClick={dismissLegend} title="Dismiss">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M4 4l8 8M12 4l-8 8" />
-              </svg>
-            </button>
-          </div>
           <div className="tier-legend-items">
             <div className="tier-legend-item">
               <span className="artifact-tier-badge tier-safe">SAFE</span>
@@ -288,7 +279,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             </div>
             <div className="tier-legend-item">
               <span className="artifact-tier-badge tier-ask">REVIEW</span>
-              <span>May contain data you want; delete manually, with care</span>
+              <span>May contain data you want; check before deleting</span>
             </div>
           </div>
         </div>
