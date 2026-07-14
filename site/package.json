@@ -1,0 +1,6 @@
+{
+  "name": "symbolsweep-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SymbolSweep landing page — static HTML/CSS, deployed via Vercel"
+}

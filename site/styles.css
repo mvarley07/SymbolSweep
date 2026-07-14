@@ -1,0 +1,470 @@
+/* ─── Design tokens (LOCKED — from the app) ─────────────────────────── */
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --elevated: #1a1a1a;
+  --accent: #14b8a6;
+  --accent-dim: rgba(20, 184, 166, 0.10);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-mid: rgba(255, 255, 255, 0.10);
+  --text: #f5f5f5;
+  --text-dim: #a3a3a3;
+  --text-faint: #666;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+  --mono: 'SF Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body { min-height: 100vh; }
+
+a {
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+a:hover { color: var(--accent); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+
+/* ─── Page container ─────────────────────────────────────────────────── */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 24px 48px;
+}
+
+/* ─── Section shared ─────────────────────────────────────────────────── */
+section {
+  margin-bottom: 56px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 24px;
+}
+
+/* ─── Hero ────────────────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.logo-lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+/* Broom icon rendered via CSS mask — same technique as the app */
+.logo-broom {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background-color: var(--accent);
+  -webkit-mask-image: url('/assets/broom-icon@2x.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/assets/broom-icon@2x.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.logo-wordmark {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.hero h1 {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.hero .sub {
+  font-size: 17px;
+  color: var(--text-dim);
+  max-width: 540px;
+  margin: 0 auto 24px;
+  line-height: 1.55;
+}
+
+.cta-btn {
+  display: inline-block;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  padding: 12px 28px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: opacity 0.15s;
+  border: none;
+  cursor: pointer;
+}
+
+.cta-btn:hover {
+  opacity: 0.88;
+  color: var(--bg);
+}
+
+.cta-note {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* ─── Demo slot ──────────────────────────────────────────────────────── */
+.demo-slot {
+  margin-bottom: 48px;
+}
+
+.demo-frame {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.demo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.demo-placeholder {
+  font-size: 13px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Origin hook ────────────────────────────────────────────────────── */
+.origin {
+  margin-bottom: 48px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.origin::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.origin p {
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.origin strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.origin code {
+  font-size: 13px;
+}
+
+/* ─── Differentiator cards ───────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.card h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.card p {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  flex: 1;
+}
+
+/* ─── How it works ───────────────────────────────────────────────────── */
+.steps {
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.steps li::before {
+  content: counter(step);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 50%;
+}
+
+.steps strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ─── Final CTA ──────────────────────────────────────────────────────── */
+.final-cta {
+  text-align: center;
+  padding: 48px 0 0;
+  border-top: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.final-cta h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.final-cta p {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+.trust-line {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.site-footer {
+  padding-top: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-faint);
+  flex-wrap: wrap;
+}
+
+.site-footer a {
+  color: var(--text-dim);
+}
+
+.site-footer a:hover {
+  color: var(--accent);
+}
+
+.footer-broom {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-color: var(--accent);
+  opacity: 0.5;
+  -webkit-mask-image: url('/assets/broom-icon.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/assets/broom-icon.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (min-width: 600px) {
+  .cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .hero h1 {
+    font-size: 40px;
+  }
+
+  .hero .sub {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 599px) {
+  .page {
+    padding: 40px 16px 32px;
+  }
+
+  .hero h1 {
+    font-size: 26px;
+  }
+
+  .hero .sub {
+    font-size: 15px;
+  }
+
+  .logo-lockup {
+    gap: 10px;
+  }
+
+  .logo-broom {
+    width: 24px;
+    height: 24px;
+  }
+
+  .logo-wordmark {
+    font-size: 22px;
+  }
+}
+
+/* ─── Privacy / prose page ───────────────────────────────────────────── */
+.prose {
+  max-width: 600px;
+}
+
+.prose h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.prose h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 32px;
+  margin-bottom: 12px;
+}
+
+.prose p {
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.prose ul {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+.prose ul li {
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  padding: 4px 0 4px 16px;
+  position: relative;
+}
+
+.prose ul li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  width: 4px;
+  height: 4px;
+  background: var(--text-faint);
+  border-radius: 50%;
+}
+
+.prose a {
+  color: var(--accent);
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
+
+.prose code {
+  font-size: 13px;
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy — SymbolSweep</title>
+  <meta name="description" content="SymbolSweep privacy policy. Local-only, no data collected.">
+  <link rel="icon" href="/assets/broom-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page prose">
+    <h1>Privacy</h1>
+
+    <h2>The short version</h2>
+    <p>SymbolSweep is a local-only desktop app. We collect no data.</p>
+
+    <h2>What stays on your machine</h2>
+    <p>Everything. SymbolSweep scans your filesystem for developer artifacts&mdash;build caches, derived data, package manager directories&mdash;and displays the results locally. No scan data, file paths, directory names, or disk metrics ever leave your Mac.</p>
+
+    <h2>What it accesses</h2>
+    <p>SymbolSweep reads only the directories it needs to measure and clean:</p>
+    <ul>
+      <li>Xcode DerivedData and Archives</li>
+      <li><code>node_modules</code>, <code>.pnpm-store</code>, and package manager caches</li>
+      <li>Rust <code>target</code> directories</li>
+      <li>CocoaPods and Carthage build folders</li>
+      <li>Swift Package Manager caches</li>
+      <li>macOS symbol caches (<code>coresymbolicationd</code>)</li>
+    </ul>
+    <p>It does not access your documents, photos, mail, browser data, or any directories outside its scan scope. Deletes always go to macOS Trash first.</p>
+
+    <h2>Network requests</h2>
+    <p>SymbolSweep makes zero network requests during normal operation. It does not phone home, upload telemetry, or communicate with any server. Optional update checks connect only to the update server and send no user data.</p>
+
+    <h2>Analytics</h2>
+    <p>None. No cookies, no tracking pixels, no analytics service&mdash;not in the app, not on this website.</p>
+
+    <h2>Third parties</h2>
+    <p>We don&rsquo;t share data with third parties because we don&rsquo;t have any data to share.</p>
+
+    <h2>Contact</h2>
+    <p>Questions? <a href="mailto:hello@symbolsweep.app">hello@symbolsweep.app</a></p>
+
+    <footer class="site-footer" style="margin-top: 48px;">
+      <a href="/">&larr; Back to SymbolSweep</a>
+    </footer>
+  </div>
+</body>
+</html>
