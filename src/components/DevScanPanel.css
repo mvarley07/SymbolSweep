@@ -61,6 +61,98 @@
 }
 
 /* ============================================================
+   Header help button (re-open legend)
+   ============================================================ */
+.legend-help-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-xs);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.legend-help-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.legend-help-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ============================================================
+   Tier legend — dismissible guide strip
+   ============================================================ */
+.tier-legend {
+  margin: 0 var(--gutter);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.tier-legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+
+.tier-legend-title {
+  font-size: var(--font-caption);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.tier-legend-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  border-radius: var(--badge-radius);
+  transition: all 0.15s ease;
+}
+
+.tier-legend-dismiss:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tier-legend-dismiss svg {
+  width: 10px;
+  height: 10px;
+}
+
+.tier-legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tier-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  line-height: 1.3;
+}
+
+.tier-legend-item .artifact-tier-badge {
+  flex-shrink: 0;
+}
+
+/* ============================================================
    Scan results — scrollable content area
    ============================================================ */
 .scan-results {
@@ -247,11 +339,18 @@
   opacity: 0.7;
 }
 
-/* Main line: badge + size */
-.artifact-main {
+/* Two-column body: text on left, size+delete pinned top-right */
+.artifact-body {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: var(--space-sm);
+}
+
+.artifact-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.artifact-main {
   margin-bottom: var(--space-xs);
 }
 
@@ -341,19 +440,29 @@
 }
 
 /* ============================================================
-   Per-artifact delete button — row-level, hover-only, neutral
+   Action column: size + delete, pinned top-right of row
    ============================================================ */
-.artifact-row {
-  position: relative;
+.artifact-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding-top: 1px;
 }
 
+.artifact-delete-spacer {
+  width: 22px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Per-artifact delete button — always visible, muted at rest
+   ============================================================ */
 .artifact-delete-btn {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
   width: 22px;
   height: 22px;
+  flex-shrink: 0;
   padding: 0;
   border: none;
   border-radius: var(--badge-radius);
@@ -364,18 +473,11 @@
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .artifact-delete-btn svg {
   width: 13px;
   height: 13px;
-}
-
-.artifact-row:hover .artifact-delete-btn {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .artifact-delete-btn:hover:not(:disabled) {
@@ -386,7 +488,6 @@
 .artifact-delete-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
-  pointer-events: none;
 }
 
 /* ============================================================
@@ -474,4 +575,191 @@
   padding: var(--space-xl);
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+/* ============================================================
+   Tier bulk-clean buttons (REBUILD, REINSTALL)
+   ============================================================ */
+.clean-tier-btn {
+  width: 100%;
+  height: var(--btn-height);
+  padding: 0 var(--space-md);
+  margin-bottom: var(--space-xs);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.clean-tier-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clean-tier-btn.tier-rebuild {
+  background: rgba(147, 130, 255, 0.65);
+  box-shadow: 0 1px 4px rgba(147, 130, 255, 0.12);
+}
+
+.clean-tier-btn.tier-rebuild:hover:not(:disabled) {
+  background: rgba(147, 130, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(147, 130, 255, 0.18);
+}
+
+.clean-tier-btn.tier-reinstall {
+  background: rgba(251, 191, 36, 0.7);
+  box-shadow: 0 1px 4px rgba(251, 191, 36, 0.12);
+}
+
+.clean-tier-btn.tier-reinstall:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.85);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.18);
+}
+
+/* ============================================================
+   Confirmation strip — inline one-liner before delete
+   ============================================================ */
+.confirm-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  animation: slideIn 0.15s ease-out;
+}
+
+.confirm-strip.tier-rebuild {
+  background: rgba(147, 130, 255, 0.08);
+  border: 1px solid rgba(147, 130, 255, 0.15);
+}
+
+.confirm-strip.tier-reinstall {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
+.confirm-text {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
+.confirm-yes,
+.confirm-no {
+  padding: 2px var(--space-sm);
+  border-radius: var(--badge-radius);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.confirm-yes {
+  background: rgba(248, 113, 113, 0.15);
+  color: rgb(248, 113, 113);
+}
+
+.confirm-yes:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.25);
+}
+
+.confirm-yes:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm-no {
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.confirm-no:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ============================================================
+   REVIEW row — removal command / instruction snippets
+   ============================================================ */
+.removal-command {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.removal-command code {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: var(--font-caption);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--badge-radius);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.removal-note {
+  font-size: var(--font-caption);
+  color: rgba(248, 113, 113, 0.6);
+}
+
+.removal-instruction {
+  font-size: var(--font-caption);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+/* ============================================================
+   Copy button — inline, icon-only
+   ============================================================ */
+.copy-btn {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--badge-radius);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.copy-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.copy-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -13,9 +13,10 @@ interface SettingsPanelProps {
 function formatInterval(secs: number): string {
   const hours = secs / 3600;
   if (hours < 1) {
-    return `${Math.round(secs / 60)} minutes`;
+    const mins = Math.round(secs / 60);
+    return `${mins} ${mins === 1 ? 'minute' : 'minutes'}`;
   }
-  return `${hours} hours`;
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 }
 
 export function SettingsPanel({ onBack }: SettingsPanelProps) {

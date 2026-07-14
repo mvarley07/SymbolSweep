@@ -91,38 +91,39 @@ fn get_daemon_status() -> bool {
 
 /// Clean the cache (with full safety checks)
 #[tauri::command]
-fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) -> Result<CleanResult, String> {
-    match clean_cache(dry_run) {
-        Ok(result) => {
-            // Update last clean timestamp only if not a dry run
-            if !dry_run && result.success {
-                if let Ok(mut settings) = state.settings.lock() {
-                    settings.record_clean(result.bytes_freed);
-                    // Reset debug simulated size to 0 after clean (makes debug mode more realistic)
-                    if settings.debug_mode {
-                        settings.debug_simulated_size = 0;
-                        let _ = settings.save();
-                        // Notify frontend to refresh settings
-                        let _ = app.emit("settings-updated", settings.clone());
-                    }
-                }
-                // Compute unified status and update both tray and frontend
-                let cache = {
-                    let s = state.settings.lock().unwrap();
-                    if s.debug_mode { get_simulated_status(s.debug_simulated_size) } else { get_cache_status() }
-                };
-                let (dev_total, dev_scan_complete) = state.dev_scan_result.lock()
-                    .ok()
-                    .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
-                    .unwrap_or((0, false));
-                let app_status = compute_app_status(&cache, dev_total, dev_scan_complete);
-                let _ = update_tray(&app, &app_status);
-                let _ = app.emit("app-status-update", &app_status);
+async fn clean(app: tauri::AppHandle, state: tauri::State<'_, AppState>, dry_run: bool) -> Result<CleanResult, String> {
+    // Offload blocking file I/O to background thread
+    let result = tauri::async_runtime::spawn_blocking(move || clean_cache(dry_run))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+
+    // State updates are fast — run after I/O completes
+    if !dry_run && result.success {
+        if let Ok(mut settings) = state.settings.lock() {
+            settings.record_clean(result.bytes_freed);
+            // Reset debug simulated size to 0 after clean (makes debug mode more realistic)
+            if settings.debug_mode {
+                settings.debug_simulated_size = 0;
+                let _ = settings.save();
+                // Notify frontend to refresh settings
+                let _ = app.emit("settings-updated", settings.clone());
             }
-            Ok(result)
         }
-        Err(e) => Err(e.to_string()),
+        // Compute unified status and update both tray and frontend
+        let cache = {
+            let s = state.settings.lock().unwrap();
+            if s.debug_mode { get_simulated_status(s.debug_simulated_size) } else { get_cache_status() }
+        };
+        let (dev_total, dev_scan_complete) = state.dev_scan_result.lock()
+            .ok()
+            .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
+            .unwrap_or((0, false));
+        let app_status = compute_app_status(&cache, dev_total, dev_scan_complete);
+        let _ = update_tray(&app, &app_status);
+        let _ = app.emit("app-status-update", &app_status);
     }
+    Ok(result)
 }
 
 /// Get the deletion log file path
@@ -158,7 +159,7 @@ fn get_recent_deletions() -> Vec<String> {
 
 /// Run a dev artifact scan (detection only, no deletion)
 #[tauri::command]
-fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevScanResult, String> {
+async fn scan_dev(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<DevScanResult, String> {
     use std::sync::atomic::Ordering;
 
     // Prevent concurrent scans
@@ -179,7 +180,17 @@ fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevS
         s.dev_scan_roots.clone()
     };
 
-    let result = dev_scanner::scan_dev_artifacts(&roots);
+    // Offload filesystem walk to background thread
+    let scan_result = tauri::async_runtime::spawn_blocking(move || {
+        dev_scanner::scan_dev_artifacts(&roots)
+    }).await;
+
+    // Release scan lock regardless of result
+    state
+        .dev_scan_in_progress
+        .store(false, Ordering::SeqCst);
+
+    let result = scan_result.map_err(|e| e.to_string())?;
 
     // Cache the result
     {
@@ -200,11 +211,6 @@ fn scan_dev(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<DevS
     let _ = update_tray(&app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
-    // Release scan lock
-    state
-        .dev_scan_in_progress
-        .store(false, Ordering::SeqCst);
-
     Ok(result)
 }
 
@@ -216,31 +222,31 @@ fn get_dev_scan_result(state: tauri::State<AppState>) -> Option<DevScanResult> {
 
 /// Delete specific dev artifacts by path (bulk — Safe tier only), then re-scan
 #[tauri::command]
-fn delete_dev_artifacts(
+async fn delete_dev_artifacts(
     app: tauri::AppHandle,
-    state: tauri::State<AppState>,
+    state: tauri::State<'_, AppState>,
     paths: Vec<String>,
 ) -> Result<DevDeleteResult, String> {
-    delete_dev_artifacts_inner(&app, &state, &paths, false)
+    delete_dev_artifacts_inner(&app, &state, paths, false).await
 }
 
 /// Delete specific dev artifacts by path (manual — user-initiated, allows non-Safe except Ask)
 #[tauri::command]
-fn delete_dev_artifacts_manual(
+async fn delete_dev_artifacts_manual(
     app: tauri::AppHandle,
-    state: tauri::State<AppState>,
+    state: tauri::State<'_, AppState>,
     paths: Vec<String>,
 ) -> Result<DevDeleteResult, String> {
-    delete_dev_artifacts_inner(&app, &state, &paths, true)
+    delete_dev_artifacts_inner(&app, &state, paths, true).await
 }
 
-fn delete_dev_artifacts_inner(
+async fn delete_dev_artifacts_inner(
     app: &tauri::AppHandle,
-    state: &tauri::State<AppState>,
-    paths: &[String],
+    state: &tauri::State<'_, AppState>,
+    paths: Vec<String>,
     manual: bool,
 ) -> Result<DevDeleteResult, String> {
-    // Get known artifacts from cached scan result (safety: only delete known paths)
+    // Extract needed data from state (fast, sync)
     let known_artifacts = {
         let cached = state.dev_scan_result.lock().unwrap();
         match cached.as_ref() {
@@ -248,21 +254,25 @@ fn delete_dev_artifacts_inner(
             None => return Err("No scan result available. Run a scan first.".to_string()),
         }
     };
-
-    let delete_result = if manual {
-        dev_scanner::delete_dev_artifacts_manual(paths, &known_artifacts)
-    } else {
-        dev_scanner::delete_dev_artifacts(paths, &known_artifacts)
-    };
-
-    // Re-scan to get updated totals
     let roots = {
         let s = state.settings.lock().unwrap();
         s.dev_scan_roots.clone()
     };
-    let new_scan = dev_scanner::scan_dev_artifacts(&roots);
 
-    // Update cached result
+    // Offload heavy deletion + re-scan to background thread
+    let (delete_result, new_scan) = tauri::async_runtime::spawn_blocking(move || {
+        let del = if manual {
+            dev_scanner::delete_dev_artifacts_manual(&paths, &known_artifacts)
+        } else {
+            dev_scanner::delete_dev_artifacts(&paths, &known_artifacts)
+        };
+        let scan = dev_scanner::scan_dev_artifacts(&roots);
+        (del, scan)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Update cached result (fast)
     {
         let mut cached = state.dev_scan_result.lock().unwrap();
         *cached = Some(new_scan.clone());

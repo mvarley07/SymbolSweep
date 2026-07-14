@@ -440,7 +440,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: None,
+                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
             });
         }
@@ -460,7 +460,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: None,
+                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
             });
         }
@@ -480,7 +480,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: None,
+                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
             });
         }
@@ -500,7 +500,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Clean via pnpm store prune — removes only orphaned packages".to_string()),
+                hint: Some("Safe to delete \u{2014} use pnpm store prune (removes only orphaned packages)".to_string()),
                 active_build: false,
             });
         }
@@ -526,7 +526,7 @@ fn check_home_cache(home: &Path, dir_name: &str, kind: &str, artifacts: &mut Vec
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: None,
+                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
             });
         }
@@ -576,7 +576,7 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                         project: None,
                         staleness_days: None,
                         is_nested: false,
-                        hint: None,
+                        hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                         active_build: false,
                     });
                 }
@@ -597,7 +597,7 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                     project: None,
                     staleness_days: None,
                     is_nested: false,
-                    hint: None,
+                    hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                     active_build: false,
                 });
             }
@@ -632,7 +632,7 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Rebuilds on next Xcode build".to_string()),
+                hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                 active_build: building,
             });
         }
@@ -658,7 +658,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Re-downloads on next gradle build — needs network".to_string()),
+                hint: Some("Safe to delete \u{2014} re-downloads on next gradle build (needs network)".to_string()),
                 active_build: false,
             });
         }
@@ -678,7 +678,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Re-downloads on next mvn build — needs network".to_string()),
+                hint: Some("Safe to delete \u{2014} re-downloads on next mvn build (needs network)".to_string()),
                 active_build: false,
             });
         }
@@ -701,7 +701,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Re-downloads on next go build — needs network".to_string()),
+                hint: Some("Safe to delete \u{2014} re-downloads on next go build (needs network)".to_string()),
                 active_build: false,
             });
         }
@@ -727,7 +727,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("May contain databases \u{2014} use docker system prune".to_string()),
+                hint: Some("Keep unless you're sure \u{2014} may contain databases; use docker system prune".to_string()),
                 active_build: false,
             });
         }
@@ -747,7 +747,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Contains dSYMs for shipped builds \u{2014} not regenerable".to_string()),
+                hint: Some("Keep \u{2014} holds crash symbols for shipped apps".to_string()),
                 active_build: false,
             });
         }
@@ -767,7 +767,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
+                hint: Some("Keep unless you're sure \u{2014} delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
                 active_build: false,
             });
         }
@@ -787,7 +787,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Delete via Android Studio \u{2192} Device Manager".to_string()),
+                hint: Some("Keep unless you're sure \u{2014} delete via Android Studio \u{2192} Device Manager".to_string()),
                 active_build: false,
             });
         }
@@ -898,7 +898,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
-                        hint: None,
+                        hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                         active_build: false,
                     });
                 }
@@ -922,7 +922,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: check_project_staleness(dir),
                     is_nested: false,
-                    hint: Some("Rebuilds on next cargo build \u{2014} takes minutes, needs network".to_string()),
+                    hint: Some("Safe to delete \u{2014} rebuilds on next cargo build (takes minutes, needs network)".to_string()),
                     active_build: building,
                 });
             }
@@ -942,7 +942,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Rebuilds on next dotnet build".to_string()),
+                    hint: Some("Safe to delete \u{2014} rebuilds on next dotnet build".to_string()),
                     active_build: false,
                 });
             }
@@ -962,7 +962,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Rebuilds when Unity reimports the project".to_string()),
+                    hint: Some("Safe to delete \u{2014} rebuilds when Unity reimports the project".to_string()),
                     active_build: false,
                 });
             }
@@ -982,7 +982,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Rebuilds on next Unreal Editor launch".to_string()),
+                    hint: Some("Safe to delete \u{2014} rebuilds on next Unreal Editor launch".to_string()),
                     active_build: false,
                 });
             }
@@ -1003,7 +1003,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Rebuilds on next Xcode build".to_string()),
+                    hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                     active_build: building,
                 });
             }
@@ -1025,7 +1025,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
-                        hint: Some("May contain shipped output \u{2014} verify before deleting".to_string()),
+                        hint: Some("Keep unless you're sure \u{2014} may contain shipped output you haven't deployed".to_string()),
                         active_build: false,
                     });
                 }
@@ -1056,7 +1056,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
                 project: get_project_name(nm_path),
                 staleness_days: None,
                 is_nested: true, // Size is included in parent node_modules total
-                hint: None,
+                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
             });
         }
@@ -1076,7 +1076,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
             project: get_project_name(nm_path),
             staleness_days: staleness,
             is_nested: false,
-            hint: Some("Restore with npm install".to_string()),
+            hint: Some("Safe to delete \u{2014} restore with npm install".to_string()),
             active_build: false,
         });
     }

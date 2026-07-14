@@ -140,6 +140,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const performClean = async () => {
     setIsLoading(true);
+    // Yield to browser so "Cleaning..." state paints before heavy I/O
+    await new Promise(resolve => requestAnimationFrame(resolve));
     try {
       // Snapshot disk free space BEFORE cleaning
       const beforeFree = appStatus?.disk_free_bytes ?? 0;
