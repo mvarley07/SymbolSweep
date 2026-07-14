@@ -104,26 +104,56 @@
   color: #c9a96b;
 }
 
-.status-size.scanning {
-  color: var(--text-tertiary);
-  font-size: 20px;
-  font-weight: 500;
-  animation: scan-pulse 2s ease-in-out infinite;
+/* ============================================================
+   Scan shell — animated logo loading state
+   ============================================================ */
+.scan-shell {
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
 }
 
-/* Fade-in container for delayed scanning indicator */
-.scan-fade-in {
+.scan-logo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
   animation: scanFadeIn 0.4s ease-out;
 }
 
-@keyframes scanFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.scan-logo-broom {
+  width: 44px;
+  height: 44px;
+  background-color: var(--accent);
+  -webkit-mask-image: url('/broom-icon.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/broom-icon.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  animation: broom-sweep 2.4s ease-in-out infinite;
+  transform-origin: 50% 85%;
 }
 
-@keyframes scan-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+@keyframes broom-sweep {
+  0%, 100% { transform: rotate(0deg) scale(1); opacity: 0.85; }
+  25%      { transform: rotate(-8deg) scale(1.03); opacity: 1; }
+  50%      { transform: rotate(0deg) scale(1); opacity: 0.85; }
+  75%      { transform: rotate(6deg) scale(1.02); opacity: 1; }
+}
+
+.scan-logo-label {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+@keyframes scanFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* Hero split: big number + small descriptor */
@@ -296,33 +326,6 @@
   gap: var(--space-sm);
   flex-shrink: 0;
   padding-top: var(--space-lg);
-}
-
-/* Skeleton loader */
-.skeleton-loader {
-  display: inline-block;
-  width: 60px;
-  height: 14px;
-  background: linear-gradient(
-    90deg,
-    var(--bg-tertiary) 25%,
-    var(--bg-hover) 50%,
-    var(--bg-tertiary) 75%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-  border-radius: var(--badge-radius);
-}
-
-.skeleton-loader.size-loader {
-  width: 80px;
-  height: var(--btn-height);
-  border-radius: var(--radius-sm);
-}
-
-@keyframes skeleton-pulse {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
 }
 
 /* Loading text with animated dots */
