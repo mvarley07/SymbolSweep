@@ -76,7 +76,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-sm) 0 var(--space-xs);
+  padding: var(--space-sm) 0 var(--space-sm);
   gap: var(--space-sm);
   flex-shrink: 0;
 }
@@ -264,43 +264,27 @@
 }
 
 /* ============================================================
-   Gap banner — disk under pressure but little cleanable
+   Gap banner — compact disk-low notice with inline link
    ============================================================ */
 .gap-banner {
-  padding: var(--space-sm) var(--space-md);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
   font-size: var(--font-xs);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   line-height: 1.5;
 }
 
-.gap-banner p {
-  margin: 0 0 var(--space-xs);
+.gap-snapshots {
+  color: var(--text-tertiary);
 }
 
-.gap-banner p:last-of-type {
-  margin-bottom: var(--space-sm);
-}
-
-.gap-banner-btn {
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  font-size: var(--font-xs);
-  font-weight: 500;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.gap-banner-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
+.gap-link {
   color: var(--accent);
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.gap-link:hover {
+  text-decoration: underline;
 }
 
 /* ============================================================

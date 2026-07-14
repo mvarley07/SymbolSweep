@@ -354,13 +354,12 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
         {appStatus.show_gap_banner && (
           <div className="gap-banner">
-            <p>Your disk is still low — most usage is outside SymbolSweep's reach.</p>
+            <span>Your disk is still low — most usage is outside SymbolSweep's reach.</span>
             {appStatus.snapshot_count > 0 && (
-              <p>{appStatus.snapshot_count} local Time Machine snapshot{appStatus.snapshot_count !== 1 ? 's' : ''} detected.</p>
+              <span className="gap-snapshots"> {appStatus.snapshot_count} snapshot{appStatus.snapshot_count !== 1 ? 's' : ''} detected.</span>
             )}
-            <button className="gap-banner-btn" onClick={() => invoke('open_storage_settings')}>
-              Manage Storage
-            </button>
+            {' '}
+            <a className="gap-link" onClick={() => invoke('open_storage_settings')}>Manage Storage &rsaquo;</a>
           </div>
         )}
 
@@ -383,8 +382,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             <span className="loading-text">
               Cleaning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
             </span>
-          ) : appStatus.clean_state === 'Clean' ? (
-            'Nothing to clean'
           ) : (
             'Clean Now'
           )}
