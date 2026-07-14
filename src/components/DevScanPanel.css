@@ -362,6 +362,9 @@
   font-weight: 600;
   color: var(--text-primary);
   font-feature-settings: 'tnum' 1;
+  min-width: 52px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 /* Details line: kind, project, staleness */
@@ -422,7 +425,9 @@
 }
 
 .artifact-delete-spacer {
+  display: inline-block;
   width: 22px;
+  height: 22px;
   flex-shrink: 0;
 }
 
