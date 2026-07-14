@@ -321,7 +321,11 @@
 }
 
 .artifact-main {
-  margin-bottom: var(--space-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-bottom: 2px;
 }
 
 /* Tier badges — strong color, instantly distinguishable */
@@ -367,15 +371,7 @@
   flex-shrink: 0;
 }
 
-/* Details line: kind, project, staleness */
-.artifact-details {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 2px;
-}
-
+/* Kind label — inline with badge */
 .artifact-kind {
   font-size: var(--font-xs);
   color: var(--text-secondary);
@@ -394,19 +390,11 @@
   color: rgba(251, 191, 36, 0.7);
 }
 
-/* Hint/cost lines — legible, not dim afterthoughts */
+/* Hint — single line, truncated with tooltip for full text */
 .artifact-hint {
-  font-size: var(--font-xs);
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin-bottom: 2px;
-}
-
-/* Path — monospace, tertiary */
-.artifact-path {
   font-size: var(--font-caption);
   color: var(--text-tertiary);
-  font-family: 'SF Mono', 'Menlo', monospace;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

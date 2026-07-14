@@ -108,6 +108,22 @@
   color: var(--text-tertiary);
   font-size: 20px;
   font-weight: 500;
+  animation: scan-pulse 2s ease-in-out infinite;
+}
+
+/* Fade-in container for delayed scanning indicator */
+.scan-fade-in {
+  animation: scanFadeIn 0.4s ease-out;
+}
+
+@keyframes scanFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 /* Hero split: big number + small descriptor */

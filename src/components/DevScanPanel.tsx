@@ -88,6 +88,8 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
   const isReview = artifact.tier === 'Ask';
   const removalInfo = isReview ? getRemovalInfo(artifact) : null;
 
+  const shortPath = artifact.path.replace(/^\/Users\/[^/]+/, '~');
+
   return (
     <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''} ${artifact.active_build ? 'active-build' : ''} ${isReview ? 'tier-ask-row' : ''}`}>
       <div className="artifact-body">
@@ -96,9 +98,7 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
             <span className={`artifact-tier-badge ${config.className}`}>
               {artifact.active_build ? 'BUILDING' : config.label}
             </span>
-          </div>
-          <div className="artifact-details">
-            <span className="artifact-kind">{artifact.kind}</span>
+            <span className="artifact-kind" title={shortPath}>{artifact.kind}</span>
             {artifact.project && (
               <span className="artifact-project">{artifact.project}</span>
             )}
@@ -107,7 +107,7 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
             )}
           </div>
           {artifact.hint && (
-            <div className="artifact-hint">{artifact.hint}</div>
+            <div className="artifact-hint" title={artifact.hint}>{artifact.hint}</div>
           )}
           {removalInfo && 'command' in removalInfo && (
             <div className="removal-command">
@@ -119,9 +119,6 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
           {removalInfo && 'instruction' in removalInfo && (
             <div className="removal-instruction">{removalInfo.instruction}</div>
           )}
-          <div className="artifact-path" title={artifact.path}>
-            {artifact.path.replace(/^\/Users\/[^/]+/, '~')}
-          </div>
         </div>
         <div className="artifact-actions">
           <span className="artifact-size">{artifact.size_display}</span>

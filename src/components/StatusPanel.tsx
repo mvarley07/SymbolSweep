@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
@@ -87,6 +87,29 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+
+  // Delayed scanning indicator: only show after 350ms of !dev_scan_complete.
+  // If the scan finishes faster, the user sees nothing — straight to results.
+  // DEBUG: set SCAN_LOADER_DELAY to e.g. 0 and add `|| true` to the condition to force-show.
+  const SCAN_LOADER_DELAY = 350;
+  const [showScanning, setShowScanning] = useState(false);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const scanPending = appStatus && !appStatus.dev_scan_complete;
+    if (scanPending) {
+      scanTimerRef.current = setTimeout(() => setShowScanning(true), SCAN_LOADER_DELAY);
+    } else {
+      setShowScanning(false);
+      if (scanTimerRef.current) {
+        clearTimeout(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    };
+  }, [appStatus?.dev_scan_complete]);
 
   const showCleanBanner = (message: string) => {
     setBannerMessage(message);
@@ -231,8 +254,36 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
-  // Pre-scan: show scanning state, never "All clean"
+  // Pre-scan: suppress "All clean" until scan completes.
+  // If scan finishes within 350ms, skip the loader entirely (no flash).
+  // Only show the scanning UI if the scan is actually slow.
   if (!appStatus.dev_scan_complete) {
+    if (!showScanning) {
+      // Within the delay window — render the shell without hero content
+      return (
+        <div className="status-panel">
+          <header className="panel-header">
+            <div className="header-logo">
+              <div className="logo-icon" aria-hidden="true" />
+              <span className="logo-text">SymbolSweep</span>
+            </div>
+            <button className="settings-btn" onClick={onSettingsClick} title="Settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+          </header>
+          {appStatus.disk_health !== 'Unknown' && (
+            <span className={`disk-context${appStatus.disk_health !== 'Normal' ? ' disk-low' : ''}`}>
+              {appStatus.disk_free_display} free of {appStatus.disk_total_display}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // Scan is taking a while — show the scanning indicator with fade-in
     return (
       <div className="status-panel">
         <header className="panel-header">
@@ -248,12 +299,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
           </button>
         </header>
 
-        <div className="status-indicator">
-          <div className="status-size scanning">
-            <span className="loading-text">
-              Scanning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
-            </span>
-          </div>
+        <div className="status-indicator scan-fade-in">
+          <div className="status-size scanning">Scanning</div>
         </div>
 
         {appStatus.disk_health !== 'Unknown' && (
