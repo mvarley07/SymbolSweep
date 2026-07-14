@@ -41,6 +41,12 @@ pub struct Settings {
     /// Project root directories to scan for dev artifacts
     #[serde(default = "default_dev_scan_roots")]
     pub dev_scan_roots: Vec<String>,
+    /// Timestamp of last clean that actually freed >0 bytes (for UI display)
+    #[serde(default)]
+    pub last_real_clean_timestamp: u64,
+    /// Bytes freed in the last real clean (for UI summary line)
+    #[serde(default)]
+    pub last_real_clean_freed: u64,
 }
 
 fn default_dev_scan_roots() -> Vec<String> {
@@ -63,6 +69,8 @@ impl Default for Settings {
             first_run_completed: false,
             first_clean_confirmed: false,
             dev_scan_roots: default_dev_scan_roots(),
+            last_real_clean_timestamp: 0,
+            last_real_clean_freed: 0,
         }
     }
 }
@@ -115,9 +123,14 @@ impl Settings {
         fs::write(&path, content).map_err(|e| format!("Failed to write settings: {}", e))
     }
 
-    /// Update last clean timestamp
-    pub fn record_clean(&mut self) {
+    /// Update clean timestamps. Always updates scheduling timestamp.
+    /// Only updates the "real clean" display fields when bytes_freed > 0.
+    pub fn record_clean(&mut self, bytes_freed: u64) {
         self.last_clean_timestamp = current_timestamp();
+        if bytes_freed > 0 {
+            self.last_real_clean_timestamp = current_timestamp();
+            self.last_real_clean_freed = bytes_freed;
+        }
         let _ = self.save();
     }
 }
@@ -188,7 +201,7 @@ impl Scheduler {
                 Ok(result) => {
                     // Update last clean timestamp
                     let mut settings = self.settings.lock().unwrap();
-                    settings.record_clean();
+                    settings.record_clean(result.bytes_freed);
                     Some(result)
                 }
                 Err(_) => None,
@@ -241,7 +254,7 @@ impl Scheduler {
                         Ok(result) => {
                             // Update last clean timestamp
                             let mut s = settings.lock().unwrap();
-                            s.record_clean();
+                            s.record_clean(result.bytes_freed);
                             callback(SchedulerEvent::AutoCleanCompleted(result));
                         }
                         Err(e) => {
@@ -317,13 +330,18 @@ pub fn format_duration(secs: u64) -> String {
     }
 }
 
-/// Get time since last clean
+/// Get time since last real clean (one that actually freed >0 bytes)
 pub fn time_since_last_clean(settings: &Settings) -> String {
-    if settings.last_clean_timestamp == 0 {
+    let ts = if settings.last_real_clean_timestamp > 0 {
+        settings.last_real_clean_timestamp
+    } else if settings.last_clean_timestamp > 0 {
+        // Backward compat: fall back to old field if no real clean recorded yet
+        settings.last_clean_timestamp
+    } else {
         return "Never".to_string();
-    }
+    };
 
     let now = current_timestamp();
-    let elapsed = now.saturating_sub(settings.last_clean_timestamp);
+    let elapsed = now.saturating_sub(ts);
     format!("{} ago", format_duration(elapsed))
 }

@@ -320,15 +320,8 @@ pub fn clean_cache(dry_run: bool) -> Result<CleanResult, CleanError> {
     // SAFETY CHECK 1: Verify path is exactly what we expect
     verify_safe_path(&cache_path)?;
 
-    log_deletion(&format!(
-        "=== {} STARTED ===",
-        if dry_run { "DRY RUN" } else { "CLEAN OPERATION" }
-    ));
-    log_deletion(&format!("Target path: {}", cache_path.display()));
-
     // Check if cache exists
     if !cache_path.exists() {
-        log_deletion("Cache directory does not exist - nothing to clean");
         return Ok(CleanResult {
             success: true,
             bytes_freed: 0,
@@ -347,6 +340,27 @@ pub fn clean_cache(dry_run: bool) -> Result<CleanResult, CleanError> {
     let total_size: u64 = items.iter().map(|i| i.size).sum();
     let total_count = items.len() as u64;
 
+    // Nothing to clean — return silently without logging
+    if total_count == 0 && !dry_run {
+        return Ok(CleanResult {
+            success: true,
+            bytes_freed: 0,
+            bytes_freed_display: "0 B".to_string(),
+            files_removed: 0,
+            timestamp: current_timestamp(),
+            message: "Nothing to clean".to_string(),
+            requires_password: false,
+            was_dry_run: false,
+            items_found: Vec::new(),
+        });
+    }
+
+    // Only log operations that will actually do something
+    log_deletion(&format!(
+        "=== {} STARTED ===",
+        if dry_run { "DRY RUN" } else { "CLEAN OPERATION" }
+    ));
+    log_deletion(&format!("Target path: {}", cache_path.display()));
     log_deletion(&format!(
         "Found {} items totaling {}",
         total_count,

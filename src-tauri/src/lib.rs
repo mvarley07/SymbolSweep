@@ -97,7 +97,7 @@ fn clean(app: tauri::AppHandle, state: tauri::State<AppState>, dry_run: bool) ->
             // Update last clean timestamp only if not a dry run
             if !dry_run && result.success {
                 if let Ok(mut settings) = state.settings.lock() {
-                    settings.record_clean();
+                    settings.record_clean(result.bytes_freed);
                     // Reset debug simulated size to 0 after clean (makes debug mode more realistic)
                     if settings.debug_mode {
                         settings.debug_simulated_size = 0;
@@ -355,6 +355,18 @@ fn get_last_clean_time(state: tauri::State<AppState>) -> String {
     time_since_last_clean(&settings)
 }
 
+/// Get the freed size from the last real clean (>0 bytes).
+/// Returns the human-readable size string, or empty string if no real clean on record.
+#[tauri::command]
+fn get_last_clean_freed(state: tauri::State<AppState>) -> String {
+    let settings = state.settings.lock().unwrap();
+    if settings.last_real_clean_freed > 0 {
+        cache_monitor::format_size(settings.last_real_clean_freed)
+    } else {
+        String::new()
+    }
+}
+
 /// Quit the application
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
@@ -584,7 +596,7 @@ pub fn run() {
                         if let Ok(result) = clean_cache(false) {
                             // Update last clean timestamp and reset debug size
                             if let Ok(mut s) = settings.lock() {
-                                s.record_clean();
+                                s.record_clean(result.bytes_freed);
                                 if s.debug_mode {
                                     s.debug_simulated_size = 0;
                                     let _ = s.save();
@@ -723,6 +735,7 @@ pub fn run() {
             get_settings,
             update_settings,
             get_last_clean_time,
+            get_last_clean_freed,
             quit_app,
             test_notification,
             open_notification_settings,
