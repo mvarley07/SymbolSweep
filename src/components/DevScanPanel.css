@@ -324,8 +324,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  flex-wrap: wrap;
   margin-bottom: 2px;
+  min-width: 0;
 }
 
 /* Tier badges — strong color, instantly distinguishable */
@@ -371,10 +371,14 @@
   flex-shrink: 0;
 }
 
-/* Kind label — inline with badge */
+/* Kind label — inline with badge, truncates when tight */
 .artifact-kind {
   font-size: var(--font-xs);
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .artifact-project {
@@ -518,10 +522,6 @@
 /* ============================================================
    Active build state
    ============================================================ */
-.artifact-row.active-build {
-  background: rgba(251, 191, 36, 0.04);
-}
-
 .artifact-row.active-build .artifact-tier-badge {
   background: rgba(251, 191, 36, 0.15);
   color: var(--status-warning);
