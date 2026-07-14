@@ -301,6 +301,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         value={appStatus.clean_state === 'Clean' ? null : appStatus.reclaimable_display}
         label={appStatus.clean_state === 'Clean' ? 'All clean' : 'to clean'}
       />
+      {appStatus.clean_state === 'Clean' && appStatus.show_gap_banner && (
+        <span className="hero-scope">Nothing left for SymbolSweep to clean</span>
+      )}
 
       {/* Secondary disk context line */}
       {appStatus.disk_health === 'Unknown' ? (
@@ -328,7 +331,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
         {appStatus.show_gap_banner && (
           <div className="gap-banner">
-            <p>Disk space is low and most usage is outside SymbolSweep's scope.</p>
+            <p>Your disk is still low — most usage is outside SymbolSweep's reach.</p>
             {appStatus.snapshot_count > 0 && (
               <p>{appStatus.snapshot_count} local Time Machine snapshot{appStatus.snapshot_count !== 1 ? 's' : ''} detected.</p>
             )}
