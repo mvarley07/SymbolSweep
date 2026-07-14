@@ -30,7 +30,7 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
   const showDelete = !artifact.is_nested && artifact.tier !== 'Ask' && !artifact.active_build;
 
   return (
-    <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''} ${artifact.active_build ? 'active-build' : ''}`}>
+    <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''} ${artifact.active_build ? 'active-build' : ''} ${artifact.tier === 'Ask' ? 'tier-ask-row' : ''}`}>
       <div className="artifact-main">
         <span className={`artifact-tier-badge ${config.className}`}>
           {artifact.active_build ? 'BUILDING' : config.label}

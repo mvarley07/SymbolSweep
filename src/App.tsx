@@ -20,6 +20,13 @@ const MAX_HEIGHTS: Record<View, number> = {
   devscan: 520,
 };
 
+// Views where the content has an intrinsic height and the observer should
+// measure scrollHeight to fit the window.  Views NOT listed here use
+// height:100% with internal scroll — giving them to the observer creates a
+// feedback loop (observer shrinks window → height:100% shrinks content →
+// observer shrinks window again → collapse to zero).
+const CONTENT_SIZED_VIEWS: Set<View> = new Set(['status', 'welcome']);
+
 function App() {
   const { settings, loading, updateSettings } = useSettings();
   const [view, setView] = useState<View>('status');
@@ -32,23 +39,32 @@ function App() {
     }
   }, [loading, settings.first_run_completed]);
 
-  // Resize window to match actual content height
+  // Resize window to match actual content height (content-sized views only)
   const syncWindowHeight = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    // scrollHeight = full content height, ignoring any overflow clipping
     const contentHeight = el.scrollHeight;
     const maxHeight = MAX_HEIGHTS[view];
     const height = Math.min(contentHeight, maxHeight);
     getCurrentWindow().setSize(new LogicalSize(WINDOW_WIDTH, height));
   }, [view]);
 
-  // Observe content size changes and resize window accordingly
+  // Manage window height per view type:
+  // - Content-sized views (status, welcome): ResizeObserver measures and fits
+  // - Fixed-height views (settings, devscan): jump to MAX_HEIGHT, no observer
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    // Initial sync after a frame (let layout settle)
+    if (!CONTENT_SIZED_VIEWS.has(view)) {
+      // Fixed-height view — set size directly, skip observer
+      getCurrentWindow().setSize(
+        new LogicalSize(WINDOW_WIDTH, MAX_HEIGHTS[view]),
+      );
+      return;
+    }
+
+    // Content-sized view — observe and fit
     const raf = requestAnimationFrame(syncWindowHeight);
 
     const observer = new ResizeObserver(syncWindowHeight);
@@ -58,7 +74,7 @@ function App() {
       cancelAnimationFrame(raf);
       observer.disconnect();
     };
-  }, [syncWindowHeight]);
+  }, [view, syncWindowHeight]);
 
   // Handle Escape key and click outside to close window
   useEffect(() => {
