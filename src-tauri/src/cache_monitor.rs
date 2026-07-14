@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Cache status thresholds in bytes (reclaimable totals)
@@ -11,6 +12,12 @@ pub const CRITICAL_THRESHOLD: u64 = 5 * 1024 * 1024 * 1024; // 5GB
 /// Disk free space thresholds
 pub const DISK_WARNING_THRESHOLD: u64 = 25 * 1024 * 1024 * 1024; // <25GB free = warning
 pub const DISK_CRITICAL_THRESHOLD: u64 = 10 * 1024 * 1024 * 1024; // <10GB free = critical
+
+/// Display smoothing: only update the shown disk-free number when the reading
+/// changes by more than this amount. Prevents visible jitter from normal APFS
+/// churn (snapshots, purgeable reclamation) while keeping big changes responsive.
+const DISK_FREE_DISPLAY_THRESHOLD: u64 = 512 * 1024 * 1024; // 0.5 GB
+static LAST_DISPLAYED_DISK_FREE: Mutex<u64> = Mutex::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CacheState {
@@ -151,12 +158,31 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete
 
     let snapshot_count = get_snapshot_count();
 
-    // When statvfs fails (disk_free == u64::MAX), show "unavailable" instead
-    // of formatting a nonsensical huge number
+    // Display smoothing: only update the shown disk-free value when the reading
+    // moves by more than 0.5 GB from the last displayed value. The raw
+    // disk_free_bytes stays accurate for DiskHealth / gap-banner logic.
+    //
+    // Smoothing is disabled when disk health is Warning/Critical — accuracy
+    // matters more than stability when the user is monitoring a low-disk
+    // situation, and it prevents the displayed number contradicting the
+    // gap banner (e.g. banner says "low" while smoothed number shows "fine").
+    let displayed_free = if disk_health == DiskHealth::Unknown {
+        disk_free // will be formatted as "unavailable" below
+    } else {
+        let mut last = LAST_DISPLAYED_DISK_FREE.lock().unwrap();
+        let snap = *last == 0
+            || disk_health != DiskHealth::Normal
+            || disk_free.abs_diff(*last) >= DISK_FREE_DISPLAY_THRESHOLD;
+        if snap {
+            *last = disk_free;
+        }
+        *last
+    };
+
     let (display_free, display_total) = if disk_health == DiskHealth::Unknown {
         ("unavailable".to_string(), "unavailable".to_string())
     } else {
-        (format_size(disk_free), format_size(disk_total))
+        (format_size(displayed_free), format_size(disk_total))
     };
 
     AppStatus {
