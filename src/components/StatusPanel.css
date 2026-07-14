@@ -192,7 +192,7 @@
 
 .status-state.heavy {
   color: var(--heavy-color);
-  background: rgba(212, 167, 44, 0.08);
+  background: rgba(251, 191, 36, 0.08);
 }
 
 .status-dot {
@@ -436,12 +436,12 @@
 .clean-btn.heavy {
   background: var(--heavy-color);
   color: rgba(0, 0, 0, 0.85);
-  box-shadow: 0 1px 4px rgba(212, 167, 44, 0.2);
+  box-shadow: 0 1px 4px rgba(251, 191, 36, 0.2);
 }
 
 .clean-btn.heavy:hover:not(:disabled):not(.loading) {
   background: var(--heavy-hover);
-  box-shadow: 0 2px 8px rgba(212, 167, 44, 0.3);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
 }
 
 .clean-btn.heavy:active:not(:disabled):not(.loading) {
