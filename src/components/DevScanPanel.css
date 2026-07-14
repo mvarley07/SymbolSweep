@@ -267,6 +267,18 @@
   font-weight: 700;
 }
 
+.delete-message.trashed {
+  background: rgba(147, 130, 255, 0.08);
+  border-color: rgba(147, 130, 255, 0.2);
+  color: rgba(147, 130, 255, 0.85);
+}
+
+.delete-message .trash-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
 /* ============================================================
    SS Trash banner — shows when SS items are sitting in Trash
    ============================================================ */

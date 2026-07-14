@@ -423,8 +423,14 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           )}
 
           {deleteMessage && (
-            <div className="delete-message">
-              <span className="result-icon">&#10003;</span>
+            <div className={`delete-message${deletedToTrash ? ' trashed' : ''}`}>
+              {deletedToTrash ? (
+                <svg className="result-icon trash-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2.5 4.5h11M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4 4.5l.5 8.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1l.5-8.5" />
+                </svg>
+              ) : (
+                <span className="result-icon">&#10003;</span>
+              )}
               <span>{deleteMessage}</span>
             </div>
           )}
