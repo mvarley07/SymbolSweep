@@ -779,6 +779,51 @@
   color: var(--text-primary);
 }
 
+/* ============================================================
+   Tooltips — CSS-only via data-tip, pointer-events: none
+   ============================================================ */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: #E4E6E9;
+  background: #24272C;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 100;
+}
+
+[data-tip]:hover::after {
+  opacity: 1;
+}
+
+/* Right-side controls: anchor tooltip to right edge to prevent panel overflow */
+.artifact-actions [data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+/* Staleness chip: keep centered, it sits mid-row */
+.artifact-staleness[data-tip]::after {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

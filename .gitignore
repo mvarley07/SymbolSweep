@@ -40,3 +40,4 @@ src-tauri/build-ai-safe.js
 src-tauri/dev-config.sh
 src-tauri/monitor-symbolication.sh
 src-tauri/scripts/
+.vercel

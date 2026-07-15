@@ -59,7 +59,7 @@ function CopyButton({ text }: { text: string }) {
   };
 
   return (
-    <button className="copy-btn" onClick={handleCopy} title="Copy command">
+    <button className="copy-btn" onClick={handleCopy} data-tip="Copy just this item" aria-label="Copy just this item">
       {copied ? (
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M3 8.5l3 3 7-7" />
@@ -104,7 +104,7 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
               <span className="artifact-project">{artifact.project}</span>
             )}
             {staleness && (
-              <span className="artifact-staleness">{staleness}</span>
+              <span className="artifact-staleness" data-tip={`Unused for ${artifact.staleness_days} days`} aria-label={`Unused for ${artifact.staleness_days} days`}>{staleness}</span>
             )}
           </div>
           {artifact.hint && (
@@ -128,7 +128,8 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
               className="artifact-delete-btn"
               onClick={() => onDelete(artifact.path)}
               disabled={deleting}
-              title="Move to Trash"
+              data-tip="Remove from rack"
+              aria-label="Remove from rack"
             >
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M2.5 4.5h11M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4 4.5l.5 8.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1l.5-8.5" />

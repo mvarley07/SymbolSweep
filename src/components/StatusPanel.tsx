@@ -324,7 +324,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             ? 'to clean'
             : appStatus.show_gap_banner
               ? 'Nothing to clean'
-              : 'All clean'
+              : appStatus.dev_total_bytes > 0
+                ? 'Caches clean'
+                : 'All clean'
         }
       />
 
@@ -373,19 +375,21 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       )}
 
       <div className="status-footer">
-        <button
-          className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
-          onClick={handleCleanClick}
-          disabled={isLoading || cleaning || appStatus.clean_state === 'Clean'}
-        >
-          {isLoading ? (
-            <span className="loading-text">
-              Cleaning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
-            </span>
-          ) : (
-            'Clean Now'
-          )}
-        </button>
+        {appStatus.clean_state !== 'Clean' && (
+          <button
+            className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
+            onClick={handleCleanClick}
+            disabled={isLoading || cleaning}
+          >
+            {isLoading ? (
+              <span className="loading-text">
+                Cleaning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
+              </span>
+            ) : (
+              'Clean Now'
+            )}
+          </button>
+        )}
 
         {appStatus.dev_scan_available && (
           <button className="dev-scan-link" onClick={onDevScanClick}>
