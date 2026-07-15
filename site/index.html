@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SymbolSweep — The honest Mac cleaner for developers</title>
-  <meta name="description" content="Reclaims your dev space — Rust targets, node_modules, package caches — and tells you the truth about the disk it can't touch. No fake scare tactics.">
+  <title>SymbolSweep — Reclaim your dev disk space, safely</title>
+  <meta name="description" content="SymbolSweep finds the build caches, node_modules, and system junk eating your Mac, shows you exactly what's safe to delete tier by tier, and keeps runaway caches in check automatically.">
 
   <!-- OG / Social -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="SymbolSweep — The honest Mac cleaner for developers">
-  <meta property="og:description" content="Reclaims your dev space — Rust targets, node_modules, package caches — and tells you the truth about the disk it can't touch.">
+  <meta property="og:title" content="SymbolSweep — Reclaim your dev disk space, safely">
+  <meta property="og:description" content="Finds the build caches, node_modules, and system junk eating your Mac. Shows you exactly what's safe to delete tier by tier.">
   <meta property="og:image" content="/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SymbolSweep — The honest Mac cleaner for developers">
-  <meta name="twitter:description" content="Reclaims your dev space — Rust targets, node_modules, package caches — and tells you the truth about the disk it can't touch.">
+  <meta name="twitter:title" content="SymbolSweep — Reclaim your dev disk space, safely">
+  <meta name="twitter:description" content="Finds the build caches, node_modules, and system junk eating your Mac. Shows you exactly what's safe to delete tier by tier.">
   <meta name="twitter:image" content="/assets/og-image.png">
 
   <link rel="icon" href="/assets/broom-icon.png">
@@ -25,45 +25,39 @@
     <!-- ─── HERO ──────────────────────────────────────────────────── -->
     <header class="hero">
       <div class="logo-lockup">
-        <div class="logo-broom" role="img" aria-label="SymbolSweep broom icon"></div>
+        <img class="logo-icon" src="/assets/app-icon.png" alt="SymbolSweep" width="32" height="32">
         <span class="logo-wordmark">SymbolSweep</span>
       </div>
 
-      <h1>The honest Mac cleaner for developers.</h1>
-      <p class="sub">Reclaims your dev space&mdash;Rust targets, <code>node_modules</code>, package caches&mdash;and tells you the truth about the disk it can&rsquo;t touch. No fake &ldquo;your Mac is unhealthy&rdquo; scare tactics.</p>
+      <h1>Reclaim your dev disk space&thinsp;&mdash;&thinsp;safely.</h1>
+      <p class="sub">SymbolSweep finds the build caches, <code>node_modules</code>, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
 
-      <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $PRICE</a>
-      <p class="cta-note">One-time purchase &middot; macOS &middot; Universal (Apple Silicon + Intel)</p>
+      <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
+      <p class="cta-note">One-time purchase &middot; macOS &middot; Apple Silicon + Intel &middot; free updates forever</p>
     </header>
 
     <!-- ─── DEMO SLOT ─────────────────────────────────────────────── -->
     <div class="demo-slot">
       <div class="demo-frame">
-        <!-- Replace with product screenshot: <img src="/assets/demo-poster.png" alt="SymbolSweep status panel and dev scan view"> -->
+        <!-- SWAP: <img src="/assets/demo-poster.png" alt="SymbolSweep popup and dev panel"> -->
         <span class="demo-placeholder">Product screenshot</span>
       </div>
     </div>
 
-    <!-- ─── ORIGIN HOOK ───────────────────────────────────────────── -->
-    <div class="origin">
-      <p>Built because <code>coresymbolicationd</code>&mdash;a hidden macOS cache&mdash;<strong>quietly grew to 85&nbsp;GB and corrupted a Mac.</strong> SymbolSweep keeps that from happening to you, automatically.</p>
-    </div>
-
-    <!-- ─── DIFFERENTIATORS ───────────────────────────────────────── -->
+    <!-- ─── THREE PILLARS ─────────────────────────────────────────── -->
     <section>
-      <h2 class="section-title">Why SymbolSweep</h2>
       <div class="cards">
         <div class="card">
-          <h3>Honest</h3>
-          <p>Shows your real disk space, always. When your disk is low from things it can&rsquo;t clean&mdash;snapshots, system files&mdash;it tells you plainly and points you to the right place. It never fakes a health score to sell you.</p>
+          <h3>Safe</h3>
+          <p>Deletes go to Trash, not oblivion. Confirms before anything permanent. Never touches your databases, shipped builds, or undeployed work.</p>
         </div>
         <div class="card">
-          <h3>Safe</h3>
-          <p>Everything recoverable. Deletes move to Trash, not oblivion. It confirms before anything permanent, and won&rsquo;t touch anything you&rsquo;d regret&mdash;your databases, your shipped builds, your undeployed work.</p>
+          <h3>Honest</h3>
+          <p>Shows your real disk space, always. When your disk is low from things it can&rsquo;t clean&mdash;snapshots, system files&mdash;it tells you plainly instead of faking a health score.</p>
         </div>
         <div class="card">
           <h3>Dev-native</h3>
-          <p>Understands your stack. Rust <code>target</code> dirs, <code>node_modules</code>, Xcode DerivedData, pnpm stores&mdash;it knows what&rsquo;s safe to delete, what costs a rebuild, and what needs your judgment. It shows you, tier by tier.</p>
+          <p>Understands Rust targets, <code>node_modules</code>, DerivedData, package caches. Knows what&rsquo;s safe, what costs a rebuild, and what needs your call&mdash;tier by tier.</p>
         </div>
       </div>
     </section>
@@ -72,23 +66,24 @@
     <section>
       <h2 class="section-title">How it works</h2>
       <ol class="steps">
-        <li>It watches the caches that balloon&mdash;quietly, from your menu bar.</li>
-        <li>Reclaim space with one click for safe caches, or review build artifacts tier by tier.</li>
-        <li>Honest about what it freed, honest about what&rsquo;s beyond its reach.</li>
+        <li>Watches the caches that balloon&mdash;quietly, from your menu bar.</li>
+        <li>Reclaim safe caches with one click, or review artifacts tier by tier.</li>
+        <li>Honest about what it freed and what&rsquo;s beyond its reach.</li>
       </ol>
     </section>
 
+    <!-- ─── FOUNDER NOTE ──────────────────────────────────────────── -->
+    <p class="founder-note">Built after a runaway macOS cache filled a disk and bricked a Mac. SymbolSweep keeps that from happening to you.</p>
+
     <!-- ─── FINAL CTA ─────────────────────────────────────────────── -->
     <section class="final-cta">
-      <h2>Stop losing disk space to build artifacts.</h2>
-      <p>SymbolSweep sits in your menu bar and handles it.</p>
-      <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $PRICE</a>
-      <p class="trust-line">Runs entirely on your Mac. Nothing leaves your machine. No account, no telemetry.</p>
+      <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
+      <p class="trust-line">Runs entirely on your Mac. No account, no telemetry, nothing leaves your machine.</p>
     </section>
 
     <!-- ─── FOOTER ────────────────────────────────────────────────── -->
     <footer class="site-footer">
-      <div class="footer-broom" role="img" aria-label="SymbolSweep"></div>
+      <img class="footer-icon" src="/assets/app-icon.png" alt="" width="16" height="16">
       <span>SymbolSweep</span>
       <a href="/privacy.html">Privacy</a>
       <a href="mailto:hello@symbolsweep.app">Contact</a>

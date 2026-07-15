@@ -63,7 +63,7 @@ code {
 
 /* ─── Section shared ─────────────────────────────────────────────────── */
 section {
-  margin-bottom: 56px;
+  margin-bottom: 40px;
 }
 
 .section-title {
@@ -72,13 +72,13 @@ section {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 /* ─── Hero ────────────────────────────────────────────────────────────── */
 .hero {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
 }
 
 .logo-lockup {
@@ -89,20 +89,11 @@ section {
   margin-bottom: 24px;
 }
 
-/* Broom icon rendered via CSS mask — same technique as the app */
-.logo-broom {
+.logo-icon {
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  background-color: var(--accent);
-  -webkit-mask-image: url('/assets/broom-icon@2x.png');
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: url('/assets/broom-icon@2x.png');
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
+  border-radius: 6px;
 }
 
 .logo-wordmark {
@@ -158,7 +149,7 @@ section {
 
 /* ─── Demo slot ──────────────────────────────────────────────────────── */
 .demo-slot {
-  margin-bottom: 48px;
+  margin-bottom: 36px;
 }
 
 .demo-frame {
@@ -187,39 +178,13 @@ section {
   letter-spacing: 0.04em;
 }
 
-/* ─── Origin hook ────────────────────────────────────────────────────── */
-.origin {
-  margin-bottom: 48px;
-  padding: 20px 24px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  position: relative;
-}
-
-.origin::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 16px;
-  right: 16px;
-  height: 2px;
-  background: var(--accent);
-}
-
-.origin p {
-  font-size: 15px;
-  color: var(--text-dim);
-  line-height: 1.6;
-}
-
-.origin strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.origin code {
+/* ─── Founder note ───────────────────────────────────────────────────── */
+.founder-note {
+  margin-bottom: 36px;
   font-size: 13px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  text-align: center;
 }
 
 /* ─── Differentiator cards ───────────────────────────────────────────── */
@@ -232,21 +197,11 @@ section {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  position: relative;
-}
-
-.card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 12px;
-  right: 12px;
-  height: 2px;
-  background: var(--accent);
 }
 
 .card h3 {
@@ -269,7 +224,7 @@ section {
   counter-reset: step;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .steps li {
@@ -305,7 +260,7 @@ section {
 /* ─── Final CTA ──────────────────────────────────────────────────────── */
 .final-cta {
   text-align: center;
-  padding: 48px 0 0;
+  padding: 36px 0 0;
   border-top: 1px solid var(--border);
   margin-bottom: 0;
 }
@@ -331,7 +286,7 @@ section {
 
 /* ─── Footer ─────────────────────────────────────────────────────────── */
 .site-footer {
-  padding-top: 48px;
+  padding-top: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -349,20 +304,12 @@ section {
   color: var(--accent);
 }
 
-.footer-broom {
+.footer-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  background-color: var(--accent);
   opacity: 0.5;
-  -webkit-mask-image: url('/assets/broom-icon.png');
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: url('/assets/broom-icon.png');
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
+  border-radius: 3px;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────── */
@@ -397,7 +344,7 @@ section {
     gap: 10px;
   }
 
-  .logo-broom {
+  .logo-icon {
     width: 24px;
     height: 24px;
   }
