@@ -1223,7 +1223,12 @@ pub fn purge_ss_trash() -> PurgeResult {
             // Already gone (user emptied Trash manually) — drop from manifest
             continue;
         }
-        match fs::remove_dir_all(path) {
+        let remove_result = if path.is_dir() {
+            fs::remove_dir_all(path)
+        } else {
+            fs::remove_file(path)
+        };
+        match remove_result {
             Ok(()) => {
                 purged_count += 1;
                 bytes_freed += item.size_bytes;

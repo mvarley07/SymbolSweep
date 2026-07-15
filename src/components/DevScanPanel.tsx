@@ -183,14 +183,17 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     setPurging(true);
     try {
       const res = await invoke<PurgeResult>('purge_ss_trash');
-      if (res.purged_count > 0) {
+      if (res.purged_count > 0 && res.errors.length > 0) {
+        showResult(`Freed ${res.bytes_freed_display} — ${res.errors.length} item(s) failed`);
+      } else if (res.purged_count > 0) {
         showResult(`Freed ${res.bytes_freed_display} from Trash (${res.purged_count} items)`);
       } else if (res.errors.length > 0) {
         showResult(`Error: ${res.errors[0]}`);
       } else {
         showResult('Trash already empty');
       }
-      setTrashInfo(null);
+      // Refresh instead of clearing — shows remaining items if partial failure
+      refreshTrashInfo();
     } catch {
       showResult('Error emptying Trash');
     } finally {

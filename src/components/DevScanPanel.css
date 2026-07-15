@@ -665,6 +665,13 @@
   border: 1px solid rgba(251, 191, 36, 0.15);
 }
 
+.confirm-strip.tier-purge {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.15);
+  padding: var(--space-sm) var(--space-md);
+  flex-wrap: wrap;
+}
+
 .confirm-text {
   flex: 1;
   color: var(--text-secondary);
