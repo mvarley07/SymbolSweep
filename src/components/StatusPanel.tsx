@@ -322,10 +322,10 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         label={
           appStatus.clean_state !== 'Clean'
             ? 'to clean'
-            : appStatus.show_gap_banner
-              ? 'Nothing to clean'
-              : appStatus.dev_total_bytes > 0
-                ? 'Caches clean'
+            : appStatus.dev_total_bytes > 0
+              ? 'Caches clean'
+              : appStatus.show_gap_banner
+                ? 'Nothing to clean'
                 : 'All clean'
         }
       />
