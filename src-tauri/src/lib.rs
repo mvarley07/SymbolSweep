@@ -41,6 +41,18 @@ impl Default for AppState {
     }
 }
 
+/// RAII guard that clears `dev_scan_in_progress` on drop.
+/// Prevents the AtomicBool from staying true forever if a panic or early
+/// return occurs between the compare_exchange(false→true) and the manual
+/// store(false). Covers the same silent-failure class as the autoclean fix.
+struct DevScanGuard(Arc<std::sync::atomic::AtomicBool>);
+
+impl Drop for DevScanGuard {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 // ============================================================================
 // Tauri Commands - Cache Monitoring
 // ============================================================================
@@ -179,6 +191,7 @@ async fn scan_dev(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> R
             .clone()
             .ok_or_else(|| "Scan already in progress".to_string());
     }
+    let _guard = DevScanGuard(Arc::clone(&state.dev_scan_in_progress));
 
     let roots = {
         let s = state.settings.lock().unwrap();
@@ -189,11 +202,6 @@ async fn scan_dev(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> R
     let scan_result = tauri::async_runtime::spawn_blocking(move || {
         dev_scanner::scan_dev_artifacts(&roots)
     }).await;
-
-    // Release scan lock regardless of result
-    state
-        .dev_scan_in_progress
-        .store(false, Ordering::SeqCst);
 
     let result = scan_result.map_err(|e| e.to_string())?;
 
@@ -537,6 +545,7 @@ pub fn run() {
                     )
                     .is_ok()
                 {
+                    let _guard = DevScanGuard(Arc::clone(&dev_in_progress_init));
                     let roots = {
                         let s = settings_init.lock().unwrap();
                         s.dev_scan_roots.clone()
@@ -563,7 +572,6 @@ pub fn run() {
                         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
                         std::sync::atomic::Ordering::SeqCst,
                     );
-                    dev_in_progress_init.store(false, std::sync::atomic::Ordering::SeqCst);
                 }
             });
 
@@ -814,6 +822,7 @@ pub fn run() {
                         let dev_scan_epoch_bg = Arc::clone(&dev_scan_epoch_show);
 
                         std::thread::spawn(move || {
+                            let _guard = DevScanGuard(dev_in_progress_bg);
                             let roots = {
                                 let s = settings_bg.lock().unwrap();
                                 s.dev_scan_roots.clone()
@@ -833,7 +842,6 @@ pub fn run() {
                                     .as_secs(),
                                 std::sync::atomic::Ordering::SeqCst,
                             );
-                            dev_in_progress_bg.store(false, std::sync::atomic::Ordering::SeqCst);
 
                             // Recompute and emit updated status
                             let cache_status = {
