@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SymbolSweep — Reclaim your dev disk space, safely</title>
+  <title>SymbolSweep — Reclaim your dev disk space</title>
   <meta name="description" content="SymbolSweep finds the build caches, node_modules, and system junk eating your Mac, shows you exactly what's safe to delete tier by tier, and keeps runaway caches in check automatically.">
 
   <!-- OG / Social -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="SymbolSweep — Reclaim your dev disk space, safely">
+  <meta property="og:title" content="SymbolSweep — Reclaim your dev disk space">
   <meta property="og:description" content="Finds the build caches, node_modules, and system junk eating your Mac. Shows you exactly what's safe to delete tier by tier.">
   <meta property="og:image" content="/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SymbolSweep — Reclaim your dev disk space, safely">
+  <meta name="twitter:title" content="SymbolSweep — Reclaim your dev disk space">
   <meta name="twitter:description" content="Finds the build caches, node_modules, and system junk eating your Mac. Shows you exactly what's safe to delete tier by tier.">
   <meta name="twitter:image" content="/assets/og-image.png">
 
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -27,15 +30,14 @@
     <!-- ─── HERO ──────────────────────────────────────────────────── -->
     <header class="hero">
       <div class="logo-lockup">
-        <img class="logo-icon" src="/assets/app-icon.png" alt="SymbolSweep" width="32" height="32">
-        <span class="logo-wordmark">SymbolSweep</span>
+        <span class="logo-wordmark"><span class="wm-sym">Symbol</span><svg class="wm-broom" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 4L12 12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12L4 20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12L7 21" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M12 12L2.5 15.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>Sweep</span>
       </div>
 
-      <h1>Reclaim your dev disk space&thinsp;&mdash;&thinsp;safely.</h1>
+      <h1>Reclaim your dev disk space.</h1>
       <p class="sub">SymbolSweep finds the build caches, <code>node_modules</code>, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
 
       <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
-      <p class="cta-note">One-time purchase &middot; macOS &middot; Apple Silicon + Intel &middot; free updates forever</p>
+      <p class="cta-note">One-time purchase, not a subscription.</p>
     </header>
 
     <!-- ─── DEMO SLOT ─────────────────────────────────────────────── -->
@@ -51,15 +53,15 @@
       <div class="cards">
         <div class="card">
           <h3>Safe</h3>
-          <p>Deletes go to Trash, not oblivion. Confirms before anything permanent. Never touches your databases, shipped builds, or undeployed work.</p>
+          <p>Deletes go to Trash. Confirms before anything permanent.</p>
         </div>
         <div class="card">
           <h3>Honest</h3>
-          <p>Shows your real disk space, always. When your disk is low from things it can&rsquo;t clean&mdash;snapshots, system files&mdash;it tells you plainly instead of faking a health score.</p>
+          <p>Real disk numbers, always. When it can&rsquo;t help, it says so&mdash;no fake health scores.</p>
         </div>
         <div class="card">
           <h3>Dev-native</h3>
-          <p>Understands Rust targets, <code>node_modules</code>, DerivedData, package caches. Knows what&rsquo;s safe, what costs a rebuild, and what needs your call&mdash;tier by tier.</p>
+          <p>Knows Rust targets, DerivedData, package caches. What&rsquo;s safe, what costs a rebuild, what needs your call.</p>
         </div>
       </div>
     </section>
@@ -79,17 +81,19 @@
 
     <!-- ─── FINAL CTA ─────────────────────────────────────────────── -->
     <section class="final-cta">
-      <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
       <p class="trust-line">Runs entirely on your Mac. No account, no telemetry, nothing leaves your machine.</p>
+      <a href="#" class="cta-link" data-lemon-url>Get SymbolSweep &mdash; $9 &rarr;</a>
     </section>
 
     <!-- ─── FOOTER ────────────────────────────────────────────────── -->
     <footer class="site-footer">
-      <img class="footer-icon" src="/assets/app-icon.png" alt="" width="16" height="16">
-      <span>SymbolSweep</span>
-      <a href="/privacy.html">Privacy</a>
-      <a href="mailto:hello@symbolsweep.app">Contact</a>
-      <span>&copy; 2026 SymbolSweep</span>
+      <p class="footer-specs">macOS 13+ &middot; Universal binary (Apple&nbsp;Silicon&nbsp;+&nbsp;Intel)</p>
+      <div class="footer-links">
+        <span>SymbolSweep</span>
+        <a href="/privacy.html">Privacy</a>
+        <a href="mailto:hello@symbolsweep.app">Contact</a>
+        <span>&copy; 2026 SymbolSweep</span>
+      </div>
     </footer>
 
   </div>
