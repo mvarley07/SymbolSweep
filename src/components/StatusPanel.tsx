@@ -283,7 +283,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       <div className="status-panel scan-shell" ref={panelRef}>
         {showScanning && (
           <div className="scan-loader">
-            <div className="scan-logo" aria-hidden="true" />
+            <div className="loading-logo" aria-hidden="true" />
           </div>
         )}
       </div>

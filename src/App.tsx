@@ -75,7 +75,7 @@ function App() {
   if (loading) {
     return (
       <div className="app-container">
-        <div className="app-loading">Loading...</div>
+        <div className="app-loading"><div className="loading-logo" aria-hidden="true" /></div>
       </div>
     );
   }

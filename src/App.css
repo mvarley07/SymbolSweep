@@ -247,28 +247,32 @@ a:hover {
   animation: scaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Loading state */
+/* Loading state — pulsing broom logo */
 .app-loading {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: 12px;
 }
 
-.app-loading::after {
-  content: '';
-  width: 22px;
-  height: 22px;
-  border: 2px solid var(--border-medium);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.loading-logo {
+  width: 32px;
+  height: 32px;
+  background-color: var(--accent);
+  -webkit-mask-image: url('/broom-icon@2x.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/broom-icon@2x.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  animation: logo-pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes logo-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
 }
 
 /* Utility classes */
