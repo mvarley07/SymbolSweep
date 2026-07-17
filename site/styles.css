@@ -73,7 +73,7 @@ code {
   padding: 0 24px;
 }
 
-.band--hero    { padding: 64px 0 24px; }
+.band--hero    { padding: 64px 0 56px; }
 .band--demo    { overflow: hidden; }
 .band--pillars { background: var(--surface); padding: 40px 0; }
 .band--steps   { padding: 40px 0; }
@@ -98,14 +98,14 @@ code {
 .logo-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 56px;
 }
 
 .logo-icon {
   display: inline-block;
-  width: 28px;
-  height: 28px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   background-color: var(--accent);
   -webkit-mask-image: url('assets/broom-mark.png');
@@ -144,7 +144,7 @@ code {
   font-size: 17px;
   color: var(--text-dim);
   max-width: 540px;
-  margin: 0 auto 24px;
+  margin: 0 auto 40px;
   line-height: 1.55;
 }
 
@@ -371,7 +371,16 @@ code {
 
   .band--hero {
     padding-top: 40px;
-    padding-bottom: 16px;
+    padding-bottom: 40px;
+  }
+
+  .logo-lockup {
+    margin-bottom: 40px;
+  }
+
+  .logo-icon {
+    width: 13px;
+    height: 13px;
   }
 
   .band--pillars,
