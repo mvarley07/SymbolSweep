@@ -282,11 +282,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     return (
       <div className="status-panel scan-shell" ref={panelRef}>
         {showScanning && (
-          <div className="scan-logo-container">
-            <div className="scan-logo-broom" aria-hidden="true" />
-            <span className="scan-logo-label">
-              Scanning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
-            </span>
+          <div className="scan-loader">
+            <div className="scan-logo" aria-hidden="true" />
           </div>
         )}
       </div>
