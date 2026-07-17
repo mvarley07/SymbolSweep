@@ -305,7 +305,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       <header className="panel-header">
         <div className="header-logo">
           <div className="logo-icon" aria-hidden="true" />
-          <span className="logo-text">SymbolSweep</span>
+          <span className="logo-text"><span className="logo-sym">Symbol</span>Sweep</span>
         </div>
         <button className="settings-btn" onClick={onSettingsClick} title="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

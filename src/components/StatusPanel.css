@@ -41,7 +41,11 @@
   font-weight: 700;
   color: var(--accent);
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+}
+
+.logo-sym {
+  color: var(--text-primary);
 }
 
 .settings-btn {

@@ -390,6 +390,10 @@ select option {
   letter-spacing: -0.02em;
 }
 
+.footer-logo-text .logo-sym {
+  color: var(--text-primary);
+}
+
 .tap-hint {
   color: var(--accent);
   font-weight: 500;

@@ -97,14 +97,6 @@ section {
   color: var(--text);
 }
 
-.wm-broom {
-  display: inline-block;
-  width: 0.75em;
-  height: 0.75em;
-  vertical-align: -0.08em;
-  color: var(--accent);
-  margin: 0 0.04em;
-}
 
 .hero h1 {
   font-size: 32px;

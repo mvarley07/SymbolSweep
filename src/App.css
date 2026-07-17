@@ -82,7 +82,7 @@
   --btn-weight: 600;
 
   /* Typography */
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
   font-size: var(--font-base);
   line-height: 1.4;
   font-weight: 400;

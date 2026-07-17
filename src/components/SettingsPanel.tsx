@@ -381,7 +381,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
       <footer className="settings-footer" onClick={handleVersionTap}>
         <div className="footer-logo">
           <div className="footer-logo-icon" aria-hidden="true" />
-          <span className="footer-logo-text">SymbolSweep</span>
+          <span className="footer-logo-text"><span className="logo-sym">Symbol</span>Sweep</span>
         </div>
       </footer>
     </div>
