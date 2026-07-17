@@ -144,18 +144,15 @@ section {
 /* ─── Demo slot ──────────────────────────────────────────────────────── */
 .demo-slot {
   margin-bottom: 28px;
+  text-align: center;
 }
 
 .demo-frame {
-  width: 100%;
-  aspect-ratio: 16 / 10;
+  display: inline-flex;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .demo-frame img {
@@ -440,7 +437,7 @@ section {
 /* ── nav (one per view) ── */
 .ssv-nav { display:flex; align-items:center; gap:7px; height:37px; }
 .ssv-nav svg { flex-shrink:0; }
-.ssv-broom { width:16px; height:16px; border-radius:3.5px; }
+.ssv-broom { width:16px; height:16px; border-radius:3.5px; flex-shrink:0; object-fit:contain; display:block; }
 .ssv-mark { font-size:12.5px; font-weight:700; letter-spacing:-0.02em; color:var(--t1); }
 .ssv-mark em { font-style:normal; color:var(--a); }
 .ssv-navbtn {
