@@ -97,6 +97,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
 
                     let _ = window.show();
                     let _ = window.set_focus();
+                    let _ = tray.app_handle().emit("window-shown", ());
                 }
             }
         })
@@ -109,6 +110,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
                     std::thread::sleep(std::time::Duration::from_millis(10));
                     let _ = window.show();
                     let _ = window.set_focus();
+                    let _ = app.emit("window-shown", ());
                 }
             }
             "clean" => {

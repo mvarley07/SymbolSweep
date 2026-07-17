@@ -7,7 +7,7 @@ mod scheduler;
 mod tray;
 
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, log_deletion, CleanResult};
@@ -26,6 +26,8 @@ pub struct AppState {
     pub dev_scan_result: Arc<Mutex<Option<DevScanResult>>>,
     /// Guard to prevent concurrent dev scans
     pub dev_scan_in_progress: Arc<std::sync::atomic::AtomicBool>,
+    /// Epoch seconds of the last completed dev artifact scan
+    pub last_dev_scan_epoch: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Default for AppState {
@@ -34,6 +36,7 @@ impl Default for AppState {
             settings: Arc::new(Mutex::new(Settings::load())),
             dev_scan_result: Arc::new(Mutex::new(None)),
             dev_scan_in_progress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            last_dev_scan_epoch: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 }
@@ -194,11 +197,15 @@ async fn scan_dev(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> R
 
     let result = scan_result.map_err(|e| e.to_string())?;
 
-    // Cache the result
+    // Cache the result and record scan timestamp
     {
         let mut cached = state.dev_scan_result.lock().unwrap();
         *cached = Some(result.clone());
     }
+    state.last_dev_scan_epoch.store(
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
+        Ordering::SeqCst,
+    );
 
     // Compute unified status and update tray + emit
     let cache_status = {
@@ -470,6 +477,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
+                let _ = app.emit("window-shown", ());
             }
         }))
         .plugin(tauri_plugin_positioner::init())
@@ -502,6 +510,7 @@ pub fn run() {
             let settings_init = Arc::clone(&state.settings);
             let dev_result_init = Arc::clone(&state.dev_scan_result);
             let dev_in_progress_init = Arc::clone(&state.dev_scan_in_progress);
+            let dev_scan_epoch_init = Arc::clone(&state.last_dev_scan_epoch);
             std::thread::spawn(move || {
                 // Phase 1: Quick — get coresymbolicationd cache status
                 let initial_cache = {
@@ -550,6 +559,10 @@ pub fn run() {
                     // Also emit full artifact list for DevScanPanel
                     let _ = app_handle_init.emit("dev-scan-ready", &dev_result);
 
+                    dev_scan_epoch_init.store(
+                        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
+                        std::sync::atomic::Ordering::SeqCst,
+                    );
                     dev_in_progress_init.store(false, std::sync::atomic::Ordering::SeqCst);
                 }
             });
@@ -746,6 +759,103 @@ pub fn run() {
                 }
             });
 
+            // Refresh status on window show — cache always, dev scan if stale (>5 min)
+            {
+                let app_handle = app.handle().clone();
+                let state = app.state::<AppState>();
+                let settings_show = Arc::clone(&state.settings);
+                let dev_result_show = Arc::clone(&state.dev_scan_result);
+                let dev_in_progress_show = Arc::clone(&state.dev_scan_in_progress);
+                let dev_scan_epoch_show = Arc::clone(&state.last_dev_scan_epoch);
+
+                app.listen("window-shown", move |_event| {
+                    // Always: refresh cache + recompute + emit (instant)
+                    let cache_status = {
+                        let s = settings_show.lock().unwrap();
+                        if s.debug_mode {
+                            get_simulated_status(s.debug_simulated_size)
+                        } else {
+                            get_cache_status()
+                        }
+                    };
+                    let (dev_total, dev_scan_complete) = dev_result_show
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .map(|r| (r.total_bytes, true))
+                        .unwrap_or((0, false));
+                    let failures = settings_show.lock().unwrap().consecutive_autoclean_failures;
+                    let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete, failures);
+                    let _ = update_tray(&app_handle, &app_status);
+                    let _ = app_handle.emit("app-status-update", &app_status);
+
+                    // Conditionally: re-run dev scan if stale (>5 minutes)
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    let last_scan = dev_scan_epoch_show.load(std::sync::atomic::Ordering::SeqCst);
+                    let stale = now.saturating_sub(last_scan) >= 300; // 5 minutes
+
+                    if stale
+                        && dev_in_progress_show
+                            .compare_exchange(
+                                false,
+                                true,
+                                std::sync::atomic::Ordering::SeqCst,
+                                std::sync::atomic::Ordering::SeqCst,
+                            )
+                            .is_ok()
+                    {
+                        let app_handle_bg = app_handle.clone();
+                        let settings_bg = Arc::clone(&settings_show);
+                        let dev_result_bg = Arc::clone(&dev_result_show);
+                        let dev_in_progress_bg = Arc::clone(&dev_in_progress_show);
+                        let dev_scan_epoch_bg = Arc::clone(&dev_scan_epoch_show);
+
+                        std::thread::spawn(move || {
+                            let roots = {
+                                let s = settings_bg.lock().unwrap();
+                                s.dev_scan_roots.clone()
+                            };
+                            let result = dev_scanner::scan_dev_artifacts(&roots);
+                            let dev_total = result.total_bytes;
+
+                            // Cache result + update epoch
+                            {
+                                let mut cached = dev_result_bg.lock().unwrap();
+                                *cached = Some(result.clone());
+                            }
+                            dev_scan_epoch_bg.store(
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                                std::sync::atomic::Ordering::SeqCst,
+                            );
+                            dev_in_progress_bg.store(false, std::sync::atomic::Ordering::SeqCst);
+
+                            // Recompute and emit updated status
+                            let cache_status = {
+                                let s = settings_bg.lock().unwrap();
+                                if s.debug_mode {
+                                    get_simulated_status(s.debug_simulated_size)
+                                } else {
+                                    get_cache_status()
+                                }
+                            };
+                            let failures = settings_bg.lock().unwrap().consecutive_autoclean_failures;
+                            let app_status = compute_app_status(
+                                &cache_status, dev_total, true, failures,
+                            );
+                            let _ = update_tray(&app_handle_bg, &app_status);
+                            let _ = app_handle_bg.emit("app-status-update", &app_status);
+                            let _ = app_handle_bg.emit("dev-scan-ready", &result);
+                        });
+                    }
+                });
+            }
+
             // Background update check (30s after launch, then every 6 hours)
             let app_handle_updater = app.handle().clone();
             std::thread::spawn(move || {
@@ -865,6 +975,7 @@ pub fn run() {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                     let _ = window.show();
                     let _ = window.set_focus();
+                    let _ = app.emit("window-shown", ());
                 }
             }
         });
