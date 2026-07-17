@@ -47,6 +47,9 @@ pub struct Settings {
     /// Bytes freed in the last real clean (for UI summary line)
     #[serde(default)]
     pub last_real_clean_freed: u64,
+    /// Consecutive autoclean failure count (persisted across restarts)
+    #[serde(default)]
+    pub consecutive_autoclean_failures: u32,
 }
 
 fn default_dev_scan_roots() -> Vec<String> {
@@ -71,6 +74,7 @@ impl Default for Settings {
             dev_scan_roots: default_dev_scan_roots(),
             last_real_clean_timestamp: 0,
             last_real_clean_freed: 0,
+            consecutive_autoclean_failures: 0,
         }
     }
 }
@@ -125,12 +129,20 @@ impl Settings {
 
     /// Update clean timestamps. Always updates scheduling timestamp.
     /// Only updates the "real clean" display fields when bytes_freed > 0.
+    /// Resets the autoclean failure counter — any successful clean clears the alarm.
     pub fn record_clean(&mut self, bytes_freed: u64) {
         self.last_clean_timestamp = current_timestamp();
+        self.consecutive_autoclean_failures = 0;
         if bytes_freed > 0 {
             self.last_real_clean_timestamp = current_timestamp();
             self.last_real_clean_freed = bytes_freed;
         }
+        let _ = self.save();
+    }
+
+    /// Record an autoclean failure (increment counter, persist).
+    pub fn record_autoclean_failure(&mut self) {
+        self.consecutive_autoclean_failures += 1;
         let _ = self.save();
     }
 }

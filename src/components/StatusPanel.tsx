@@ -42,6 +42,7 @@ function StatusIndicator({ state, value, label }: StatusIndicatorProps) {
     Clean: { label: 'All clean' },
     Moderate: { label: 'Moderate' },
     Heavy: { label: 'Heavy' },
+    Runaway: { label: 'Cache runaway' },
   };
 
   const config = stateConfig[state];
@@ -312,18 +313,24 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         </button>
       </header>
 
-      {/* Hero -- reclaimable total */}
+      {/* Hero -- reclaimable total (or cache-specific for Runaway) */}
       <StatusIndicator
         state={appStatus.clean_state}
-        value={appStatus.clean_state === 'Clean' ? null : appStatus.reclaimable_display}
+        value={
+          appStatus.clean_state === 'Clean' ? null
+            : appStatus.clean_state === 'Runaway' ? appStatus.cache.size_display
+            : appStatus.reclaimable_display
+        }
         label={
-          appStatus.clean_state !== 'Clean'
-            ? 'to clean'
-            : appStatus.dev_total_bytes > 0
-              ? 'Caches clean'
-              : appStatus.show_gap_banner
-                ? 'Nothing to clean'
-                : 'All clean'
+          appStatus.clean_state === 'Runaway'
+            ? 'cache runaway'
+            : appStatus.clean_state !== 'Clean'
+              ? 'to clean'
+              : appStatus.dev_total_bytes > 0
+                ? 'Caches clean'
+                : appStatus.show_gap_banner
+                  ? 'Nothing to clean'
+                  : 'All clean'
         }
       />
 
@@ -359,6 +366,13 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             )}
             {' '}
             <a className="gap-link" onClick={() => invoke('open_storage_settings')}>Manage Storage &rsaquo;</a>
+          </div>
+        )}
+
+        {appStatus.autoclean_failing && (
+          <div className="autoclean-fail-banner">
+            <span className="fail-icon">&#9888;</span>
+            <span>Autoclean is failing repeatedly. Try a manual clean or check disk permissions.</span>
           </div>
         )}
 

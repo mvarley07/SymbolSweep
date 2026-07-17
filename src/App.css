@@ -26,9 +26,13 @@
   --status-critical: #f87171;
   --status-critical-glow: rgba(248, 113, 113, 0.18);
 
-  /* Heavy clean-state — warning yellow (own token, independent of REINSTALL tier) */
-  --heavy-color: #fbbf24;
-  --heavy-hover: #e5ad1e;
+  /* Moderate clean-state — yellow (own token, not the teal accent) */
+  --moderate-color: #eab308;
+  --moderate-hover: #d4a017;
+
+  /* Heavy clean-state — red (own token, same hex as REVIEW tier but separate so they can diverge) */
+  --heavy-color: #f87171;
+  --heavy-hover: #ef4444;
 
   /* Surface colors */
   --bg-primary: rgba(18, 18, 22, 0.97);

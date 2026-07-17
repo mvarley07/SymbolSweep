@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
-use cache_cleaner::{clean_cache, get_log_file_path, CleanResult};
+use cache_cleaner::{clean_cache, get_log_file_path, log_deletion, CleanResult};
 use cache_monitor::{
     compute_app_status, get_cache_status, get_combined_cache_status, get_simulated_status,
     is_daemon_running, AppStatus, CacheStatus,
@@ -76,7 +76,8 @@ fn get_app_status(state: tauri::State<AppState>) -> AppStatus {
         .ok()
         .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
         .unwrap_or((0, false));
-    compute_app_status(&cache, dev_total, dev_scan_complete)
+    let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
+    compute_app_status(&cache, dev_total, dev_scan_complete, failures)
 }
 
 /// Check if coresymbolicationd daemon is running
@@ -119,7 +120,8 @@ async fn clean(app: tauri::AppHandle, state: tauri::State<'_, AppState>, dry_run
             .ok()
             .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
             .unwrap_or((0, false));
-        let app_status = compute_app_status(&cache, dev_total, dev_scan_complete);
+        let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
+        let app_status = compute_app_status(&cache, dev_total, dev_scan_complete, failures);
         let _ = update_tray(&app, &app_status);
         let _ = app.emit("app-status-update", &app_status);
     }
@@ -207,7 +209,8 @@ async fn scan_dev(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> R
             get_cache_status()
         }
     };
-    let app_status = compute_app_status(&cache_status, result.total_bytes, true);
+    let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
+    let app_status = compute_app_status(&cache_status, result.total_bytes, true, failures);
     let _ = update_tray(&app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -287,7 +290,8 @@ async fn delete_dev_artifacts_inner(
             get_cache_status()
         }
     };
-    let app_status = compute_app_status(&cache_status, new_scan.total_bytes, true);
+    let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
+    let app_status = compute_app_status(&cache_status, new_scan.total_bytes, true, failures);
     let _ = update_tray(app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -334,7 +338,9 @@ fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, mut set
         .ok()
         .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
         .unwrap_or((0, false));
-    let app_status = compute_app_status(&cache, dev_total, dev_scan_complete);
+    let failures = current.consecutive_autoclean_failures;
+    drop(current); // release lock before compute
+    let app_status = compute_app_status(&cache, dev_total, dev_scan_complete, failures);
     let _ = update_tray(&app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -507,7 +513,8 @@ pub fn run() {
                     }
                 };
                 // Emit unified AppStatus (dev_total=0, scan not yet complete)
-                let app_status = compute_app_status(&initial_cache, 0, false);
+                let failures = settings_init.lock().unwrap().consecutive_autoclean_failures;
+                let app_status = compute_app_status(&initial_cache, 0, false, failures);
                 let _ = update_tray(&app_handle_init, &app_status);
                 let _ = app_handle_init.emit("app-status-update", &app_status);
 
@@ -535,7 +542,8 @@ pub fn run() {
                     }
 
                     // Re-compute and emit unified AppStatus with dev total
-                    let app_status = compute_app_status(&initial_cache, dev_total, true);
+                    let failures = settings_init.lock().unwrap().consecutive_autoclean_failures;
+                    let app_status = compute_app_status(&initial_cache, dev_total, true, failures);
                     let _ = update_tray(&app_handle_init, &app_status);
                     let _ = app_handle_init.emit("app-status-update", &app_status);
 
@@ -565,10 +573,11 @@ pub fn run() {
             let dev_result_monitor = Arc::clone(&state.dev_scan_result);
 
             std::thread::spawn(move || {
-                // Track if we've already notified for warning/critical this session
-                // Reset when state drops back to normal
+                // Track if we've already notified for each escalation level this session
+                // Reset when state drops back to clean
                 let mut warning_notified = false;
                 let mut critical_notified = false;
+                let mut runaway_notified = false;
 
                 loop {
                     // Get monitoring interval (read before sleep)
@@ -597,7 +606,8 @@ pub fn run() {
                         .as_ref()
                         .map(|r| (r.total_bytes, true))
                         .unwrap_or((0, false));
-                    let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete);
+                    let failures = settings.lock().unwrap().consecutive_autoclean_failures;
+                    let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete, failures);
                     let _ = update_tray(&app_handle, &app_status);
                     let _ = app_handle.emit("app-status-update", &app_status);
 
@@ -622,32 +632,65 @@ pub fn run() {
                         let show_notifications = settings.lock().unwrap().show_notifications;
 
                         // Perform clean
-                        if let Ok(result) = clean_cache(false) {
-                            // Update last clean timestamp and reset debug size
-                            if let Ok(mut s) = settings.lock() {
-                                s.record_clean(result.bytes_freed);
-                                if s.debug_mode {
-                                    s.debug_simulated_size = 0;
-                                    let _ = s.save();
-                                    let _ = app_handle.emit("settings-updated", s.clone());
+                        match clean_cache(false) {
+                            Ok(result) => {
+                                // Update last clean timestamp and reset debug size
+                                // (record_clean also resets consecutive_autoclean_failures)
+                                if let Ok(mut s) = settings.lock() {
+                                    s.record_clean(result.bytes_freed);
+                                    if s.debug_mode {
+                                        s.debug_simulated_size = 0;
+                                        let _ = s.save();
+                                        let _ = app_handle.emit("settings-updated", s.clone());
+                                    }
+                                }
+
+                                // Re-compute and emit unified AppStatus after clean
+                                let clean_cache = get_cache_status();
+                                let failures = settings.lock().unwrap().consecutive_autoclean_failures;
+                                let post_clean_status = compute_app_status(&clean_cache, dev_total, dev_scan_complete, failures);
+                                let _ = update_tray(&app_handle, &post_clean_status);
+                                let _ = app_handle.emit("app-status-update", &post_clean_status);
+
+                                // Emit clean result
+                                let _ = app_handle.emit("auto-clean-completed", &result);
+
+                                if show_notifications && result.bytes_freed > 0 {
+                                    send_notification(
+                                        &app_handle,
+                                        "SymbolSweep",
+                                        &format!("Cleaned {} of cache", result.bytes_freed_display),
+                                    );
                                 }
                             }
+                            Err(e) => {
+                                // Log every failure
+                                log_deletion(&format!("AUTOCLEAN FAILED: {}", e));
 
-                            // Re-compute and emit unified AppStatus after clean
-                            let clean_cache = get_cache_status();
-                            let post_clean_status = compute_app_status(&clean_cache, dev_total, dev_scan_complete);
-                            let _ = update_tray(&app_handle, &post_clean_status);
-                            let _ = app_handle.emit("app-status-update", &post_clean_status);
+                                // Track consecutive failures (only increments on real attempts)
+                                let failures = if let Ok(mut s) = settings.lock() {
+                                    s.record_autoclean_failure();
+                                    s.consecutive_autoclean_failures
+                                } else {
+                                    0
+                                };
 
-                            // Emit clean result
-                            let _ = app_handle.emit("auto-clean-completed", &result);
+                                // After 3 consecutive failures, surface to the user
+                                if failures >= 3 {
+                                    let fail_status = compute_app_status(
+                                        &cache_status, dev_total, dev_scan_complete, failures,
+                                    );
+                                    let _ = update_tray(&app_handle, &fail_status);
+                                    let _ = app_handle.emit("app-status-update", &fail_status);
 
-                            if show_notifications && result.bytes_freed > 0 {
-                                send_notification(
-                                    &app_handle,
-                                    "SymbolSweep",
-                                    &format!("Cleaned {} of cache", result.bytes_freed_display),
-                                );
+                                    if show_notifications {
+                                        send_notification(
+                                            &app_handle,
+                                            "SymbolSweep",
+                                            "Autoclean has failed repeatedly \u{2014} cache is unmanaged",
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
@@ -677,6 +720,19 @@ pub fn run() {
                                     critical_notified = true;
                                 }
                             }
+                            cache_monitor::CleanState::Runaway => {
+                                if !runaway_notified {
+                                    send_notification(
+                                        &app_handle,
+                                        "SymbolSweep",
+                                        &format!(
+                                            "Symbolication cache has grown to {} \u{2014} clean now",
+                                            app_status.cache.size_display
+                                        ),
+                                    );
+                                    runaway_notified = true;
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -685,6 +741,7 @@ pub fn run() {
                     if matches!(app_status.clean_state, cache_monitor::CleanState::Clean) {
                         warning_notified = false;
                         critical_notified = false;
+                        runaway_notified = false;
                     }
                 }
             });

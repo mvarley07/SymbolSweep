@@ -320,25 +320,25 @@ select option {
 }
 
 .debug-btn.moderate:hover:not(:disabled):not(.active) {
-  background: var(--status-warning);
+  background: var(--moderate-color);
   color: rgba(0, 0, 0, 0.85);
 }
 
 .debug-btn.moderate.active {
-  background: var(--status-warning);
-  border-color: var(--status-warning);
+  background: var(--moderate-color);
+  border-color: var(--moderate-color);
   color: rgba(0, 0, 0, 0.85);
 }
 
 .debug-btn.heavy:hover:not(:disabled):not(.active) {
   background: var(--heavy-color);
-  color: rgba(0, 0, 0, 0.85);
+  color: white;
 }
 
 .debug-btn.heavy.active {
   background: var(--heavy-color);
   border-color: var(--heavy-color);
-  color: rgba(0, 0, 0, 0.85);
+  color: white;
 }
 
 .debug-btn:disabled {

@@ -107,7 +107,7 @@ fn get_log_path() -> PathBuf {
         .join("deletions.log")
 }
 
-fn log_deletion(message: &str) {
+pub fn log_deletion(message: &str) {
     let log_path = get_log_path();
 
     // Ensure log directory exists

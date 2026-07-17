@@ -151,6 +151,10 @@ pub fn update_tray<R: Runtime>(
                     // Icon only — nothing meaningful to clean
                     tray.set_title(Some(""))?;
                 }
+                CleanState::Runaway => {
+                    // Distinct label naming the actual problem
+                    tray.set_title(Some(&format!("Cache runaway \u{2014} {}", status.cache.size_display)))?;
+                }
                 CleanState::Moderate | CleanState::Heavy => {
                     // Show reclaimable total (same value as popup hero)
                     tray.set_title(Some(&format!("{} to clean", status.reclaimable_display)))?;
@@ -167,6 +171,7 @@ pub fn update_tray<R: Runtime>(
                     CleanState::Clean => "All clean",
                     CleanState::Moderate => "Moderate",
                     CleanState::Heavy => "Heavy",
+                    CleanState::Runaway => "Runaway cache",
                 }
             );
             tray.set_tooltip(Some(&tooltip))?;

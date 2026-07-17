@@ -101,11 +101,15 @@
 }
 
 .status-size.moderate {
-  color: var(--text-primary);
+  color: var(--moderate-color);
 }
 
 .status-size.heavy {
   color: var(--heavy-color);
+}
+
+.status-size.runaway {
+  color: var(--status-critical);
 }
 
 /* ============================================================
@@ -153,13 +157,18 @@
 }
 
 .status-state.moderate {
-  color: var(--accent);
-  background: rgba(20, 184, 166, 0.10);
+  color: var(--moderate-color);
+  background: rgba(234, 179, 8, 0.10);
 }
 
 .status-state.heavy {
   color: var(--heavy-color);
-  background: rgba(251, 191, 36, 0.08);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.status-state.runaway {
+  color: var(--status-critical);
+  background: rgba(248, 113, 113, 0.10);
 }
 
 .status-dot {
@@ -252,6 +261,23 @@
 
 .gap-link:hover {
   text-decoration: underline;
+}
+
+/* ============================================================
+   Autoclean failure banner — persistent warning
+   ============================================================ */
+.autoclean-fail-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  font-size: var(--font-xs);
+  color: var(--status-critical);
+  line-height: 1.5;
+}
+
+.autoclean-fail-banner .fail-icon {
+  flex-shrink: 0;
+  font-size: var(--font-sm);
 }
 
 /* ============================================================
@@ -379,39 +405,70 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Clean + Moderate states — teal accent */
-.clean-btn.clean,
-.clean-btn.moderate {
+/* Clean state — teal accent */
+.clean-btn.clean {
   background: var(--accent);
   color: white;
   box-shadow: 0 1px 4px rgba(20, 184, 166, 0.2);
 }
 
-.clean-btn.clean:hover:not(:disabled):not(.loading),
-.clean-btn.moderate:hover:not(:disabled):not(.loading) {
+.clean-btn.clean:hover:not(:disabled):not(.loading) {
   background: var(--accent-hover);
   box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
 }
 
-.clean-btn.clean:active:not(:disabled):not(.loading),
+.clean-btn.clean:active:not(:disabled):not(.loading) {
+  box-shadow: none;
+  transition: box-shadow 0.06s ease;
+}
+
+/* Moderate state — yellow */
+.clean-btn.moderate {
+  background: var(--moderate-color);
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 4px rgba(234, 179, 8, 0.2);
+}
+
+.clean-btn.moderate:hover:not(:disabled):not(.loading) {
+  background: var(--moderate-hover);
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.3);
+}
+
 .clean-btn.moderate:active:not(:disabled):not(.loading) {
   box-shadow: none;
   transition: box-shadow 0.06s ease;
 }
 
-/* Heavy state — amber warning */
+/* Heavy state — red */
 .clean-btn.heavy {
   background: var(--heavy-color);
-  color: rgba(0, 0, 0, 0.85);
-  box-shadow: 0 1px 4px rgba(251, 191, 36, 0.2);
+  color: white;
+  box-shadow: 0 1px 4px rgba(248, 113, 113, 0.2);
 }
 
 .clean-btn.heavy:hover:not(:disabled):not(.loading) {
   background: var(--heavy-hover);
-  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+  box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3);
 }
 
 .clean-btn.heavy:active:not(:disabled):not(.loading) {
+  box-shadow: none;
+  transition: box-shadow 0.06s ease;
+}
+
+/* Runaway state — critical red */
+.clean-btn.runaway {
+  background: var(--status-critical);
+  color: white;
+  box-shadow: 0 1px 4px rgba(248, 113, 113, 0.2);
+}
+
+.clean-btn.runaway:hover:not(:disabled):not(.loading) {
+  background: #ef4444;
+  box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3);
+}
+
+.clean-btn.runaway:active:not(:disabled):not(.loading) {
   box-shadow: none;
   transition: box-shadow 0.06s ease;
 }

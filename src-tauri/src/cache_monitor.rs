@@ -56,11 +56,16 @@ pub enum CleanState {
     Moderate,
     /// >= 10 GB reclaimable — significant junk, worth a sweep
     Heavy,
+    /// Cache alone >= 20 GB — coresymbolicationd is running away
+    Runaway,
 }
 
 /// Reclaimable size thresholds for cleanup states
 pub const CLEAN_MODERATE_THRESHOLD: u64 = 1 * 1024 * 1024 * 1024; // 1 GB
 pub const CLEAN_HEAVY_THRESHOLD: u64 = 10 * 1024 * 1024 * 1024; // 10 GB
+
+/// Cache-specific threshold: coresymbolicationd alone at this size is a runaway.
+pub const RUNAWAY_THRESHOLD: u64 = 20 * 1024 * 1024 * 1024; // 20 GB
 
 impl CleanState {
     pub fn from_reclaimable(bytes: u64) -> Self {
@@ -78,6 +83,7 @@ impl CleanState {
             CleanState::Clean => "clean",
             CleanState::Moderate => "moderate",
             CleanState::Heavy => "heavy",
+            CleanState::Runaway => "runaway",
         }
     }
 }
@@ -134,11 +140,13 @@ pub struct AppStatus {
     pub snapshot_count: u32,
     /// Whether the first dev artifact scan has completed
     pub dev_scan_complete: bool,
+    /// Whether autoclean has failed 3+ consecutive times
+    pub autoclean_failing: bool,
 }
 
 /// Compute the unified app status from cache + dev scan data.
 /// Both tray and popup read from this same struct.
-pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete: bool) -> AppStatus {
+pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete: bool, consecutive_autoclean_failures: u32) -> AppStatus {
     let disk_free = get_disk_free_bytes();
     let disk_total = get_disk_total_bytes();
     let disk_health = DiskHealth::from_free_bytes(disk_free);
@@ -149,6 +157,15 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete
     // A power user with a large steady-state dev cache should see an
     // informational "here's what's available" signal, not a panic state.
     let clean_state = CleanState::from_reclaimable(reclaimable);
+
+    // Override: if the cache ALONE is >= 20 GB, this is a runaway.
+    // This is the exact emergency SS was built to prevent — keyed off
+    // cache.size_bytes, not the combined total, so dev artifacts can't mask it.
+    let clean_state = if cache.size_bytes >= RUNAWAY_THRESHOLD {
+        CleanState::Runaway
+    } else {
+        clean_state
+    };
 
     // Gap banner: disk is genuinely low AND SS can't fix most of it.
     // On a healthy disk (>= 25 GB free), the banner never fires regardless
@@ -201,6 +218,7 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete
         show_gap_banner,
         snapshot_count,
         dev_scan_complete,
+        autoclean_failing: consecutive_autoclean_failures >= 3,
     }
 }
 
@@ -589,5 +607,72 @@ mod tests {
 
         let health = DiskHealth::from_free_bytes(free);
         assert_ne!(health, DiskHealth::Unknown);
+    }
+
+    /// Helper to construct a test CacheStatus with a given size
+    fn test_cache(size_bytes: u64) -> CacheStatus {
+        CacheStatus {
+            size_bytes,
+            size_display: format_size(size_bytes),
+            state: CacheState::from_size(size_bytes),
+            path: "[Test]".to_string(),
+            exists: true,
+            file_count: 100,
+            last_checked: 0,
+        }
+    }
+
+    #[test]
+    fn test_runaway_21gb_cache_no_dev() {
+        let status = compute_app_status(&test_cache(21 * 1024 * 1024 * 1024), 0, true, 0);
+        assert_eq!(status.clean_state, CleanState::Runaway,
+            "21 GB cache alone should be Runaway");
+    }
+
+    #[test]
+    fn test_runaway_21gb_cache_with_15gb_dev() {
+        let status = compute_app_status(
+            &test_cache(21 * 1024 * 1024 * 1024),
+            15 * 1024 * 1024 * 1024,
+            true,
+            0,
+        );
+        assert_eq!(status.clean_state, CleanState::Runaway,
+            "21 GB cache + 15 GB dev should still be Runaway (cache-specific, not combined)");
+    }
+
+    #[test]
+    fn test_19gb_cache_is_not_runaway() {
+        let status = compute_app_status(&test_cache(19 * 1024 * 1024 * 1024), 0, true, 0);
+        assert_eq!(status.clean_state, CleanState::Heavy,
+            "19 GB cache should be Heavy, not Runaway");
+    }
+
+    #[test]
+    fn test_20gb_boundary_is_runaway() {
+        let status = compute_app_status(&test_cache(20 * 1024 * 1024 * 1024), 0, true, 0);
+        assert_eq!(status.clean_state, CleanState::Runaway,
+            "Exactly 20 GB cache should be Runaway (>= threshold)");
+    }
+
+    #[test]
+    fn test_autoclean_failing_under_threshold() {
+        let status = compute_app_status(&test_cache(0), 0, true, 2);
+        assert!(!status.autoclean_failing,
+            "2 consecutive failures should NOT trigger the banner");
+    }
+
+    #[test]
+    fn test_autoclean_failing_at_threshold() {
+        let status = compute_app_status(&test_cache(0), 0, true, 3);
+        assert!(status.autoclean_failing,
+            "3 consecutive failures should trigger the banner");
+    }
+
+    #[test]
+    fn test_autoclean_failing_above_threshold() {
+        let status = compute_app_status(&test_cache(0), 0, true, 10);
+        assert!(status.autoclean_failing,
+            "10 consecutive failures should trigger the banner");
     }
 }
