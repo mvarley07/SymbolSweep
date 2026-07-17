@@ -107,11 +107,11 @@ code {
   height: 28px;
   flex-shrink: 0;
   background-color: var(--accent);
-  -webkit-mask-image: url('assets/broom-icon@2x.png');
+  -webkit-mask-image: url('assets/broom-mark.png');
   -webkit-mask-size: contain;
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-position: center;
-  mask-image: url('assets/broom-icon@2x.png');
+  mask-image: url('assets/broom-mark.png');
   mask-size: contain;
   mask-repeat: no-repeat;
   mask-position: center;
@@ -502,7 +502,7 @@ code {
 /* ── nav (one per view) ── */
 .ssv-nav { display:flex; align-items:center; gap:7px; height:37px; }
 .ssv-nav svg { flex-shrink:0; }
-.ssv-broom { display:block; width:16px; height:16px; flex-shrink:0; background-color:var(--a); -webkit-mask-image:url('assets/broom-icon@2x.png'); -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; -webkit-mask-position:center; mask-image:url('assets/broom-icon@2x.png'); mask-size:contain; mask-repeat:no-repeat; mask-position:center; }
+.ssv-broom { display:block; width:16px; height:16px; flex-shrink:0; background-color:var(--a); -webkit-mask-image:url('assets/broom-mark.png'); -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; -webkit-mask-position:center; mask-image:url('assets/broom-mark.png'); mask-size:contain; mask-repeat:no-repeat; mask-position:center; }
 .ssv-mark { font-size:12.5px; font-weight:700; letter-spacing:-0.02em; color:var(--t1); }
 .ssv-mark em { font-style:normal; color:var(--a); }
 .ssv-navbtn {
