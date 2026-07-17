@@ -1202,7 +1202,12 @@ pub fn get_ss_trash_info() -> SsTrashInfo {
 /// SAFETY: Only deletes paths inside ~/.Trash. Manifest entries pointing
 /// elsewhere are rejected and logged as errors (defense against corruption).
 pub fn purge_ss_trash() -> PurgeResult {
-    let trash_dir = get_home_dir().join(".Trash");
+    purge_ss_trash_in(&get_home_dir().join(".Trash"))
+}
+
+/// Inner implementation accepting an explicit trash root.
+/// SAFETY GUARD: only deletes paths inside `trash_dir`.
+fn purge_ss_trash_in(trash_dir: &Path) -> PurgeResult {
     let manifest = load_trash_manifest();
     let mut purged_count = 0usize;
     let mut bytes_freed = 0u64;
@@ -1212,8 +1217,8 @@ pub fn purge_ss_trash() -> PurgeResult {
     for item in &manifest {
         let path = Path::new(&item.trash_path);
 
-        // SAFETY GUARD: only delete inside ~/.Trash — reject anything else
-        if !path.starts_with(&trash_dir) {
+        // SAFETY GUARD: only delete inside trash_dir — reject anything else
+        if !path.starts_with(trash_dir) {
             errors.push(format!("SAFETY: refused to delete path outside Trash: {}", item.trash_path));
             remaining.push(item.clone());
             continue;
@@ -2331,21 +2336,20 @@ mod tests {
     }
 
     /// SCOPE: purge deletes ONLY SS-manifest items, not other Trash content.
+    /// Uses a temp directory instead of real ~/.Trash (which requires FDA).
     #[test]
     fn test_purge_only_deletes_manifest_items() {
-        // Use a sub-dir inside ~/.Trash so the path guard accepts it
-        let trash_dir = get_home_dir().join(".Trash");
-        let test_dir = trash_dir.join("_ss_purge_scope_test");
-        let _ = fs::remove_dir_all(&test_dir);
-        fs::create_dir_all(&test_dir).unwrap();
+        let tmp_trash = std::env::temp_dir().join("_ss_purge_scope_test");
+        let _ = fs::remove_dir_all(&tmp_trash);
+        fs::create_dir_all(&tmp_trash).unwrap();
 
         // "SS item" — recorded in manifest
-        let ss_item = test_dir.join("ss_trashed_target");
+        let ss_item = tmp_trash.join("ss_trashed_target");
         fs::create_dir_all(&ss_item).unwrap();
         fs::write(ss_item.join("data.bin"), vec![0u8; 512]).unwrap();
 
         // "Non-SS item" — NOT in manifest (simulates other user Trash content)
-        let non_ss_item = test_dir.join("user_photo_backup");
+        let non_ss_item = tmp_trash.join("user_photo_backup");
         fs::create_dir_all(&non_ss_item).unwrap();
         fs::write(non_ss_item.join("photo.jpg"), vec![0xFFu8; 256]).unwrap();
 
@@ -2359,7 +2363,7 @@ mod tests {
             timestamp: 0,
         }]);
 
-        let result = purge_ss_trash();
+        let result = purge_ss_trash_in(&tmp_trash);
         restore_manifest(&backup);
 
         assert!(!ss_item.exists(), "SS item should be deleted by purge");
@@ -2370,29 +2374,24 @@ mod tests {
         assert_eq!(result.purged_count, 1);
         assert!(result.errors.is_empty());
 
-        println!(
-            "PASS: purge deleted 1 SS item, non-SS item survived ({})",
-            non_ss_item.display()
-        );
-
-        let _ = fs::remove_dir_all(&test_dir);
+        let _ = fs::remove_dir_all(&tmp_trash);
     }
 
     /// STALE MANIFEST: missing/restored entries handled gracefully.
+    /// Uses a temp directory instead of real ~/.Trash (which requires FDA).
     #[test]
     fn test_purge_handles_stale_entries() {
-        let trash_dir = get_home_dir().join(".Trash");
-        let test_dir = trash_dir.join("_ss_purge_stale_test");
-        let _ = fs::remove_dir_all(&test_dir);
-        fs::create_dir_all(&test_dir).unwrap();
+        let tmp_trash = std::env::temp_dir().join("_ss_purge_stale_test");
+        let _ = fs::remove_dir_all(&tmp_trash);
+        fs::create_dir_all(&tmp_trash).unwrap();
 
         // One item that exists
-        let existing = test_dir.join("still_in_trash");
+        let existing = tmp_trash.join("still_in_trash");
         fs::create_dir_all(&existing).unwrap();
         fs::write(existing.join("f.txt"), b"data").unwrap();
 
         // Stale entry — path does NOT exist (user already emptied or restored)
-        let stale_path = test_dir.join("already_gone");
+        let stale_path = tmp_trash.join("already_gone");
         assert!(!stale_path.exists());
 
         let backup = install_test_manifest(&[
@@ -2410,7 +2409,7 @@ mod tests {
             },
         ]);
 
-        let result = purge_ss_trash();
+        let result = purge_ss_trash_in(&tmp_trash);
         let post_manifest = load_trash_manifest();
         restore_manifest(&backup);
 
@@ -2419,9 +2418,7 @@ mod tests {
         assert!(result.errors.is_empty(), "Stale entries should not produce errors");
         assert!(post_manifest.is_empty(), "Manifest should be clean after purge");
 
-        println!("PASS: stale manifest entry handled gracefully, no errors");
-
-        let _ = fs::remove_dir_all(&test_dir);
+        let _ = fs::remove_dir_all(&tmp_trash);
     }
 
     /// PATH GUARD: manifest entry pointing OUTSIDE ~/.Trash is rejected.
