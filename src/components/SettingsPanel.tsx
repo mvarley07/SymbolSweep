@@ -10,15 +10,6 @@ interface SettingsPanelProps {
   onBack: () => void;
 }
 
-function formatInterval(secs: number): string {
-  const hours = secs / 3600;
-  if (hours < 1) {
-    const mins = Math.round(secs / 60);
-    return `${mins} ${mins === 1 ? 'minute' : 'minutes'}`;
-  }
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
-}
-
 export function SettingsPanel({ onBack }: SettingsPanelProps) {
   const { settings, loading, saving, updateSetting } = useSettings();
   const [debugUnlocked, setDebugUnlocked] = useState(false);
@@ -43,7 +34,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
       }
     } catch {
       setUpdateStatus('error');
-      setTimeout(() => setUpdateStatus('idle'), 3000);
+      setTimeout(() => setUpdateStatus('idle'), 5000);
     }
   };
 
@@ -93,16 +84,26 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
         <section className="settings-section">
           <h2>Auto-Clean</h2>
           <p className="section-description">
-            Automatically manages the macOS symbolication cache (coresymbolicationd),
-            which can grow very large and cause disk issues.
-            Does not auto-clean package caches or build artifacts — use Clean Now for those.
+            Keeps the macOS symbolication cache (coresymbolicationd) from growing
+            out of control. Doesn't touch package caches or build artifacts — use Clean Now for those.
           </p>
 
           <div className="setting-row">
             <div className="setting-info">
-              <label htmlFor="auto-threshold">Auto-clear symbolication cache when it exceeds</label>
+              <label htmlFor="auto-threshold">Auto-clear symbolication cache</label>
               <span className="setting-description">
-                Clears coresymbolicationd when it exceeds this size
+                Clears automatically when it grows past{' '}
+                <select
+                  className="inline-select"
+                  value={settings.auto_clean_threshold}
+                  onChange={(e) => updateSetting('auto_clean_threshold', Number(e.target.value))}
+                  disabled={saving || !settings.auto_clean_on_threshold}
+                >
+                  <option value={1 * 1024 * 1024 * 1024}>1 GB</option>
+                  <option value={2 * 1024 * 1024 * 1024}>2 GB</option>
+                  <option value={3 * 1024 * 1024 * 1024}>3 GB</option>
+                  <option value={5 * 1024 * 1024 * 1024}>5 GB</option>
+                </select>
               </span>
             </div>
             <label className="toggle">
@@ -116,63 +117,6 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
               <span className="toggle-slider" />
             </label>
           </div>
-
-          {settings.auto_clean_on_threshold && (
-            <div className="setting-row nested">
-              <label htmlFor="threshold-select">Threshold</label>
-              <select
-                id="threshold-select"
-                value={settings.auto_clean_threshold}
-                onChange={(e) => updateSetting('auto_clean_threshold', Number(e.target.value))}
-                disabled={saving}
-              >
-                <option value={1 * 1024 * 1024 * 1024}>1 GB</option>
-                <option value={2 * 1024 * 1024 * 1024}>2 GB</option>
-                <option value={3 * 1024 * 1024 * 1024}>3 GB</option>
-                <option value={5 * 1024 * 1024 * 1024}>5 GB</option>
-              </select>
-            </div>
-          )}
-
-          <div className="setting-row">
-            <div className="setting-info">
-              <label htmlFor="auto-scheduled">Scheduled symbolication cleanup</label>
-              <span className="setting-description">
-                Clear coresymbolicationd every {formatInterval(settings.auto_clean_interval_secs)}
-              </span>
-            </div>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                id="auto-scheduled"
-                checked={settings.auto_clean_scheduled}
-                onChange={(e) => updateSetting('auto_clean_scheduled', e.target.checked)}
-                disabled={saving}
-              />
-              <span className="toggle-slider" />
-            </label>
-          </div>
-
-          {settings.auto_clean_scheduled && (
-            <div className="setting-row nested">
-              <label htmlFor="interval-select">Interval</label>
-              <select
-                id="interval-select"
-                value={settings.auto_clean_interval_secs}
-                onChange={(e) => updateSetting('auto_clean_interval_secs', Number(e.target.value))}
-                disabled={saving}
-              >
-                {settings.debug_mode && (
-                  <option value={2 * 60}>2 minutes (debug)</option>
-                )}
-                <option value={1 * 60 * 60}>1 hour</option>
-                <option value={3 * 60 * 60}>3 hours</option>
-                <option value={6 * 60 * 60}>6 hours</option>
-                <option value={12 * 60 * 60}>12 hours</option>
-                <option value={24 * 60 * 60}>24 hours</option>
-              </select>
-            </div>
-          )}
         </section>
 
         <section className="settings-section">
@@ -222,7 +166,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
           {settings.show_notifications && (
             <div className="setting-row nested notification-hint">
               <span className="hint-text">
-                Not seeing notifications? Enable them in macOS Settings.
+                Enable notifications in macOS Settings
               </span>
               <button
                 className="hint-btn"
@@ -293,7 +237,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
               {updateStatus === 'checking' ? 'Checking...' :
                updateStatus === 'up_to_date' ? 'Up to date' :
                updateStatus === 'installed' ? 'Restart' :
-               updateStatus === 'error' ? 'Failed' :
+               updateStatus === 'error' ? 'Couldn\'t check' :
                'Check'}
             </button>
           </div>

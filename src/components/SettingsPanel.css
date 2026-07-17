@@ -82,7 +82,7 @@
 .section-description {
   font-size: var(--font-caption);
   color: var(--text-tertiary);
-  margin: -4px 0 var(--space-md) 0;
+  margin: -4px 0 var(--space-sm) 0;
   line-height: 1.4;
 }
 
@@ -205,7 +205,6 @@ select {
   background-position: right var(--space-sm) center;
   color: var(--text-primary);
   cursor: pointer;
-  min-width: 100px;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -230,6 +229,19 @@ select:focus {
 select option {
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+/* Inline dropdown (embedded in description text) */
+.inline-select {
+  display: inline;
+  padding: 1px 18px 1px 5px;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  background-size: 10px;
+  background-position: right 4px center;
+  vertical-align: baseline;
+  min-width: 0;
 }
 
 /* Update check button */
@@ -414,15 +426,13 @@ select option {
 
 /* Notification hint */
 .notification-hint {
-  flex-wrap: wrap;
-  gap: var(--space-sm) !important;
+  gap: var(--space-md) !important;
 }
 
 .notification-hint .hint-text {
   font-size: var(--font-xs);
   color: var(--text-tertiary);
   flex: 1;
-  min-width: 120px;
 }
 
 .notification-hint .hint-btn {
