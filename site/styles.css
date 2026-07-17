@@ -1,7 +1,7 @@
 /* ─── Design tokens (LOCKED — from the app) ─────────────────────────── */
 :root {
   --bg: #0a0a0a;
-  --surface: #141414;
+  --surface: #1a1a22;
   --elevated: #1a1a1a;
   --accent: #14b8a6;
   --accent-dim: rgba(20, 184, 166, 0.10);
@@ -78,6 +78,7 @@ code {
 .band--pillars { background: var(--surface); padding: 40px 0; }
 .band--steps   { padding: 40px 0; }
 .band--founder { background: var(--surface); padding: 28px 0; }
+.band--cta     { padding: 28px 0; }
 .band--footer  { padding: 20px 0 28px; }
 
 /* ─── Section headings ───────────────────────────────────────────────── */
@@ -190,17 +191,18 @@ code {
 }
 
 .demo-slot .ssv-stage {
-  transform: scale(2);
+  transform: scale(1.4);
   transform-origin: top center;
-  margin-bottom: 278px;
+  margin-bottom: 118px;
 }
 
 /* ─── Founder note ───────────────────────────────────────────────────── */
 .founder-note {
   margin-bottom: 24px;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-faint);
   line-height: 1.5;
+  max-width: 540px;
 }
 
 /* ─── Differentiator cards ───────────────────────────────────────────── */
@@ -339,7 +341,7 @@ code {
 /* ─── Responsive ─────────────────────────────────────────────────────── */
 @media (min-width: 600px) {
   .cards {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .hero h1 {
@@ -353,8 +355,8 @@ code {
 
 @media (max-width: 799px) {
   .demo-slot .ssv-stage {
-    transform: scale(1.5);
-    margin-bottom: 139px;
+    transform: scale(1.2);
+    margin-bottom: 59px;
   }
 }
 
@@ -483,7 +485,7 @@ code {
 }
 
 .ssv-win {
-  position:relative; width:320px; height:278px;
+  position:relative; width:320px; height:296px;
   background:#121216; border:1px solid var(--bd); border-radius:12px;
   overflow:hidden;
 }
@@ -577,7 +579,7 @@ code {
 }
 .ssv-btn {
   position:relative; height:36px; border-radius:6px; overflow:hidden;
-  background:var(--hv);
+  background:var(--a);
   animation: ssv-press 14s cubic-bezier(0.4,0,0.2,1) infinite;
 }
 .ssv-btn span {
@@ -657,7 +659,7 @@ code {
 .ssv-sz { margin-left:auto; font-size:11px; font-weight:700; color:var(--t1); letter-spacing:-0.02em; }
 .ssv-can { width:12px; height:12px; margin-left:8px; color:var(--t3); flex-shrink:0; }
 .ssv-slot { width:12px; margin-left:8px; flex-shrink:0; }
-.ssv-hint { font-size:9px; color:var(--t2); line-height:1.45; }
+.ssv-hint { font-size:9px; color:var(--t2); line-height:1.45; padding-left:53px; }
 .ssv-hint em { font-style:normal; color:var(--t1); }
 .ssv-cmd {
   display:inline-flex; align-items:center; gap:5px; margin-top:5px;

@@ -36,7 +36,7 @@
         </div>
 
         <h1>Reclaim your dev disk space.</h1>
-        <p class="sub">Finds the <code>node_modules</code>, build caches, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
+        <p class="sub">Finds the build caches, <code>node_modules</code>, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
 
         <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
         <p class="cta-note">One-time purchase, not a subscription.</p>
@@ -168,6 +168,10 @@
           <h3>Dev-native</h3>
           <p>Knows Rust targets, DerivedData, package caches. What&rsquo;s safe, what costs a rebuild, what needs your call.</p>
         </div>
+        <div class="card">
+          <h3>The cache Apple forgets</h3>
+          <p>macOS&rsquo;s symbolication cache can grow past 80 GB unnoticed and fill your disk. SymbolSweep clears it automatically, in the background.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -179,16 +183,22 @@
       <ol class="steps">
         <li>Watches the caches that balloon&mdash;quietly, from your menu bar.</li>
         <li>Reclaim safe caches with one click, or review artifacts tier by tier.</li>
-        <li>Honest about what it freed and what&rsquo;s beyond its reach.</li>
+        <li>Clears the macOS symbolication cache automatically&mdash;the one that grows while you&rsquo;re not looking.</li>
       </ol>
     </div>
   </section>
 
-  <!-- ─── FOUNDER NOTE + CLOSING CTA ───────────────────────────── -->
+  <!-- ─── FOUNDER NOTE ─────────────────────────────────────────── -->
   <section class="band band--founder">
     <div class="band-inner">
       <h2 class="section-heading">Why I built this</h2>
       <p class="founder-note">Built after a runaway macOS cache filled my disk and bricked my Mac. SymbolSweep keeps that from happening to you.</p>
+    </div>
+  </section>
+
+  <!-- ─── CLOSING CTA ────────────────────────────────────────── -->
+  <section class="band band--cta">
+    <div class="band-inner">
       <div class="final-cta">
         <p class="trust-line">Runs entirely on your Mac. No account, no telemetry, nothing leaves your machine.</p>
         <a href="#" class="cta-link" data-lemon-url>Get SymbolSweep &mdash; $9 &rarr;</a>
@@ -199,9 +209,8 @@
   <!-- ─── FOOTER ────────────────────────────────────────────────── -->
   <footer class="band band--footer">
     <div class="band-inner">
-      <p class="footer-specs">macOS 13+ &middot; Universal binary (Apple&nbsp;Silicon&nbsp;+&nbsp;Intel)</p>
+      <p class="footer-specs">macOS 13+ &middot; Apple Silicon</p>
       <div class="footer-links">
-        <span>SymbolSweep</span>
         <a href="/privacy.html">Privacy</a>
         <a href="mailto:hello@symbolsweep.app">Contact</a>
         <span>&copy; 2026 SymbolSweep</span>
