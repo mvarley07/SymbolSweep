@@ -82,7 +82,16 @@ section {
 }
 
 .logo-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 24px;
+}
+
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 .logo-wordmark {
