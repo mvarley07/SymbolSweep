@@ -25,23 +25,27 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="page">
 
-    <!-- ─── HERO ──────────────────────────────────────────────────── -->
-    <header class="hero">
-      <div class="logo-lockup">
-        <img class="logo-icon" src="assets/broom-icon.png" alt="">
-        <span class="logo-wordmark"><span class="wm-sym">Symbol</span>Sweep</span>
-      </div>
+  <!-- ─── HERO ──────────────────────────────────────────────────── -->
+  <section class="band band--hero">
+    <div class="band-inner">
+      <header class="hero">
+        <div class="logo-lockup">
+          <span class="logo-icon" aria-hidden="true"></span>
+          <span class="logo-wordmark"><span class="wm-sym">Symbol</span>Sweep</span>
+        </div>
 
-      <h1>Reclaim your dev disk space.</h1>
-      <p class="sub">SymbolSweep finds the build caches, <code>node_modules</code>, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
+        <h1>Reclaim your dev disk space.</h1>
+        <p class="sub">Finds the <code>node_modules</code>, build caches, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
 
-      <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
-      <p class="cta-note">One-time purchase, not a subscription.</p>
-    </header>
+        <a href="#" class="cta-btn" data-lemon-url>Get SymbolSweep &mdash; $9</a>
+        <p class="cta-note">One-time purchase, not a subscription.</p>
+      </header>
+    </div>
+  </section>
 
-    <!-- ─── DEMO SLOT ─────────────────────────────────────────────── -->
+  <!-- ─── DEMO SLOT ─────────────────────────────────────────────── -->
+  <section class="band band--demo">
     <div class="demo-slot">
       <div class="demo-frame">
         <div class="ssv-stage">
@@ -51,7 +55,7 @@
               <!-- ══ popup ══ -->
               <div class="ssv-view">
                 <div class="ssv-nav">
-                  <img class="ssv-broom" src="assets/favicon-32.png" alt="">
+                  <span class="ssv-broom" aria-hidden="true"></span>
                   <div class="ssv-mark">Symbol<em>Sweep</em></div>
                   <div class="ssv-navbtn">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.48.48 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.47.47 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.5.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58ZM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2Z"/></svg>
@@ -145,9 +149,12 @@
         </div>
       </div>
     </div>
+  </section>
 
-    <!-- ─── THREE PILLARS ─────────────────────────────────────────── -->
-    <section>
+  <!-- ─── THREE PILLARS ─────────────────────────────────────────── -->
+  <section class="band band--pillars">
+    <div class="band-inner">
+      <h2 class="section-heading">Why SymbolSweep</h2>
       <div class="cards">
         <div class="card">
           <h3>Safe</h3>
@@ -162,29 +169,36 @@
           <p>Knows Rust targets, DerivedData, package caches. What&rsquo;s safe, what costs a rebuild, what needs your call.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- ─── HOW IT WORKS ──────────────────────────────────────────── -->
-    <section>
-      <h2 class="section-title">How it works</h2>
+  <!-- ─── HOW IT WORKS ──────────────────────────────────────────── -->
+  <section class="band band--steps">
+    <div class="band-inner">
+      <h2 class="section-heading">How it works</h2>
       <ol class="steps">
         <li>Watches the caches that balloon&mdash;quietly, from your menu bar.</li>
         <li>Reclaim safe caches with one click, or review artifacts tier by tier.</li>
         <li>Honest about what it freed and what&rsquo;s beyond its reach.</li>
       </ol>
-    </section>
+    </div>
+  </section>
 
-    <!-- ─── FOUNDER NOTE ──────────────────────────────────────────── -->
-    <p class="founder-note">Built after a runaway macOS cache filled a disk and bricked a Mac. SymbolSweep keeps that from happening to you.</p>
+  <!-- ─── FOUNDER NOTE + CLOSING CTA ───────────────────────────── -->
+  <section class="band band--founder">
+    <div class="band-inner">
+      <h2 class="section-heading">Why I built this</h2>
+      <p class="founder-note">Built after a runaway macOS cache filled my disk and bricked my Mac. SymbolSweep keeps that from happening to you.</p>
+      <div class="final-cta">
+        <p class="trust-line">Runs entirely on your Mac. No account, no telemetry, nothing leaves your machine.</p>
+        <a href="#" class="cta-link" data-lemon-url>Get SymbolSweep &mdash; $9 &rarr;</a>
+      </div>
+    </div>
+  </section>
 
-    <!-- ─── FINAL CTA ─────────────────────────────────────────────── -->
-    <section class="final-cta">
-      <p class="trust-line">Runs entirely on your Mac. No account, no telemetry, nothing leaves your machine.</p>
-      <a href="#" class="cta-link" data-lemon-url>Get SymbolSweep &mdash; $9 &rarr;</a>
-    </section>
-
-    <!-- ─── FOOTER ────────────────────────────────────────────────── -->
-    <footer class="site-footer">
+  <!-- ─── FOOTER ────────────────────────────────────────────────── -->
+  <footer class="band band--footer">
+    <div class="band-inner">
       <p class="footer-specs">macOS 13+ &middot; Universal binary (Apple&nbsp;Silicon&nbsp;+&nbsp;Intel)</p>
       <div class="footer-links">
         <span>SymbolSweep</span>
@@ -192,8 +206,8 @@
         <a href="mailto:hello@symbolsweep.app">Contact</a>
         <span>&copy; 2026 SymbolSweep</span>
       </div>
-    </footer>
+    </div>
+  </footer>
 
-  </div>
 </body>
 </html>

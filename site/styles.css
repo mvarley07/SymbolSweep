@@ -54,31 +54,44 @@ code {
   color: var(--text-dim);
 }
 
-/* ─── Page container ─────────────────────────────────────────────────── */
+/* ─── Page container (privacy page) ──────────────────────────────────── */
 .page {
   max-width: 720px;
   margin: 0 auto;
   padding: 64px 24px 48px;
 }
 
-/* ─── Section shared ─────────────────────────────────────────────────── */
-section {
-  margin-bottom: 28px;
+/* ─── Band layout ────────────────────────────────────────────────────── */
+.band {
+  width: 100%;
+  margin-bottom: 0;
 }
 
-.section-title {
-  font-size: 13px;
+.band-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.band--hero    { padding: 64px 0 24px; }
+.band--demo    { overflow: hidden; }
+.band--pillars { background: var(--surface); padding: 40px 0; }
+.band--steps   { padding: 40px 0; }
+.band--founder { background: var(--surface); padding: 28px 0; }
+.band--footer  { padding: 20px 0 28px; }
+
+/* ─── Section headings ───────────────────────────────────────────────── */
+.section-heading {
+  font-size: 24px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-  margin-bottom: 12px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 20px;
 }
 
 /* ─── Hero ────────────────────────────────────────────────────────────── */
 .hero {
   text-align: center;
-  margin-bottom: 32px;
 }
 
 .logo-lockup {
@@ -89,9 +102,19 @@ section {
 }
 
 .logo-icon {
+  display: inline-block;
   width: 28px;
   height: 28px;
-  object-fit: contain;
+  flex-shrink: 0;
+  background-color: var(--accent);
+  -webkit-mask-image: url('assets/broom-icon@2x.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('assets/broom-icon@2x.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
 }
 
 .logo-wordmark {
@@ -152,16 +175,11 @@ section {
 
 /* ─── Demo slot ──────────────────────────────────────────────────────── */
 .demo-slot {
-  margin-bottom: 28px;
   text-align: center;
 }
 
 .demo-frame {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--surface);
+  display: inline-block;
 }
 
 .demo-frame > img {
@@ -171,11 +189,10 @@ section {
   display: block;
 }
 
-.demo-placeholder {
-  font-size: 13px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.demo-slot .ssv-stage {
+  transform: scale(2);
+  transform-origin: top center;
+  margin-bottom: 278px;
 }
 
 /* ─── Founder note ───────────────────────────────────────────────────── */
@@ -184,7 +201,6 @@ section {
   font-size: 13px;
   color: var(--text-faint);
   line-height: 1.5;
-  text-align: left;
 }
 
 /* ─── Differentiator cards ───────────────────────────────────────────── */
@@ -212,8 +228,8 @@ section {
 }
 
 .card p {
-  font-size: 14px;
-  color: var(--text-dim);
+  font-size: 15px;
+  color: var(--text);
   line-height: 1.55;
   flex: 1;
 }
@@ -260,9 +276,7 @@ section {
 /* ─── Final CTA ──────────────────────────────────────────────────────── */
 .final-cta {
   text-align: center;
-  padding: 36px 0 0;
-  border-top: 1px solid var(--border);
-  margin-bottom: 0;
+  padding: 24px 0 0;
 }
 
 .final-cta .trust-line {
@@ -292,6 +306,12 @@ section {
   text-align: center;
 }
 
+.band--footer {
+  font-size: 13px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
 .footer-specs {
   margin-bottom: 12px;
   font-size: 12px;
@@ -306,11 +326,13 @@ section {
   flex-wrap: wrap;
 }
 
-.site-footer a {
+.site-footer a,
+.band--footer a {
   color: var(--text-dim);
 }
 
-.site-footer a:hover {
+.site-footer a:hover,
+.band--footer a:hover {
   color: var(--accent);
 }
 
@@ -329,9 +351,39 @@ section {
   }
 }
 
+@media (max-width: 799px) {
+  .demo-slot .ssv-stage {
+    transform: scale(1.5);
+    margin-bottom: 139px;
+  }
+}
+
 @media (max-width: 599px) {
   .page {
     padding: 40px 16px 32px;
+  }
+
+  .band-inner {
+    padding: 0 16px;
+  }
+
+  .band--hero {
+    padding-top: 40px;
+    padding-bottom: 16px;
+  }
+
+  .band--pillars,
+  .band--steps {
+    padding: 32px 0;
+  }
+
+  .band--founder {
+    padding: 24px 0;
+  }
+
+  .demo-slot .ssv-stage {
+    transform: none;
+    margin-bottom: 0;
   }
 
   .hero h1 {
@@ -344,6 +396,10 @@ section {
 
   .logo-wordmark {
     font-size: 22px;
+  }
+
+  .section-heading {
+    font-size: 20px;
   }
 }
 
@@ -427,7 +483,7 @@ section {
 }
 
 .ssv-win {
-  position:relative; width:320px; height:322px;
+  position:relative; width:320px; height:278px;
   background:#121216; border:1px solid var(--bd); border-radius:12px;
   overflow:hidden;
 }
@@ -446,7 +502,7 @@ section {
 /* ── nav (one per view) ── */
 .ssv-nav { display:flex; align-items:center; gap:7px; height:37px; }
 .ssv-nav svg { flex-shrink:0; }
-.ssv-broom { width:16px; height:16px; max-width:16px; max-height:16px; border-radius:3.5px; flex-shrink:0; object-fit:contain; display:block; }
+.ssv-broom { display:block; width:16px; height:16px; flex-shrink:0; background-color:var(--a); -webkit-mask-image:url('assets/broom-icon@2x.png'); -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; -webkit-mask-position:center; mask-image:url('assets/broom-icon@2x.png'); mask-size:contain; mask-repeat:no-repeat; mask-position:center; }
 .ssv-mark { font-size:12.5px; font-weight:700; letter-spacing:-0.02em; color:var(--t1); }
 .ssv-mark em { font-style:normal; color:var(--a); }
 .ssv-navbtn {
