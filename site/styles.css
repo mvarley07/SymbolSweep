@@ -104,8 +104,8 @@ code {
 
 .logo-icon {
   display: inline-block;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   background-color: var(--accent);
   -webkit-mask-image: url('assets/broom-mark.png');
@@ -379,8 +379,8 @@ code {
   }
 
   .logo-icon {
-    width: 13px;
-    height: 13px;
+    width: 17px;
+    height: 17px;
   }
 
   .band--pillars,
