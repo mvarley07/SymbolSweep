@@ -1076,7 +1076,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
             project: get_project_name(nm_path),
             staleness_days: staleness,
             is_nested: false,
-            hint: Some("Safe to delete \u{2014} restore with npm install".to_string()),
+            hint: Some("Rebuilds on next npm install \u{2014} needs network, may resolve different versions".to_string()),
             active_build: false,
         });
     }
