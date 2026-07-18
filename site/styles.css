@@ -650,7 +650,7 @@ code {
 .ssv-bk-rb { border:1px solid rgba(147,130,255,0.45); color:var(--rb); }
 
 .ssv-rows { margin-top:3px; }
-.ssv-row { padding:7px 0; border-bottom:1px solid var(--bd); opacity:0; animation: ssv-rowin 14s ease-out infinite; }
+.ssv-row { display:flex; flex-direction:column; padding:7px 0; border-bottom:1px solid var(--bd); opacity:0; animation: ssv-rowin 14s ease-out infinite; }
 .ssv-row:last-child { border-bottom:0; }
 .ssv-row:nth-child(1) { animation-delay:-13.3s; }
 .ssv-row:nth-child(2) { animation-delay:-13.1s; }
