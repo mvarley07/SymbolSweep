@@ -74,7 +74,7 @@ code {
 }
 
 .band--hero    { padding: 64px 0 56px; }
-.band--demo    { overflow: hidden; }
+.band--demo    { overflow: hidden; padding-bottom: 48px; }
 .band--pillars { background: var(--surface); padding: 40px 0; }
 .band--steps   { padding: 40px 0; }
 .band--founder { background: var(--surface); padding: 28px 0; }
@@ -661,7 +661,7 @@ code {
 }
 
 .ssv-rt { display:flex; align-items:center; gap:7px; margin-bottom:3px; }
-.ssv-tag { font-size:6.5px; font-weight:700; letter-spacing:0.05em; padding:2.5px 5px; border-radius:4px; min-width:46px; text-align:center; }
+.ssv-tag { font-size:6.5px; font-weight:700; letter-spacing:0.05em; padding:2.5px 0; border-radius:4px; width:46px; flex-shrink:0; text-align:center; box-sizing:border-box; }
 .ssv-tg-rb { color:var(--rb); background:rgba(147,130,255,0.15); }
 .ssv-tg-rv { color:var(--rv); background:rgba(248,113,113,0.13); }
 .ssv-nm { font-size:11px; color:var(--t1); }
