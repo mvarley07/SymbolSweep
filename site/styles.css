@@ -78,8 +78,8 @@ code {
 .band--pillars { background: var(--surface); padding: 40px 0; }
 .band--steps   { padding: 40px 0; }
 .band--founder { background: var(--surface); padding: 28px 0; }
-.band--cta     { padding: 28px 0; }
-.band--footer  { padding: 20px 0 28px; }
+.band--cta     { padding: 28px 0 40px; }
+.band--footer  { padding: 0 0 28px; }
 
 /* ─── Section headings ───────────────────────────────────────────────── */
 .section-heading {
@@ -231,7 +231,7 @@ code {
 
 .card p {
   font-size: 15px;
-  color: var(--text);
+  color: var(--text-dim);
   line-height: 1.55;
   flex: 1;
 }
@@ -284,7 +284,7 @@ code {
 .final-cta .trust-line {
   font-size: 14px;
   color: var(--text-dim);
-  margin-bottom: 12px;
+  margin-bottom: 32px;
 }
 
 .cta-link {
@@ -315,7 +315,7 @@ code {
 }
 
 .footer-specs {
-  margin-bottom: 12px;
+  margin-bottom: 0;
   font-size: 12px;
   color: var(--text-faint);
 }
