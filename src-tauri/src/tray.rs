@@ -150,8 +150,12 @@ pub fn update_tray<R: Runtime>(
         } else {
             match status.clean_state {
                 CleanState::Clean => {
-                    // Icon only — nothing meaningful to clean
-                    tray.set_title(Some(""))?;
+                    if status.dev_total_bytes > 0 {
+                        tray.set_title(Some(&format!("{} dev artifacts", status.dev_total_display)))?;
+                    } else {
+                        // Icon only — nothing meaningful to clean
+                        tray.set_title(Some(""))?;
+                    }
                 }
                 CleanState::Runaway => {
                     // Distinct label naming the actual problem
@@ -170,6 +174,7 @@ pub fn update_tray<R: Runtime>(
                 status.disk_free_display,
                 status.disk_total_display,
                 match status.clean_state {
+                    CleanState::Clean if status.dev_total_bytes > 0 => "Dev artifacts",
                     CleanState::Clean => "All clean",
                     CleanState::Moderate => "Moderate",
                     CleanState::Heavy => "Heavy",

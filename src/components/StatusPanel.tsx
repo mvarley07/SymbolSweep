@@ -275,17 +275,34 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     );
   }
 
-  // Pre-scan: suppress "All clean" until scan completes.
-  // If scan finishes within SCAN_LOADER_DELAY ms, skip the loader entirely.
+  // Pre-scan: show skeleton until scan completes.
+  // If scan finishes within SCAN_LOADER_DELAY ms, skip the skeleton entirely.
   // DEBUG: set SCAN_LOADER_DELAY=0 to show immediately.
   //        Add `|| true` to the `scanPending` condition in the useEffect to hold open.
   if (!appStatus.dev_scan_complete) {
     return (
-      <div className="status-panel scan-shell" ref={panelRef}>
+      <div className="status-panel" ref={panelRef}>
         {showScanning && (
-          <div className="scan-loader">
-            <div className="loading-logo" aria-hidden="true" />
-          </div>
+          <>
+            <header className="panel-header">
+              <div className="header-logo">
+                <div className="logo-icon" aria-hidden="true" />
+                <span className="logo-text"><span className="logo-sym">Symbol</span>Sweep</span>
+              </div>
+              <div className="skel skel-settings" />
+            </header>
+            <div className="status-indicator">
+              <div className="skel skel-hero" />
+              <div className="skel skel-hero-label" />
+            </div>
+            <div className="skel skel-disk" />
+            <div className="status-content">
+              <div className="skel skel-row" />
+            </div>
+            <div className="status-footer">
+              <div className="skel skel-btn" />
+            </div>
+          </>
         )}
       </div>
     );
@@ -317,7 +334,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       <StatusIndicator
         state={appStatus.clean_state}
         value={
-          appStatus.clean_state === 'Clean' ? null
+          appStatus.clean_state === 'Clean'
+            ? (appStatus.dev_total_bytes > 0 ? appStatus.dev_total_display : null)
             : appStatus.clean_state === 'Runaway' ? appStatus.cache.size_display
             : appStatus.reclaimable_display
         }
@@ -327,7 +345,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             : appStatus.clean_state !== 'Clean'
               ? 'to clean'
               : appStatus.dev_total_bytes > 0
-                ? 'Caches clean'
+                ? 'dev artifacts'
                 : appStatus.show_gap_banner
                   ? 'Nothing to clean'
                   : 'All clean'

@@ -113,18 +113,67 @@
 }
 
 /* ============================================================
-   Scan shell — pulsing logo while calculating
+   Skeleton loader — shimmer placeholders while scanning
    ============================================================ */
-.scan-shell {
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
+.skel {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  position: relative;
+  overflow: hidden;
 }
 
-.scan-loader {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.04) 60%,
+    transparent 100%
+  );
+  animation: skel-shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes skel-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.skel-settings {
+  width: 26px;
+  height: 26px;
+}
+
+.skel-hero {
+  width: 180px;
+  height: 36px;
+  margin: 0 auto;
+  border-radius: 6px;
+}
+
+.skel-hero-label {
+  width: 100px;
+  height: 12px;
+  margin: var(--space-xs) auto 0;
+}
+
+.skel-disk {
+  width: 160px;
+  height: 12px;
+  margin: var(--space-xs) auto 0;
+}
+
+.skel-row {
+  width: 100%;
+  height: 14px;
+}
+
+.skel-btn {
+  width: 100%;
+  height: var(--btn-height);
 }
 
 /* Hero split: big number + small descriptor */
