@@ -288,6 +288,20 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const stateClass = appStatus.clean_state.toLowerCase();
 
+  // Button scope: cache + Safe-tier artifacts only (what Clean Now actually removes)
+  const safeDevBytes = devResult
+    ? devResult.artifacts
+        .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
+        .reduce((sum, a) => sum + a.size_bytes, 0)
+    : 0;
+  const safeCleanableBytes = appStatus.cache.size_bytes + safeDevBytes;
+  const safeCleanableDisplay = formatSize(safeCleanableBytes);
+  // Threshold: below 1 MB, the safe-clean button is effectively empty
+  const safeCleanMeaningful = safeCleanableBytes >= 1024 * 1024;
+  // Whether non-safe dev artifacts hold meaningful space (>= 10 MB)
+  const nonSafeDevBytes = appStatus.dev_total_bytes - safeDevBytes;
+  const hasNonSafeArtifacts = nonSafeDevBytes >= 10 * 1024 * 1024;
+
   // Build the resting summary suffix: "freed 1.2 GB"
   const lastCleanSummary = lastCleanFreed
     ? `freed ${lastCleanFreed}`
@@ -385,7 +399,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       </div>
 
       <div className="status-footer">
-        {appStatus.clean_state !== 'Clean' && (
+        {appStatus.clean_state !== 'Clean' && safeCleanMeaningful && (
           <button
             className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
             onClick={handleCleanClick}
@@ -396,8 +410,18 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
                 Cleaning<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span>
               </span>
             ) : (
-              'Clean Now'
+              `Clean ${safeCleanableDisplay} safely`
             )}
+          </button>
+        )}
+
+        {appStatus.clean_state !== 'Clean' && !safeCleanMeaningful && hasNonSafeArtifacts && (
+          <button
+            className="clean-btn review-artifacts"
+            onClick={onDevScanClick}
+          >
+            {`Review ${appStatus.dev_total_display} in dev artifacts`}
+            <span className="review-arrow">&rsaquo;</span>
           </button>
         )}
 

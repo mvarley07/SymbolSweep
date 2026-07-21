@@ -498,6 +498,29 @@
   transform: none !important;
 }
 
+/* Review artifacts — redirect CTA when safe-clean is empty */
+.clean-btn.review-artifacts {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+  box-shadow: none;
+  gap: var(--space-xs);
+}
+
+.clean-btn.review-artifacts:hover {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.5);
+}
+
+.clean-btn.review-artifacts:active {
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.review-arrow {
+  font-size: 1.2em;
+  line-height: 1;
+}
+
 /* Dev Scan Link */
 .dev-scan-link {
   display: flex;
