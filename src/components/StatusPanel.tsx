@@ -85,10 +85,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
-  const [bannerFading, setBannerFading] = useState(false);
-  const [showBanner, setShowBanner] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [freshCleanFreed, setFreshCleanFreed] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Auto-resize window to fit panel content
@@ -132,31 +130,12 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     };
   }, [appStatus?.dev_scan_complete]);
 
-  const showCleanBanner = (message: string) => {
-    setBannerMessage(message);
-    setShowBanner(true);
-    setBannerFading(false);
-  };
-
-  // Auto-dismiss success banner after 5 seconds
+  // Auto-clear the transient "Freed X" display after 5 seconds
   useEffect(() => {
-    if (!showBanner) return;
-
-    const fadeTimer = setTimeout(() => {
-      setBannerFading(true);
-    }, 4700);
-
-    const removeTimer = setTimeout(() => {
-      setShowBanner(false);
-      setBannerFading(false);
-      setBannerMessage(null);
-    }, 5000);
-
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(removeTimer);
-    };
-  }, [showBanner]);
+    if (!freshCleanFreed) return;
+    const timer = setTimeout(() => setFreshCleanFreed(null), 5000);
+    return () => clearTimeout(timer);
+  }, [freshCleanFreed]);
 
   const handleCleanClick = () => {
     if (!settings.first_clean_confirmed) {
@@ -220,14 +199,13 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         // fall back to reported bytes freed
       }
 
-      // Show disk-free delta, not just bytes unlinked
+      // Show freed amount inline in the cache-cleaned line
       if (diskDelta > 0) {
-        showCleanBanner(`Freed ${formatSize(diskDelta)} disk space`);
+        setFreshCleanFreed(`Cache cleaned ${formatSize(diskDelta)}`);
       } else if (totalFreed > 0) {
-        showCleanBanner(`Freed ${formatSize(totalFreed)}`);
+        setFreshCleanFreed(`Cache cleaned ${formatSize(totalFreed)}`);
       } else {
-        const devRemaining = appStatus?.dev_total_bytes ?? 0;
-        showCleanBanner(devRemaining > 0 ? 'Caches already clean' : 'Already clean');
+        setFreshCleanFreed(null);
       }
     } catch (err) {
       console.error('Clean failed:', err);
@@ -310,9 +288,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const stateClass = appStatus.clean_state.toLowerCase();
 
-  // Build the last-clean summary: "Last clean freed 1.2 GB" or "No recent cleans"
+  // Build the resting summary suffix: "freed 1.2 GB"
   const lastCleanSummary = lastCleanFreed
-    ? `Last clean freed ${lastCleanFreed}`
+    ? `freed ${lastCleanFreed}`
     : null;
 
   return (
@@ -364,13 +342,23 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       <div className="status-content">
         {/* Last clean summary — single line, no expand */}
         {lastCleanTime !== 'Never' && lastCleanTime !== 'Loading...' && (
-          <div className="last-clean-summary">
-            <span className="last-clean-label">Last cleaned</span>
-            <span className="last-clean-time">{lastCleanTime}</span>
-            {lastCleanSummary && (
+          <div className={`last-clean-summary${freshCleanFreed ? ' fresh' : ''}`}>
+            {freshCleanFreed ? (
               <>
+                <span className="last-clean-freed-highlight">{freshCleanFreed}</span>
                 <span className="last-clean-sep">&middot;</span>
-                <span className="last-clean-freed">{lastCleanSummary}</span>
+                <span className="last-clean-time">just now</span>
+              </>
+            ) : (
+              <>
+                <span className="last-clean-label">Cache cleaned</span>
+                <span className="last-clean-time">{lastCleanTime}</span>
+                {lastCleanSummary && (
+                  <>
+                    <span className="last-clean-sep">&middot;</span>
+                    <span className="last-clean-freed">{lastCleanSummary}</span>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -395,13 +383,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         )}
 
       </div>
-
-      {showBanner && bannerMessage && (
-        <div className={`clean-result${bannerFading ? ' fading-out' : ''}`}>
-          <span className="result-icon">&#10003;</span>
-          <span>{bannerMessage}</span>
-        </div>
-      )}
 
       <div className="status-footer">
         {appStatus.clean_state !== 'Clean' && (
