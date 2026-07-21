@@ -16,10 +16,12 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
   const [tapCount, setTapCount] = useState(0);
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [appVersion, setAppVersion] = useState('');
+  const [buildSha, setBuildSha] = useState('');
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up_to_date' | 'installed' | 'error'>('idle');
 
   useEffect(() => {
     getVersion().then(setAppVersion);
+    invoke<string>('get_build_sha').then(setBuildSha).catch(() => {});
   }, []);
 
   const handleCheckUpdate = async () => {
@@ -226,7 +228,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
             <div className="setting-info">
               <label>Updates</label>
               <span className="setting-description">
-                {updateStatus === 'installed' ? 'Restart to apply update' : `v${appVersion}`}
+                {updateStatus === 'installed' ? 'Restart to apply update' : `v${appVersion}${buildSha ? ` (${buildSha})` : ''}`}
               </span>
             </div>
             <button
@@ -327,6 +329,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
           <div className="footer-logo-icon" aria-hidden="true" />
           <span className="footer-logo-text"><span className="logo-sym">Symbol</span>Sweep</span>
         </div>
+        <span className="footer-build">{appVersion}{buildSha ? ` (${buildSha})` : ''}</span>
       </footer>
     </div>
   );

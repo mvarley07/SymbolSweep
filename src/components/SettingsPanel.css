@@ -363,7 +363,9 @@ select option {
 /* Footer with logo */
 .settings-footer {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   padding: var(--space-lg) 0 var(--space-xs);
   cursor: pointer;
   user-select: none;
@@ -400,6 +402,14 @@ select option {
   font-weight: 600;
   color: var(--accent);
   letter-spacing: -0.02em;
+}
+
+.footer-build {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .footer-logo-text .logo-sym {

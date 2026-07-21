@@ -471,6 +471,11 @@ async fn purge_ss_trash() -> Result<PurgeResult, String> {
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_build_sha() -> &'static str {
+    env!("BUILD_SHA")
+}
+
 // ============================================================================
 // App Entry Point
 // ============================================================================
@@ -1005,6 +1010,7 @@ pub fn run() {
             delete_dev_artifacts_manual,
             get_recent_deletions,
             check_for_update,
+            get_build_sha,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
