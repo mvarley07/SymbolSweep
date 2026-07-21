@@ -592,6 +592,8 @@ pub fn run() {
             let state = app.state::<AppState>();
             let settings = Arc::clone(&state.settings);
             let dev_result_monitor = Arc::clone(&state.dev_scan_result);
+            let dev_in_progress_monitor = Arc::clone(&state.dev_scan_in_progress);
+            let dev_scan_epoch_monitor = Arc::clone(&state.last_dev_scan_epoch);
 
             std::thread::spawn(move || {
                 // Track if we've already notified for each escalation level this session
@@ -631,6 +633,57 @@ pub fn run() {
                     let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete, failures);
                     let _ = update_tray(&app_handle, &app_status);
                     let _ = app_handle.emit("app-status-update", &app_status);
+
+                    // Re-run dev scan if stale so tray stays consistent with popup
+                    let now_epoch = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    let last_dev = dev_scan_epoch_monitor.load(std::sync::atomic::Ordering::SeqCst);
+                    if now_epoch.saturating_sub(last_dev) >= 300
+                        && dev_in_progress_monitor
+                            .compare_exchange(
+                                false,
+                                true,
+                                std::sync::atomic::Ordering::SeqCst,
+                                std::sync::atomic::Ordering::SeqCst,
+                            )
+                            .is_ok()
+                    {
+                        let roots = {
+                            let s = settings.lock().unwrap();
+                            s.dev_scan_roots.clone()
+                        };
+                        let result = dev_scanner::scan_dev_artifacts(&roots);
+                        let dev_total_fresh = result.total_bytes;
+
+                        {
+                            let mut cached = dev_result_monitor.lock().unwrap();
+                            *cached = Some(result);
+                        }
+                        dev_scan_epoch_monitor.store(
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(),
+                            std::sync::atomic::Ordering::SeqCst,
+                        );
+                        dev_in_progress_monitor.store(false, std::sync::atomic::Ordering::SeqCst);
+
+                        // Recompute with fresh dev numbers and update tray + frontend
+                        let cache_fresh = {
+                            let s = settings.lock().unwrap();
+                            if s.debug_mode {
+                                get_simulated_status(s.debug_simulated_size)
+                            } else {
+                                get_cache_status()
+                            }
+                        };
+                        let failures = settings.lock().unwrap().consecutive_autoclean_failures;
+                        let app_status = compute_app_status(&cache_fresh, dev_total_fresh, true, failures);
+                        let _ = update_tray(&app_handle, &app_status);
+                        let _ = app_handle.emit("app-status-update", &app_status);
+                    }
 
                     // Check for auto-clean conditions
                     let should_auto_clean = {
