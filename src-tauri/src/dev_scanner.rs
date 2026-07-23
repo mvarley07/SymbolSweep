@@ -1202,30 +1202,38 @@ pub fn get_ss_trash_info() -> SsTrashInfo {
 /// SAFETY: Only deletes paths inside ~/.Trash. Manifest entries pointing
 /// elsewhere are rejected and logged as errors (defense against corruption).
 pub fn purge_ss_trash() -> PurgeResult {
-    purge_ss_trash_in(&get_home_dir().join(".Trash"))
+    purge_ss_trash_in(&get_home_dir().join(".Trash"), &|_, _, _| {})
+}
+
+/// Purge with a per-item progress callback: `(current_index, total_count, bytes_freed_so_far)`.
+pub fn purge_ss_trash_with_progress(on_progress: &dyn Fn(usize, usize, u64)) -> PurgeResult {
+    purge_ss_trash_in(&get_home_dir().join(".Trash"), on_progress)
 }
 
 /// Inner implementation accepting an explicit trash root.
 /// SAFETY GUARD: only deletes paths inside `trash_dir`.
-fn purge_ss_trash_in(trash_dir: &Path) -> PurgeResult {
+fn purge_ss_trash_in(trash_dir: &Path, on_progress: &dyn Fn(usize, usize, u64)) -> PurgeResult {
     let manifest = load_trash_manifest();
+    let total = manifest.len();
     let mut purged_count = 0usize;
     let mut bytes_freed = 0u64;
     let mut errors = Vec::new();
     let mut remaining = Vec::new();
 
-    for item in &manifest {
+    for (idx, item) in manifest.iter().enumerate() {
         let path = Path::new(&item.trash_path);
 
         // SAFETY GUARD: only delete inside trash_dir — reject anything else
         if !path.starts_with(trash_dir) {
             errors.push(format!("SAFETY: refused to delete path outside Trash: {}", item.trash_path));
             remaining.push(item.clone());
+            on_progress(idx + 1, total, bytes_freed);
             continue;
         }
 
         if !path.exists() {
             // Already gone (user emptied Trash manually) — drop from manifest
+            on_progress(idx + 1, total, bytes_freed);
             continue;
         }
         let remove_result = if path.is_dir() {
@@ -1243,6 +1251,7 @@ fn purge_ss_trash_in(trash_dir: &Path) -> PurgeResult {
                 remaining.push(item.clone());
             }
         }
+        on_progress(idx + 1, total, bytes_freed);
     }
 
     save_trash_manifest(&remaining);

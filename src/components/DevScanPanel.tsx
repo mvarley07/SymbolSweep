@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import type { ArtifactTier, DevArtifact, SsTrashInfo, PurgeResult } from '../types';
 import './DevScanPanel.css';
@@ -153,6 +154,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const [deletedToTrash, setDeletedToTrash] = useState(false);
   const [trashInfo, setTrashInfo] = useState<SsTrashInfo | null>(null);
   const [purging, setPurging] = useState(false);
+  const [purgeProgress, setPurgeProgress] = useState<{ current: number; total: number; bytes_freed_so_far: string } | null>(null);
   const [confirmPurge, setConfirmPurge] = useState(false);
   // Legend: expanded once on first-ever visit, collapsed by default thereafter.
   // "?" in header toggles it open/closed within a session without re-persisting.
@@ -182,6 +184,11 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const handlePurgeSsTrash = async () => {
     setConfirmPurge(false);
     setPurging(true);
+    setPurgeProgress(null);
+    const unlisten = await listen<{ current: number; total: number; bytes_freed_so_far: string }>(
+      'trash-purge-progress',
+      (event) => { setPurgeProgress(event.payload); },
+    );
     try {
       const res = await invoke<PurgeResult>('purge_ss_trash');
       if (res.purged_count > 0 && res.errors.length > 0) {
@@ -198,7 +205,9 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     } catch {
       showResult('Error emptying Trash');
     } finally {
+      unlisten();
       setPurging(false);
+      setPurgeProgress(null);
     }
   };
 
@@ -462,7 +471,11 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
 
           {purging && (
             <div className="delete-message">
-              <span>Emptying Trash...</span>
+              <span>
+                {purgeProgress
+                  ? `Emptying Trash\u2026 ${purgeProgress.current} of ${purgeProgress.total} items${purgeProgress.bytes_freed_so_far !== '0 B' ? ` (${purgeProgress.bytes_freed_so_far} freed)` : ''}`
+                  : 'Emptying Trash\u2026'}
+              </span>
             </div>
           )}
 

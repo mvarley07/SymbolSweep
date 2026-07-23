@@ -12,8 +12,8 @@ use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, log_deletion, CleanResult};
 use cache_monitor::{
-    compute_app_status, get_cache_status, get_combined_cache_status, get_simulated_status,
-    is_daemon_running, AppStatus, CacheStatus,
+    compute_app_status, format_size, get_cache_status, get_combined_cache_status,
+    get_simulated_status, is_daemon_running, AppStatus, CacheStatus,
 };
 use dev_scanner::{DevDeleteResult, DevScanResult, PurgeResult, SsTrashInfo};
 use scheduler::{time_since_last_clean, Settings};
@@ -465,10 +465,27 @@ fn get_ss_trash_info() -> SsTrashInfo {
 
 /// Permanently delete only the items SS moved to Trash — never touches other Trash contents
 #[tauri::command]
-async fn purge_ss_trash() -> Result<PurgeResult, String> {
-    tauri::async_runtime::spawn_blocking(dev_scanner::purge_ss_trash)
-        .await
-        .map_err(|e| e.to_string())
+async fn purge_ss_trash(app: tauri::AppHandle) -> Result<PurgeResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        dev_scanner::purge_ss_trash_with_progress(&|current, total, bytes_freed| {
+            #[derive(Clone, serde::Serialize)]
+            struct PurgeProgress {
+                current: usize,
+                total: usize,
+                bytes_freed_so_far: String,
+            }
+            let _ = app.emit(
+                "trash-purge-progress",
+                PurgeProgress {
+                    current,
+                    total,
+                    bytes_freed_so_far: format_size(bytes_freed),
+                },
+            );
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
