@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { StatusPanel } from './components/StatusPanel';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -50,18 +49,6 @@ function App() {
   }, []);
 
   // Focus-loss hiding is now handled in Rust (lib.rs) for reliability
-
-  // Listen for clean request from tray menu
-  useEffect(() => {
-    const unlisten = listen('clean-requested', () => {
-      // The clean will be triggered, we just need to be visible
-      // The StatusPanel will handle the actual clean
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
 
   const handleWelcomeComplete = async (launchAtLogin: boolean) => {
     await updateSettings({

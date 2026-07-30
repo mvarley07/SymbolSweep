@@ -412,10 +412,6 @@ select option {
   font-variant-numeric: tabular-nums;
 }
 
-.footer-sha {
-  opacity: 0.5;
-}
-
 .footer-copied {
   font-size: 9px;
   color: var(--accent);

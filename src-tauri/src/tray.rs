@@ -53,12 +53,11 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
 
     // Create menu items
     let show_item = MenuItem::with_id(app, "show", "Show SymbolSweep", true, None::<&str>)?;
-    let clean_item = MenuItem::with_id(app, "clean", "Clean Cache Now", true, None::<&str>)?;
     let separator = MenuItem::with_id(app, "sep", "---", false, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     // Create menu
-    let menu = Menu::with_items(app, &[&show_item, &clean_item, &separator, &quit_item])?;
+    let menu = Menu::with_items(app, &[&show_item, &separator, &quit_item])?;
 
     // Create a minimal 1x1 transparent icon (required by Tauri, but we'll hide it with title)
     let icon = create_tray_icon()?;
@@ -112,10 +111,6 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dy
                     let _ = window.set_focus();
                     let _ = app.emit("window-shown", ());
                 }
-            }
-            "clean" => {
-                // Emit event to trigger clean from frontend
-                let _ = app.emit("clean-requested", ());
             }
             "quit" => {
                 app.exit(0);

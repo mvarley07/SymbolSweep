@@ -340,7 +340,7 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
         </div>
         {copied
           ? <span className="footer-copied">Copied</span>
-          : <span className="footer-build">{appVersion}{buildSha && <span className="footer-sha"> ({buildSha})</span>}</span>
+          : <span className="footer-build">{appVersion}</span>
         }
       </footer>
     </div>
