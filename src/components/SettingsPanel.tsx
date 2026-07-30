@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
@@ -18,6 +18,8 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
   const [appVersion, setAppVersion] = useState('');
   const [buildSha, setBuildSha] = useState('');
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up_to_date' | 'installed' | 'error'>('idle');
+  const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     getVersion().then(setAppVersion);
@@ -40,10 +42,18 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
     }
   };
 
-  const handleVersionTap = () => {
+  const handleFooterClick = useCallback(() => {
+    // Copy build string to clipboard
+    const buildString = `SymbolSweep ${appVersion}${buildSha ? ` (${buildSha})` : ''}`;
+    navigator.clipboard.writeText(buildString).then(() => {
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+      setCopied(true);
+      copiedTimeoutRef.current = setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+
+    // Debug unlock: 5 rapid taps
     if (debugUnlocked) return;
 
-    // Clear existing timeout
     if (tapTimeoutRef.current) {
       clearTimeout(tapTimeoutRef.current);
     }
@@ -55,12 +65,11 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
       setDebugUnlocked(true);
       setTapCount(0);
     } else {
-      // Reset after 2 seconds of no taps
       tapTimeoutRef.current = setTimeout(() => {
         setTapCount(0);
       }, 2000);
     }
-  };
+  }, [appVersion, buildSha, debugUnlocked, tapCount]);
 
   if (loading) {
     return (
@@ -324,12 +333,15 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
 
         </div>
 
-      <footer className="settings-footer" onClick={handleVersionTap}>
+      <footer className="settings-footer" onClick={handleFooterClick} title="Click to copy build info">
         <div className="footer-logo">
           <div className="footer-logo-icon" aria-hidden="true" />
           <span className="footer-logo-text"><span className="logo-sym">Symbol</span>Sweep</span>
         </div>
-        <span className="footer-build">{appVersion}{buildSha ? ` (${buildSha})` : ''}</span>
+        {copied
+          ? <span className="footer-copied">Copied</span>
+          : <span className="footer-build">{appVersion}{buildSha && <span className="footer-sha"> ({buildSha})</span>}</span>
+        }
       </footer>
     </div>
   );
