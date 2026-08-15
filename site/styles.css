@@ -77,7 +77,7 @@ code {
 .band--demo    { overflow: hidden; padding-bottom: 48px; }
 .band--pillars { background: var(--surface); padding: 40px 0; }
 .band--steps   { padding: 40px 0; }
-.band--founder { background: var(--surface); padding: 28px 0; }
+.band--origin  { background: var(--surface); padding: 20px 0; }
 .band--cta     { padding: 28px 0 40px; }
 .band--footer  { padding: 0 0 28px; }
 
@@ -196,11 +196,11 @@ code {
   margin-bottom: 118px;
 }
 
-/* ─── Founder note ───────────────────────────────────────────────────── */
-.founder-note {
-  margin-bottom: 24px;
+/* ─── Origin note ────────────────────────────────────────────────────── */
+.origin-note {
+  margin-bottom: 16px;
   font-size: 15px;
-  color: var(--text-faint);
+  color: var(--text-dim);
   line-height: 1.5;
   max-width: 540px;
 }
@@ -388,8 +388,8 @@ code {
     padding: 32px 0;
   }
 
-  .band--founder {
-    padding: 24px 0;
+  .band--origin {
+    padding: 16px 0;
   }
 
   .demo-slot .ssv-stage {
