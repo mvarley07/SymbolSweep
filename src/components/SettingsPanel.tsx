@@ -8,9 +8,10 @@ import './SettingsPanel.css';
 
 interface SettingsPanelProps {
   onBack: () => void;
+  onDeactivated?: () => void;
 }
 
-export function SettingsPanel({ onBack }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
   const { settings, loading, saving, updateSetting } = useSettings();
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -20,6 +21,9 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up_to_date' | 'installed' | 'error'>('idle');
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivateConfirm, setDeactivateConfirm] = useState(false);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
   useEffect(() => {
     getVersion().then(setAppVersion);
@@ -252,6 +256,67 @@ export function SettingsPanel({ onBack }: SettingsPanelProps) {
                'Check'}
             </button>
           </div>
+        </section>
+
+        <section className="settings-section">
+          <h2>License</h2>
+          {!deactivateConfirm ? (
+            <div className="setting-row">
+              <div className="setting-info">
+                <label>Deactivate this machine</label>
+                <span className="setting-description">
+                  Frees a slot so you can activate on another Mac
+                </span>
+              </div>
+              <button
+                className="update-check-btn deactivate-btn"
+                onClick={() => setDeactivateConfirm(true)}
+                disabled={deactivating}
+              >
+                Deactivate
+              </button>
+            </div>
+          ) : (
+            <div className="deactivate-confirm">
+              <p className="deactivate-warning">
+                This will sign out your license on this machine. You'll need to
+                re-enter your key to use SymbolSweep here again.
+              </p>
+              {deactivateError && (
+                <p className="deactivate-error">{deactivateError}</p>
+              )}
+              <div className="deactivate-actions">
+                <button
+                  className="update-check-btn"
+                  onClick={() => {
+                    setDeactivateConfirm(false);
+                    setDeactivateError(null);
+                  }}
+                  disabled={deactivating}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="update-check-btn deactivate-btn"
+                  onClick={async () => {
+                    setDeactivating(true);
+                    setDeactivateError(null);
+                    try {
+                      await invoke('deactivate_license');
+                      onDeactivated?.();
+                    } catch (e) {
+                      setDeactivateError(String(e));
+                    } finally {
+                      setDeactivating(false);
+                    }
+                  }}
+                  disabled={deactivating}
+                >
+                  {deactivating ? 'Deactivating\u2026' : 'Confirm'}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {debugUnlocked && (

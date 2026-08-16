@@ -50,6 +50,15 @@ pub struct Settings {
     /// Consecutive autoclean failure count (persisted across restarts)
     #[serde(default)]
     pub consecutive_autoclean_failures: u32,
+    /// License key (stored after successful activation)
+    #[serde(default)]
+    pub license_key: Option<String>,
+    /// Instance ID returned by LemonSqueezy on activation
+    #[serde(default)]
+    pub license_instance_id: Option<String>,
+    /// Unix timestamp of last successful license validation
+    #[serde(default)]
+    pub license_last_validated: u64,
 }
 
 fn default_dev_scan_roots() -> Vec<String> {
@@ -75,6 +84,9 @@ impl Default for Settings {
             last_real_clean_timestamp: 0,
             last_real_clean_freed: 0,
             consecutive_autoclean_failures: 0,
+            license_key: None,
+            license_instance_id: None,
+            license_last_validated: 0,
         }
     }
 }

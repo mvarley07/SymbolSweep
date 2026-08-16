@@ -122,6 +122,21 @@ export interface PurgeResult {
   errors: string[];
 }
 
+// License types
+export interface LicenseStatus {
+  status: 'NotActivated' | 'Valid' | 'Revalidated' | 'Rejected' | 'FailOpen';
+  message?: string;
+}
+
+export interface ActivationResult {
+  success: boolean;
+  error: string | null;
+  instance_id: string | null;
+  is_limit_reached: boolean;
+  activation_limit: number | null;
+  activation_usage: number | null;
+}
+
 // Debug preset sizes (simulate reclaimable for CleanState testing)
 export const DEBUG_SIZES = {
   EMPTY: 0,

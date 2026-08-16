@@ -269,6 +269,44 @@ select option {
   cursor: not-allowed;
 }
 
+/* Deactivate */
+.deactivate-btn {
+  color: var(--state-critical, #ff453a) !important;
+  border-color: rgba(255, 69, 58, 0.25) !important;
+}
+
+.deactivate-btn:hover:not(:disabled) {
+  background: var(--state-critical, #ff453a) !important;
+  border-color: var(--state-critical, #ff453a) !important;
+  color: white !important;
+}
+
+.deactivate-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.deactivate-warning {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.deactivate-error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--state-critical, #ff453a);
+}
+
+.deactivate-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
 /* Debug Section — intentionally dashed border to signal dev-only */
 .debug-section {
   border-top: 1px dashed var(--border-medium);

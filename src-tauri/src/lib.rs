@@ -3,6 +3,7 @@
 mod cache_cleaner;
 mod cache_monitor;
 mod dev_scanner;
+mod license;
 mod scheduler;
 mod tray;
 
@@ -491,6 +492,99 @@ async fn purge_ss_trash(app: tauri::AppHandle) -> Result<PurgeResult, String> {
 #[tauri::command]
 fn get_build_sha() -> &'static str {
     env!("BUILD_SHA")
+}
+
+// ============================================================================
+// License Commands
+// ============================================================================
+
+/// Check license status at startup. Returns what the frontend should do.
+#[tauri::command]
+async fn check_license(state: tauri::State<'_, AppState>) -> Result<license::LicenseStatus, String> {
+    let (key, iid, last_val) = {
+        let s = state.settings.lock().unwrap();
+        (
+            s.license_key.clone(),
+            s.license_instance_id.clone(),
+            s.license_last_validated,
+        )
+    };
+
+    match license::check_startup(&key, &iid, last_val) {
+        license::StartupAction::Proceed => Ok(license::LicenseStatus::Valid),
+        license::StartupAction::NeedActivation => Ok(license::LicenseStatus::NotActivated),
+        license::StartupAction::Revalidate { key, instance_id } => {
+            match license::validate(&key, &instance_id).await {
+                license::ValidateResult::Valid => {
+                    let mut s = state.settings.lock().unwrap();
+                    s.license_last_validated = now_secs();
+                    let _ = s.save();
+                    Ok(license::LicenseStatus::Revalidated)
+                }
+                license::ValidateResult::Invalid { message } => {
+                    let mut s = state.settings.lock().unwrap();
+                    s.license_key = None;
+                    s.license_instance_id = None;
+                    s.license_last_validated = 0;
+                    let _ = s.save();
+                    Ok(license::LicenseStatus::Rejected { message })
+                }
+                license::ValidateResult::NetworkError => Ok(license::LicenseStatus::FailOpen),
+            }
+        }
+    }
+}
+
+/// Activate a license key on this machine.
+#[tauri::command]
+async fn activate_license(
+    key: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<license::ActivationResult, String> {
+    let machine_id = license::get_machine_id()?;
+    let result = license::activate(&key, &machine_id).await;
+
+    if result.success {
+        if let Some(ref iid) = result.instance_id {
+            let mut s = state.settings.lock().unwrap();
+            s.license_key = Some(key);
+            s.license_instance_id = Some(iid.clone());
+            s.license_last_validated = now_secs();
+            let _ = s.save();
+        }
+    }
+
+    Ok(result)
+}
+
+/// Deactivate this machine, freeing an activation slot.
+#[tauri::command]
+async fn deactivate_license(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let (key, iid) = {
+        let s = state.settings.lock().unwrap();
+        match (&s.license_key, &s.license_instance_id) {
+            (Some(k), Some(i)) => (k.clone(), i.clone()),
+            _ => return Err("No active license to deactivate".to_string()),
+        }
+    };
+
+    license::deactivate(&key, &iid).await?;
+
+    let mut s = state.settings.lock().unwrap();
+    s.license_key = None;
+    s.license_instance_id = None;
+    s.license_last_validated = 0;
+    let _ = s.save();
+    Ok(())
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 // ============================================================================
@@ -1028,6 +1122,9 @@ pub fn run() {
             get_recent_deletions,
             check_for_update,
             get_build_sha,
+            check_license,
+            activate_license,
+            deactivate_license,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
