@@ -16,49 +16,20 @@
   flex-direction: column;
 }
 
-/* ── Cluster 1: identity (icon + heading + subtext) ─────────── */
-.activation-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.activation-icon {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  background-color: var(--accent);
-  -webkit-mask-image: url('/broom-icon@2x.png');
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: url('/broom-icon@2x.png');
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-}
-
-.activation-screen h1 {
-  margin: 0;
-  font-size: var(--font-xl);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
+/* Description — sits below the reused header-logo from StatusPanel */
 .activation-description {
   font-size: var(--font-base);
   line-height: 1.5;
   color: var(--text-primary);
-  margin: var(--space-xs) 0 0 0;
+  margin: var(--space-sm) 0 0 0;
 }
 
-/* ── Cluster 2: action (input + helper + error + button) ────── */
+/* ── Action cluster (input + hints + error + button) ────────── */
 .activation-action {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  margin-top: auto;
+  margin-top: var(--space-lg);
 }
 
 /* Key input — monospace for typed value, system font for placeholder */
@@ -88,11 +59,27 @@
   opacity: 0.5;
 }
 
-.activation-helper {
-  font-size: var(--font-xs);
-  color: var(--text-tertiary);
+/* Hints — where to find the key */
+.activation-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activation-hints p {
   margin: 0;
-  line-height: 1;
+  font-size: var(--font-xs);
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.activation-hints a {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.activation-hints a:hover {
+  color: var(--accent-hover);
 }
 
 /* Error */

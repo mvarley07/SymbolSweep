@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import type { ActivationResult } from '../types';
 import './ActivationScreen.css';
 
@@ -51,9 +52,9 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
   return (
     <div className="activation-screen">
       <div className="activation-content">
-        <div className="activation-header">
-          <div className="activation-icon" aria-hidden="true" />
-          <h1>Activate SymbolSweep</h1>
+        <div className="header-logo">
+          <div className="logo-icon" aria-hidden="true" />
+          <span className="logo-text"><span className="logo-sym">Symbol</span>Sweep</span>
         </div>
 
         <p className="activation-description">
@@ -74,7 +75,23 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
             autoComplete="off"
           />
 
-          <p className="activation-helper">Sent to your email after purchase.</p>
+          <div className="activation-hints">
+            <p>Check your purchase confirmation email from Lemon Squeezy.</p>
+            <p>Subject line contains "SymbolSweep".</p>
+            <p>
+              Also available at{' '}
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openUrl('https://app.lemonsqueezy.com/my-orders');
+                }}
+              >
+                My Orders
+              </a>
+              .
+            </p>
+          </div>
 
           {error && <p className="activation-error">{error}</p>}
 

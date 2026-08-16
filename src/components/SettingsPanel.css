@@ -427,10 +427,10 @@ select option {
   width: 12px;
   flex-shrink: 0;
   background-color: var(--accent);
-  -webkit-mask-image: url('/broom-icon.png');
+  -webkit-mask-image: url('/broom-mark.png');
   -webkit-mask-size: contain;
   -webkit-mask-repeat: no-repeat;
-  mask-image: url('/broom-icon.png');
+  mask-image: url('/broom-mark.png');
   mask-size: contain;
   mask-repeat: no-repeat;
 }
