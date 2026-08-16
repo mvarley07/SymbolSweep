@@ -52,12 +52,7 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
     <div className="activation-screen">
       <div className="activation-content">
         <div className="activation-header">
-          <div className="activation-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
+          <div className="activation-icon" aria-hidden="true" />
           <h1>Activate SymbolSweep</h1>
         </div>
 
@@ -65,28 +60,32 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
           Enter your license key to get started.
         </p>
 
-        <input
-          type="text"
-          className="activation-input"
-          placeholder="Your license key"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-          autoFocus
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <div className="activation-action">
+          <input
+            type="text"
+            className={`activation-input${key ? ' has-value' : ''}`}
+            placeholder="Your license key"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+            autoFocus
+            spellCheck={false}
+            autoComplete="off"
+          />
 
-        {error && <p className="activation-error">{error}</p>}
+          <p className="activation-helper">Sent to your email after purchase.</p>
 
-        <button
-          className="activation-button"
-          onClick={handleActivate}
-          disabled={loading || !key.trim()}
-        >
-          {loading ? 'Activating\u2026' : 'Activate'}
-        </button>
+          {error && <p className="activation-error">{error}</p>}
+
+          <button
+            className="activation-button"
+            onClick={handleActivate}
+            disabled={loading || !key.trim()}
+          >
+            {loading ? 'Activating\u2026' : 'Activate'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -7,41 +7,35 @@
   padding: var(--gutter);
   padding-top: calc(var(--gutter) + var(--space-xl));
   box-sizing: border-box;
+  animation: scaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .activation-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
 }
 
-/* Header */
+/* ── Cluster 1: identity (icon + heading + subtext) ─────────── */
 .activation-header {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 .activation-icon {
-  width: 44px;
-  height: 44px;
-  background: var(--accent-gradient);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
-  box-shadow:
-    0 2px 10px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-
-.activation-icon svg {
-  width: 24px;
-  height: 24px;
-  stroke: white;
-  stroke-width: 2;
+  background-color: var(--accent);
+  -webkit-mask-image: url('/broom-icon@2x.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/broom-icon@2x.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
 }
 
 .activation-screen h1 {
@@ -52,27 +46,38 @@
   color: var(--text-primary);
 }
 
-/* Description */
 .activation-description {
   font-size: var(--font-base);
   line-height: 1.5;
-  color: var(--text-secondary);
-  margin: 0;
+  color: var(--text-primary);
+  margin: var(--space-xs) 0 0 0;
 }
 
-/* Key input */
+/* ── Cluster 2: action (input + helper + error + button) ────── */
+.activation-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: auto;
+}
+
+/* Key input — monospace for typed value, system font for placeholder */
 .activation-input {
   width: 100%;
   padding: var(--space-sm) var(--space-md);
   font-size: var(--font-base);
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: inherit;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s ease;
   box-sizing: border-box;
+}
+
+.activation-input.has-value {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
 }
 
 .activation-input:focus {
@@ -83,47 +88,43 @@
   opacity: 0.5;
 }
 
+.activation-helper {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin: 0;
+  line-height: 1;
+}
+
 /* Error */
 .activation-error {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--font-xs);
   line-height: 1.4;
-  color: var(--state-critical, #ff453a);
+  color: var(--status-critical);
   padding: var(--space-sm) var(--space-md);
-  background: rgba(255, 69, 58, 0.08);
-  border: 1px solid rgba(255, 69, 58, 0.15);
-  border-radius: var(--radius-md);
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.15);
+  border-radius: var(--radius-sm);
 }
 
-/* Button — matches welcome-button pattern */
+/* Button — flat accent, matches clean-btn */
 .activation-button {
   width: 100%;
-  padding: var(--space-md) var(--space-xl);
-  font-size: var(--font-md);
-  font-weight: 600;
+  height: var(--btn-height);
+  padding: 0 var(--space-lg);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  letter-spacing: 0.01em;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  background: var(--accent-gradient);
+  background: var(--accent);
   color: white;
-  box-shadow:
-    0 2px 10px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  margin-top: auto;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
 .activation-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow:
-    0 4px 20px var(--accent-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-
-.activation-button:active:not(:disabled) {
-  transform: translateY(0) scale(0.99);
+  background: var(--accent-hover);
 }
 
 .activation-button:disabled {
