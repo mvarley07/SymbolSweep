@@ -75,23 +75,19 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
             autoComplete="off"
           />
 
-          <div className="activation-hints">
-            <p>Check your purchase confirmation email from Lemon Squeezy.</p>
-            <p>Subject line contains "SymbolSweep".</p>
-            <p>
-              Also available at{' '}
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  openUrl('https://app.lemonsqueezy.com/my-orders');
-                }}
-              >
-                My Orders
-              </a>
-              .
-            </p>
-          </div>
+          <p className="activation-hint">
+            Check your confirmation email from Lemon Squeezy, or find it at{' '}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                openUrl('https://app.lemonsqueezy.com/my-orders');
+              }}
+            >
+              My Orders
+            </a>
+            .
+          </p>
 
           {error && <p className="activation-error">{error}</p>}
 

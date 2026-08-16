@@ -29,7 +29,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  margin-top: var(--space-lg);
+  margin-top: var(--space-xl);
 }
 
 /* Key input — monospace for typed value, system font for placeholder */
@@ -59,26 +59,20 @@
   opacity: 0.5;
 }
 
-/* Hints — where to find the key */
-.activation-hints {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.activation-hints p {
+/* Hint — where to find the key */
+.activation-hint {
   margin: 0;
   font-size: var(--font-xs);
-  line-height: 1.4;
+  line-height: 1.5;
   color: var(--text-tertiary);
 }
 
-.activation-hints a {
+.activation-hint a {
   color: var(--accent);
   cursor: pointer;
 }
 
-.activation-hints a:hover {
+.activation-hint a:hover {
   color: var(--accent-hover);
 }
 
@@ -94,7 +88,7 @@
   border-radius: var(--radius-sm);
 }
 
-/* Button — flat accent, matches clean-btn */
+/* Button — flat accent, matches clean-btn structure */
 .activation-button {
   width: 100%;
   height: var(--btn-height);
@@ -107,7 +101,12 @@
   cursor: pointer;
   background: var(--accent);
   color: white;
-  transition: background 0.15s ease, opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s ease, opacity 0.2s ease;
+  margin-top: var(--space-sm);
 }
 
 .activation-button:hover:not(:disabled) {
@@ -117,4 +116,5 @@
 .activation-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none !important;
 }
