@@ -24,6 +24,8 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
   const [deactivating, setDeactivating] = useState(false);
   const [deactivateConfirm, setDeactivateConfirm] = useState(false);
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const keyCopiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     getVersion().then(setAppVersion);
@@ -260,6 +262,25 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
 
         <section className="settings-section">
           <h2>License</h2>
+
+          {settings.license_key && (
+            <div
+              className="license-key-display"
+              onClick={() => {
+                navigator.clipboard.writeText(settings.license_key!).then(() => {
+                  if (keyCopiedTimeoutRef.current) clearTimeout(keyCopiedTimeoutRef.current);
+                  setKeyCopied(true);
+                  keyCopiedTimeoutRef.current = setTimeout(() => setKeyCopied(false), 1500);
+                }).catch(() => {});
+              }}
+              title="Click to copy license key"
+            >
+              <span className="license-status">Active on this Mac</span>
+              <span className="license-key-value">{settings.license_key}</span>
+              {keyCopied && <span className="license-copied">Copied</span>}
+            </div>
+          )}
+
           {!deactivateConfirm ? (
             <div className="setting-row">
               <div className="setting-info">

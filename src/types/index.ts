@@ -46,6 +46,7 @@ export interface Settings {
   first_run_completed: boolean;
   first_clean_confirmed: boolean;
   dev_scan_roots: string[];
+  license_key?: string;
 }
 
 // Unified app status — single source of truth for tray and popup
