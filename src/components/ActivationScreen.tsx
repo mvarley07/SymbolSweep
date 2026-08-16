@@ -58,7 +58,7 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
         </div>
 
         <p className="activation-description">
-          Enter your license key to get started.
+          Enter your license key to get started:
         </p>
 
         <div className="activation-action">
