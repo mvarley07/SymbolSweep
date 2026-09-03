@@ -33,7 +33,12 @@
     <p>It does not access your documents, photos, mail, browser data, or any directories outside its scan scope. Deletes always go to macOS Trash first.</p>
 
     <h2>Network requests</h2>
-    <p>SymbolSweep makes zero network requests during normal operation. It does not phone home, upload telemetry, or communicate with any server. Optional update checks connect only to the update server and send no user data.</p>
+    <p>SymbolSweep makes exactly two kinds of network requests, and neither carries your scan data:</p>
+    <ul>
+      <li><strong>License activation.</strong> When you activate SymbolSweep, and every 30 days afterward to re-validate your license, the app contacts Lemon Squeezy&rsquo;s license API, sending your license key and a machine identifier (your Mac&rsquo;s IOPlatformUUID). Nothing else.</li>
+      <li><strong>Update check.</strong> The app contacts our update server, sending only the current app version, to fetch the release manifest.</li>
+    </ul>
+    <p>No scan results, file paths, or disk metrics are ever transmitted. It does not phone home, upload telemetry, or communicate with any other server.</p>
 
     <h2>Analytics</h2>
     <p>None. No cookies, no tracking pixels, no analytics service&mdash;not in the app, not on this website.</p>
@@ -42,7 +47,7 @@
     <p>We don&rsquo;t share data with third parties because we don&rsquo;t have any data to share.</p>
 
     <h2>Contact</h2>
-    <p>Questions? <a href="mailto:hello@symbolsweep.app">hello@symbolsweep.app</a></p>
+    <p>Questions? <a href="mailto:hello@symbolsweep.com">hello@symbolsweep.com</a></p>
 
     <footer class="site-footer" style="margin-top: 48px;">
       <a href="/">&larr; Back to SymbolSweep</a>
