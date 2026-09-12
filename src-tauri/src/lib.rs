@@ -291,11 +291,15 @@ async fn delete_dev_artifacts_inner(
     .await
     .map_err(|e| e.to_string())?;
 
-    // Update cached result (fast)
+    // Update cached result (fast) and record the scan timestamp
     {
         let mut cached = state.dev_scan_result.lock().unwrap();
         *cached = Some(new_scan.clone());
     }
+    state.last_dev_scan_epoch.store(
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
+        std::sync::atomic::Ordering::SeqCst,
+    );
 
     // Compute unified status and update tray + emit
     let cache_status = {
@@ -775,7 +779,7 @@ pub fn run() {
 
                         {
                             let mut cached = dev_result_monitor.lock().unwrap();
-                            *cached = Some(result);
+                            *cached = Some(result.clone());
                         }
                         dev_scan_epoch_monitor.store(
                             std::time::SystemTime::now()
@@ -799,6 +803,9 @@ pub fn run() {
                         let app_status = compute_app_status(&cache_fresh, dev_total_fresh, true, failures);
                         let _ = update_tray(&app_handle, &app_status);
                         let _ = app_handle.emit("app-status-update", &app_status);
+
+                        // Also emit full artifact list so an open DevScanPanel updates
+                        let _ = app_handle.emit("dev-scan-ready", &result);
                     }
 
                     // Check for auto-clean conditions

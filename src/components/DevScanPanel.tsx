@@ -366,7 +366,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
       {result && (
         <div className="scan-results">
           <div className="scan-total">
-            <span className="total-label">Total reclaimable</span>
+            <span className="total-label">Dev artifacts reclaimable</span>
             <span className="total-value">{result.total_display}</span>
           </div>
 
