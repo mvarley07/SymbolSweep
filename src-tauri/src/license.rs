@@ -11,6 +11,15 @@ use serde::{Deserialize, Serialize};
 
 const LS_API_BASE: &str = "https://api.lemonsqueezy.com/v1/licenses";
 
+// A valid LemonSqueezy key from ANY store/product would otherwise activate this
+// app. Every successful activate/validate is pinned to exactly one product.
+// !!! PLACEHOLDER — real IDs not yet supplied. Do not ship or release with 0. !!!
+const LS_STORE_ID: u64 = 0;
+const LS_PRODUCT_ID: u64 = 0;
+
+/// Shown when a key is genuine but belongs to a different store or product.
+const WRONG_PRODUCT_MSG: &str = "This license key is for a different product.";
+
 /// Re-validate at most every 30 days.
 pub const REVALIDATION_INTERVAL_SECS: u64 = 30 * 24 * 60 * 60;
 
@@ -56,6 +65,7 @@ struct LsActivateResponse {
     error: Option<String>,
     license_key: Option<LsLicenseKey>,
     instance: Option<LsInstance>,
+    meta: Option<LsMeta>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,6 +74,7 @@ struct LsValidateResponse {
     error: Option<String>,
     #[allow(dead_code)]
     license_key: Option<LsLicenseKey>,
+    meta: Option<LsMeta>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +92,31 @@ struct LsLicenseKey {
 #[derive(Debug, Deserialize)]
 struct LsInstance {
     id: String,
+}
+
+/// Identifies which store/product the key was issued against.
+///
+/// Both fields are optional so a malformed or partial meta block still
+/// deserializes and is then rejected, rather than failing the whole body
+/// parse (which `validate` treats as a network error and fails open).
+#[derive(Debug, Deserialize)]
+struct LsMeta {
+    store_id: Option<u64>,
+    product_id: Option<u64>,
+}
+
+/// True only when LS reported a meta block matching our pinned store+product.
+/// A missing meta block, or either id absent/null, is a rejection — not a pass.
+fn meta_matches(meta: &Option<LsMeta>) -> bool {
+    match meta {
+        Some(m) => match (m.store_id, m.product_id) {
+            (Some(store), Some(product)) => {
+                store == LS_STORE_ID && product == LS_PRODUCT_ID
+            }
+            _ => false,
+        },
+        None => false,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +230,15 @@ pub async fn activate(license_key: &str, instance_name: &str) -> ActivationResul
     };
 
     if body.activated {
+        // Genuine key, wrong store/product — refuse it.
+        if !meta_matches(&body.meta) {
+            // LS already consumed an activation slot before we saw the meta
+            // block. Hand it back; best-effort, the refusal stands either way.
+            if let Some(ref inst) = body.instance {
+                let _ = deactivate(license_key, &inst.id).await;
+            }
+            return activation_err(WRONG_PRODUCT_MSG);
+        }
         ActivationResult {
             success: true,
             error: None,
@@ -264,15 +309,31 @@ pub async fn validate(license_key: &str, instance_id: &str) -> ValidateResult {
         Err(_) => return ValidateResult::NetworkError,
     };
 
-    if body.valid {
-        ValidateResult::Valid
-    } else {
-        ValidateResult::Invalid {
+    decide_validate(body)
+}
+
+/// Pure decision step for a successfully parsed validate response.
+///
+/// Split out from `validate` so it can be unit-tested without network I/O.
+/// Only reached when the response parsed; network/5xx handling stays in
+/// `validate` and is unaffected by store/product pinning.
+fn decide_validate(body: LsValidateResponse) -> ValidateResult {
+    if !body.valid {
+        return ValidateResult::Invalid {
             message: body
                 .error
                 .unwrap_or_else(|| "License is no longer valid".to_string()),
-        }
+        };
     }
+
+    // Valid key, but issued for a different store or product.
+    if !meta_matches(&body.meta) {
+        return ValidateResult::Invalid {
+            message: WRONG_PRODUCT_MSG.to_string(),
+        };
+    }
+
+    ValidateResult::Valid
 }
 
 /// Deactivate this machine's instance, freeing a slot for another device.
@@ -325,5 +386,91 @@ fn activation_err(msg: &str) -> ActivationResult {
         is_limit_reached: false,
         activation_limit: None,
         activation_usage: None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a validate body the way LS sends one, with a raw meta block.
+    fn body_with_meta(meta_json: Option<String>) -> LsValidateResponse {
+        let meta_field = match meta_json {
+            Some(m) => format!(r#","meta":{}"#, m),
+            None => String::new(),
+        };
+        let json = format!(
+            r#"{{"valid":true,"error":null,"license_key":{{"activation_limit":3,"activation_usage":1}}{}}}"#,
+            meta_field
+        );
+        serde_json::from_str(&json).expect("sample LS body should deserialize")
+    }
+
+    /// Same, with a well-formed meta block for the given ids.
+    fn validate_body(meta: Option<(u64, u64)>) -> LsValidateResponse {
+        body_with_meta(meta.map(|(store, product)| {
+            format!(r#"{{"store_id":{},"product_id":{}}}"#, store, product)
+        }))
+    }
+
+    fn is_wrong_product(result: ValidateResult) -> bool {
+        matches!(result, ValidateResult::Invalid { ref message } if message == WRONG_PRODUCT_MSG)
+    }
+
+    #[test]
+    fn validate_rejects_wrong_product_id() {
+        let body = validate_body(Some((LS_STORE_ID, LS_PRODUCT_ID.wrapping_add(1))));
+        assert!(
+            is_wrong_product(decide_validate(body)),
+            "a valid key for another product must be rejected"
+        );
+    }
+
+    #[test]
+    fn validate_rejects_wrong_store_id() {
+        let body = validate_body(Some((LS_STORE_ID.wrapping_add(1), LS_PRODUCT_ID)));
+        assert!(is_wrong_product(decide_validate(body)));
+    }
+
+    #[test]
+    fn validate_rejects_missing_meta() {
+        assert!(is_wrong_product(decide_validate(validate_body(None))));
+    }
+
+    #[test]
+    fn validate_rejects_meta_with_null_product_id() {
+        let body = body_with_meta(Some(format!(
+            r#"{{"store_id":{},"product_id":null}}"#,
+            LS_STORE_ID
+        )));
+        assert!(
+            is_wrong_product(decide_validate(body)),
+            "a null product_id must reject, not fail open"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_matching_store_and_product() {
+        let body = validate_body(Some((LS_STORE_ID, LS_PRODUCT_ID)));
+        assert!(matches!(decide_validate(body), ValidateResult::Valid));
+    }
+
+    #[test]
+    fn validate_still_rejects_invalid_key_with_its_own_message() {
+        let json = format!(
+            r#"{{"valid":false,"error":"license_key has been revoked","meta":{{"store_id":{},"product_id":{}}}}}"#,
+            LS_STORE_ID, LS_PRODUCT_ID
+        );
+        let body: LsValidateResponse = serde_json::from_str(&json).unwrap();
+        match decide_validate(body) {
+            ValidateResult::Invalid { message } => {
+                assert_eq!(message, "license_key has been revoked")
+            }
+            _ => panic!("revoked key must stay Invalid"),
+        }
     }
 }

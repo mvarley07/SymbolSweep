@@ -2372,7 +2372,7 @@ mod tests {
             timestamp: 0,
         }]);
 
-        let result = purge_ss_trash_in(&tmp_trash);
+        let result = purge_ss_trash_in(&tmp_trash, &|_, _, _| {});
         restore_manifest(&backup);
 
         assert!(!ss_item.exists(), "SS item should be deleted by purge");
@@ -2418,7 +2418,7 @@ mod tests {
             },
         ]);
 
-        let result = purge_ss_trash_in(&tmp_trash);
+        let result = purge_ss_trash_in(&tmp_trash, &|_, _, _| {});
         let post_manifest = load_trash_manifest();
         restore_manifest(&backup);
 
