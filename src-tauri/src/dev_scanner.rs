@@ -249,51 +249,22 @@ fn dir_size(path: &Path) -> u64 {
     total
 }
 
-/// Check staleness of a project by looking at package.json, src/, and other
-/// project-activity indicators. Returns days since last activity.
-fn check_project_staleness(project_dir: &Path) -> Option<u64> {
-    let now = SystemTime::now();
-    let mut most_recent: Option<SystemTime> = None;
-
-    let indicators = [
-        "package.json",
-        "tsconfig.json",
-        "Cargo.toml",
-        "pom.xml",
-        "build.gradle",
-        "Makefile",
-        "Gemfile",
-    ];
-
-    // Check file indicators
-    for name in &indicators {
-        if let Ok(meta) = fs::metadata(project_dir.join(name)) {
-            if let Ok(modified) = meta.modified() {
-                match most_recent {
-                    Some(current) if modified > current => most_recent = Some(modified),
-                    None => most_recent = Some(modified),
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    // Check src/ directory
-    if let Ok(meta) = fs::metadata(project_dir.join("src")) {
-        if let Ok(modified) = meta.modified() {
-            match most_recent {
-                Some(current) if modified > current => most_recent = Some(modified),
-                None => most_recent = Some(modified),
-                _ => {}
-            }
-        }
-    }
-
-    most_recent.and_then(|mtime| {
-        now.duration_since(mtime)
-            .ok()
-            .map(|dur| dur.as_secs() / 86400)
-    })
+/// Days since an artifact's project was last active: the newer of the
+/// artifact's own mtime and <project>/.git/index (touched by checkouts,
+/// commits, staging). None if neither mtime is readable.
+fn check_project_staleness(artifact: &Path, project_dir: &Path) -> Option<u64> {
+    let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+    let most_recent = [mtime(artifact), mtime(&project_dir.join(".git").join("index"))]
+        .into_iter()
+        .flatten()
+        .max()?;
+    // A future mtime (clock skew) counts as active today
+    Some(
+        SystemTime::now()
+            .duration_since(most_recent)
+            .map(|d| d.as_secs() / 86400)
+            .unwrap_or(0),
+    )
 }
 
 /// Check if a directory has a sibling file with any of the given extensions
@@ -944,7 +915,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     tier: ArtifactTier::Rebuildable,
                     kind: "Rust target (build artifacts)".to_string(),
                     project: get_project_name(&entry_path),
-                    staleness_days: check_project_staleness(dir),
+                    staleness_days: check_project_staleness(&entry_path, dir),
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next cargo build (takes minutes, needs network)".to_string()),
                     active_build: building,
@@ -1112,7 +1083,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
     // Get total node_modules size (includes .cache)
     let total_size = dir_size(nm_path);
     if total_size > 0 {
-        let staleness = check_project_staleness(project_dir);
+        let staleness = check_project_staleness(nm_path, project_dir);
 
         artifacts.push(DevArtifact {
             path: nm_path.to_string_lossy().to_string(),
@@ -1839,6 +1810,36 @@ mod tests {
         assert_eq!(tier_of(".ShipIt"), Some(ArtifactTier::Rebuildable));
         assert_eq!(tier_of("coverage"), Some(ArtifactTier::Ask));
         assert_eq!(tier_of("pip"), Some(ArtifactTier::Safe));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_staleness_uses_artifact_and_git_index() {
+        let tmp = std::env::temp_dir().join("ss-staleness-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let project = tmp.join("proj");
+        let nm = project.join("node_modules");
+        let src = project.join("src");
+        fs::create_dir_all(&nm).unwrap();
+        fs::create_dir_all(&src).unwrap();
+
+        // src/ is fresh but no longer counts; only the artifact does
+        backdate(&nm, 10 * 24);
+        assert_eq!(check_project_staleness(&nm, &project), Some(10));
+
+        // A recent git index wins over an old artifact
+        fs::create_dir_all(project.join(".git")).unwrap();
+        fs::write(project.join(".git").join("index"), "x").unwrap();
+        backdate(&project.join(".git").join("index"), 3 * 24);
+        assert_eq!(check_project_staleness(&nm, &project), Some(3));
+
+        // An artifact newer than the git index wins
+        backdate(&nm, 0);
+        assert_eq!(check_project_staleness(&nm, &project), Some(0));
+
+        // Nothing readable: unknown
+        assert_eq!(check_project_staleness(&tmp.join("missing"), &tmp.join("nope")), None);
 
         let _ = fs::remove_dir_all(&tmp);
     }
