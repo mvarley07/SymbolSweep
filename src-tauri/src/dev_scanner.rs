@@ -1112,6 +1112,19 @@ pub struct DevDeleteResult {
     pub bytes_freed: u64,
     pub bytes_freed_display: String,
     pub errors: Vec<String>,
+    /// Safe-tier artifacts left in place because they look in use
+    #[serde(default)]
+    pub skipped: Vec<SkippedArtifact>,
+}
+
+/// An artifact the delete pass deliberately left alone, with a UI-ready reason
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkippedArtifact {
+    pub path: String,
+    pub size_bytes: u64,
+    pub size_display: String,
+    /// e.g. "modified 2h ago", "in use by node"
+    pub reason: String,
 }
 
 // ============================================================================
@@ -1350,6 +1363,134 @@ fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
     fs::remove_dir_all(path).map_err(|e| e.to_string()).map(|_| PathBuf::new())
 }
 
+// ============================================================================
+// In-use guards for Safe-tier deletes
+// ============================================================================
+
+/// Safe-tier artifacts modified more recently than this are left alone
+const RECENT_WINDOW: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Process names whose working directory marks a project as in use
+const PROJECT_PROCESS_NAMES: &[&str] = &["node", "npm", "pnpm", "yarn", "bun", "vite", "next"];
+
+/// Process names that may be reading or writing ~/.npm
+const NPM_PROCESS_NAMES: &[&str] = &["npm", "npx", "node"];
+
+/// Artifact directory names that live directly inside a project root
+const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cache", "coverage"];
+
+/// Snapshot of running processes, taken once per delete pass
+struct ProcessSnapshot {
+    /// (command name, working directory) for PROJECT_PROCESS_NAMES
+    cwds: Vec<(String, PathBuf)>,
+    /// First running process out of NPM_PROCESS_NAMES, if any
+    npm_user: Option<String>,
+}
+
+impl ProcessSnapshot {
+    fn capture() -> Self {
+        let mut cmd = Command::new("lsof");
+        cmd.arg("-a").arg("-d").arg("cwd");
+        for name in PROJECT_PROCESS_NAMES {
+            cmd.arg("-c").arg(name);
+        }
+        cmd.arg("-Fcn");
+        // lsof exits 1 when nothing matches; stdout is still valid (empty)
+        let cwds = cmd
+            .output()
+            .map(|o| parse_lsof_cwds(&String::from_utf8_lossy(&o.stdout)))
+            .unwrap_or_default();
+        let npm_user = NPM_PROCESS_NAMES
+            .iter()
+            .find(|n| is_process_running(n))
+            .map(|n| n.to_string());
+        ProcessSnapshot { cwds, npm_user }
+    }
+}
+
+/// Parse `lsof -Fcn` output into (command, cwd) pairs.
+fn parse_lsof_cwds(output: &str) -> Vec<(String, PathBuf)> {
+    let mut pairs = Vec::new();
+    let mut command = String::new();
+    for line in output.lines() {
+        match line.split_at(line.len().min(1)) {
+            ("p", _) => command.clear(),
+            ("c", name) => command = name.to_string(),
+            ("n", path) if !path.is_empty() => pairs.push((command.clone(), PathBuf::from(path))),
+            _ => {}
+        }
+    }
+    pairs
+}
+
+/// Returns the command name of the first process whose cwd is at or under `root`.
+fn process_in_project(cwds: &[(String, PathBuf)], root: &Path) -> Option<String> {
+    cwds.iter()
+        .find(|(_, cwd)| cwd.starts_with(root))
+        .map(|(name, _)| name.clone())
+}
+
+/// Returns the artifact's age if its own mtime is within `window` of `now`.
+fn recently_modified(path: &Path, now: SystemTime, window: std::time::Duration) -> Option<std::time::Duration> {
+    let mtime = fs::symlink_metadata(path).and_then(|m| m.modified()).ok()?;
+    // mtime in the future (clock skew) counts as recent
+    let age = now.duration_since(mtime).unwrap_or_default();
+    (age < window).then_some(age)
+}
+
+/// "just now", "45m ago", "2h ago"
+fn format_age(age: std::time::Duration) -> String {
+    let secs = age.as_secs();
+    if secs < 60 {
+        "just now".to_string()
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else {
+        format!("{}h ago", secs / 3600)
+    }
+}
+
+/// Project root for a project-scoped artifact (.next, node_modules/.cache, …), else None.
+fn project_root_for(path: &Path) -> Option<&Path> {
+    let name = path.file_name()?.to_str()?;
+    let parent = path.parent()?;
+    if PROJECT_SCOPED_NAMES.contains(&name) {
+        return Some(parent);
+    }
+    if name == ".cache" && parent.file_name().and_then(|n| n.to_str()) == Some("node_modules") {
+        return parent.parent();
+    }
+    None
+}
+
+/// Decide whether a Safe-tier artifact should be left alone right now.
+/// `procs` is consulted only when the mtime check passes, so lsof/pgrep run
+/// at most once per delete pass (the caller caches the snapshot).
+fn in_use_reason<F>(path: &Path, home: &Path, now: SystemTime, procs: &mut F) -> Option<String>
+where
+    F: FnMut() -> std::rc::Rc<ProcessSnapshot>,
+{
+    if let Some(age) = recently_modified(path, now, RECENT_WINDOW) {
+        return Some(format!("modified {}", format_age(age)));
+    }
+
+    if path.starts_with(home.join(".npm")) {
+        if let Some(name) = &procs().npm_user {
+            return Some(format!("in use by {}", name));
+        }
+    }
+
+    if let Some(root) = project_root_for(path) {
+        // lsof reports resolved paths (/private/tmp, not /tmp)
+        let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+        if let Some(name) = process_in_project(&procs().cwds, &root) {
+            return Some(format!("in use by {}", name));
+        }
+    }
+
+    None
+}
+
 fn delete_dev_artifacts_inner(
     paths: &[String],
     known_artifacts: &[DevArtifact],
@@ -1361,6 +1502,12 @@ fn delete_dev_artifacts_inner(
     let mut deleted_count = 0usize;
     let mut bytes_freed = 0u64;
     let mut errors = Vec::new();
+    let mut skipped = Vec::new();
+
+    let home = get_home_dir();
+    let now = SystemTime::now();
+    let mut snapshot: Option<std::rc::Rc<ProcessSnapshot>> = None;
+    let mut procs = || snapshot.get_or_insert_with(|| std::rc::Rc::new(ProcessSnapshot::capture())).clone();
 
     for path_str in paths {
         // Safety: only delete paths that were in the scan result
@@ -1418,6 +1565,24 @@ fn delete_dev_artifacts_inner(
             continue;
         }
 
+        // In-use guard: leave Safe-tier artifacts alone if recently modified
+        // or a relevant process is working in them
+        if let Some(a) = artifact.filter(|a| a.tier == ArtifactTier::Safe) {
+            if let Some(reason) = in_use_reason(path, &home, now, &mut procs) {
+                crate::cache_cleaner::log_deletion(&format!(
+                    "DEV_ARTIFACT_SKIPPED: {} | size={} | tier={} | reason={}",
+                    path_str, a.size_display, a.tier.label(), reason
+                ));
+                skipped.push(SkippedArtifact {
+                    path: path_str.clone(),
+                    size_bytes: a.size_bytes,
+                    size_display: a.size_display.clone(),
+                    reason,
+                });
+                continue;
+            }
+        }
+
         let expected_bytes = artifact.map(|a| a.size_bytes).unwrap_or(0);
         let tier_label = artifact.map(|a| a.tier.label()).unwrap_or("unknown");
         let tier = artifact.map(|a| a.tier);
@@ -1465,6 +1630,7 @@ fn delete_dev_artifacts_inner(
         bytes_freed,
         bytes_freed_display: format_size(bytes_freed),
         errors,
+        skipped,
     }
 }
 
@@ -1517,6 +1683,186 @@ fn format_log_timestamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Set a path's mtime `hours` into the past (or future, if negative)
+    fn backdate(path: &Path, hours: i64) {
+        let offset = std::time::Duration::from_secs(hours.unsigned_abs() * 3600);
+        let when = if hours >= 0 {
+            SystemTime::now() - offset
+        } else {
+            SystemTime::now() + offset
+        };
+        fs::File::open(path).unwrap().set_modified(when).unwrap();
+    }
+
+    fn snapshot(cwds: &[(&str, &str)], npm_user: Option<&str>) -> std::rc::Rc<ProcessSnapshot> {
+        std::rc::Rc::new(ProcessSnapshot {
+            cwds: cwds.iter().map(|(c, p)| (c.to_string(), PathBuf::from(p))).collect(),
+            npm_user: npm_user.map(String::from),
+        })
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: mtime predicate
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_recently_modified_predicate() {
+        let tmp = std::env::temp_dir().join("ss-recency-test");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        let now = SystemTime::now();
+
+        // Fresh dir: recent
+        let age = recently_modified(&tmp, now, RECENT_WINDOW).expect("fresh dir is recent");
+        assert_eq!(format_age(age), "just now");
+
+        // 2h old: recent, reported in hours
+        backdate(&tmp, 2);
+        let age = recently_modified(&tmp, SystemTime::now(), RECENT_WINDOW).expect("2h is inside 24h");
+        assert_eq!(format!("modified {}", format_age(age)), "modified 2h ago");
+
+        // 48h old: not recent
+        backdate(&tmp, 48);
+        assert!(recently_modified(&tmp, SystemTime::now(), RECENT_WINDOW).is_none());
+
+        // Future mtime (clock skew): treated as recent
+        backdate(&tmp, -1);
+        assert!(recently_modified(&tmp, SystemTime::now(), RECENT_WINDOW).is_some());
+
+        // Missing path: not recent (nothing to guard)
+        assert!(recently_modified(&tmp.join("missing"), now, RECENT_WINDOW).is_none());
+
+        assert_eq!(format_age(std::time::Duration::from_secs(45 * 60)), "45m ago");
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: cwd-under-root predicate and lsof parsing
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_process_in_project_predicate() {
+        let cwds = snapshot(
+            &[("node", "/work/app/packages/web"), ("vite", "/work/app2"), ("npm", "/work")],
+            None,
+        );
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/app")), Some("node".into()));
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/app2")), Some("vite".into()));
+        // Component-wise match: /work/app must not match /work/app2 or /work/application
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/application")), None);
+        // A process in a parent directory does not mark the child project as in use
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/other")), None);
+        assert_eq!(process_in_project(&[], Path::new("/work/app")), None);
+    }
+
+    #[test]
+    fn test_parse_lsof_cwds() {
+        let out = "p101\ncnode\nfcwd\nn/Users/me/proj\np202\ncnext-server\nfcwd\nn/private/tmp/site\n";
+        assert_eq!(
+            parse_lsof_cwds(out),
+            vec![
+                ("node".to_string(), PathBuf::from("/Users/me/proj")),
+                ("next-server".to_string(), PathBuf::from("/private/tmp/site")),
+            ]
+        );
+        assert!(parse_lsof_cwds("").is_empty());
+    }
+
+    #[test]
+    fn test_project_root_for() {
+        assert_eq!(project_root_for(Path::new("/w/app/.next")), Some(Path::new("/w/app")));
+        assert_eq!(project_root_for(Path::new("/w/app/coverage")), Some(Path::new("/w/app")));
+        assert_eq!(
+            project_root_for(Path::new("/w/app/node_modules/.cache")),
+            Some(Path::new("/w/app"))
+        );
+        assert_eq!(project_root_for(Path::new("/Users/me/.npm/_cacache")), None);
+        assert_eq!(project_root_for(Path::new("/Users/me/Library/Caches/pip")), None);
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: full decision with a mocked process list
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_in_use_reason_with_mocked_processes() {
+        let tmp = std::env::temp_dir().join("ss-inuse-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let project = tmp.join("site");
+        let next_dir = project.join(".next");
+        fs::create_dir_all(&next_dir).unwrap();
+        let home = tmp.join("home");
+        let npm_cache = home.join(".npm").join("_cacache");
+        fs::create_dir_all(&npm_cache).unwrap();
+        let root = project.canonicalize().unwrap();
+        let root_str = root.to_string_lossy().to_string();
+
+        // Recent: skipped on mtime alone, process list never consulted
+        let mut calls = 0;
+        let mut procs = || { calls += 1; snapshot(&[], None) };
+        let reason = in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs);
+        assert_eq!(reason.as_deref(), Some("modified just now"));
+        assert_eq!(calls, 0);
+
+        backdate(&next_dir, 48);
+        backdate(&npm_cache, 48);
+
+        // Old + dev server running in the project: skipped
+        let mut procs = || snapshot(&[("node", &root_str)], None);
+        assert_eq!(
+            in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs).as_deref(),
+            Some("in use by node")
+        );
+
+        // Old + dev server in a sibling project: deletable
+        let sibling = tmp.join("site-two").to_string_lossy().to_string();
+        let mut procs = || snapshot(&[("node", &sibling)], None);
+        assert_eq!(in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs), None);
+
+        // ~/.npm while npm runs: skipped; idle: deletable
+        let mut procs = || snapshot(&[], Some("npm"));
+        assert_eq!(
+            in_use_reason(&npm_cache, &home, SystemTime::now(), &mut procs).as_deref(),
+            Some("in use by npm")
+        );
+        let mut procs = || snapshot(&[], None);
+        assert_eq!(in_use_reason(&npm_cache, &home, SystemTime::now(), &mut procs), None);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: bulk delete reports and keeps a fresh Safe artifact
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_bulk_delete_skips_recent_safe_artifact() {
+        let tmp = std::env::temp_dir().join("ss-skip-recent-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let fresh = tmp.join("proj").join(".turbo");
+        fs::create_dir_all(&fresh).unwrap();
+        fs::write(fresh.join("cache.bin"), "x").unwrap();
+        let path = fresh.to_string_lossy().to_string();
+
+        let artifact = DevArtifact {
+            path: path.clone(),
+            size_bytes: 1,
+            size_display: "1 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: ".turbo cache".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+        };
+
+        let result = delete_dev_artifacts(&[path.clone()], &[artifact]);
+        assert_eq!(result.deleted_count, 0);
+        assert!(fresh.exists(), "Recently modified Safe artifact must survive");
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].path, path);
+        assert_eq!(result.skipped[0].reason, "modified just now");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
 
     #[test]
     fn test_artifact_tier_labels() {
@@ -1615,6 +1961,8 @@ mod tests {
             // Write a marker file so the dir isn't empty
             fs::write(d.join("marker.txt"), "test").unwrap();
         }
+        // Age the Safe fixture past the in-use guard's recency window
+        backdate(&safe_dir, 48);
 
         let artifacts = vec![
             DevArtifact {
@@ -1682,6 +2030,7 @@ mod tests {
         // Recreate safe dir for manual test
         fs::create_dir_all(&safe_dir).unwrap();
         fs::write(safe_dir.join("marker.txt"), "test").unwrap();
+        backdate(&safe_dir, 48);
 
         // --- Test 2: Manual delete should allow Safe + Rebuildable + SafeWithReinstall but reject Ask ---
         let result = delete_dev_artifacts_manual(&all_paths, &artifacts);
@@ -2265,6 +2614,7 @@ mod tests {
         let safe_dir = tmp.join("caches").join("npm").join("cache");
         fs::create_dir_all(&safe_dir).unwrap();
         fs::write(safe_dir.join("pkg.tgz"), "cache data").unwrap();
+        backdate(&safe_dir, 48);
 
         let safe_artifact = DevArtifact {
             path: safe_dir.to_string_lossy().to_string(),
