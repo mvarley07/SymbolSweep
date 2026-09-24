@@ -115,7 +115,6 @@ const KNOWN_LIBRARY_CACHES: &[(&str, &str)] = &[
     ("pnpm", "pnpm"),
     ("node-gyp", "node-gyp"),
     ("typescript", "TypeScript"),
-    ("ms-playwright", "Playwright browsers"),
     ("Homebrew", "Homebrew"),
     ("pip", "pip"),
     ("go-build", "Go build"),
@@ -590,7 +589,26 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
             }
         }
 
-        // Check for *.ShipIt caches
+        // Playwright browsers — not a cache: they only come back on an explicit install
+        if name_str == "ms-playwright" {
+            let size = dir_size(&entry_path);
+            if size > 0 {
+                artifacts.push(DevArtifact {
+                    path: entry_path.to_string_lossy().to_string(),
+                    size_bytes: size,
+                    size_display: format_size(size),
+                    tier: ArtifactTier::Rebuildable,
+                    kind: "Playwright browsers".to_string(),
+                    project: None,
+                    staleness_days: None,
+                    is_nested: false,
+                    hint: Some("Browsers re-download on next `npx playwright install`".to_string()),
+                    active_build: false,
+                });
+            }
+        }
+
+        // Check for *.ShipIt caches (an app's staged self-update)
         if name_str.ends_with(".ShipIt") {
             let size = dir_size(&entry_path);
             if size > 0 {
@@ -598,12 +616,12 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                     path: entry_path.to_string_lossy().to_string(),
                     size_bytes: size,
                     size_display: format_size(size),
-                    tier: ArtifactTier::Safe,
+                    tier: ArtifactTier::Rebuildable,
                     kind: "ShipIt update cache".to_string(),
                     project: None,
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                    hint: Some("In-progress app update; the app re-downloads it".to_string()),
                     active_build: false,
                 });
             }
@@ -890,7 +908,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
         // A bare .next/.turbo/etc. outside a project is not safe to auto-delete.
         if matches!(
             name_str.as_ref(),
-            ".next" | ".turbo" | ".parcel-cache" | ".vite" | "coverage"
+            ".next" | ".turbo" | ".parcel-cache" | ".vite"
         ) {
             if looks_like_project(dir) {
                 let size = dir_size(&entry_path);
@@ -1012,6 +1030,29 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                     active_build: building,
                 });
+            }
+            continue;
+        }
+
+        // ── ASK tier: test coverage reports ──
+        // Output of a test run, not a cache — only flagged inside a project.
+        if name_str == "coverage" {
+            if looks_like_project(dir) {
+                let size = dir_size(&entry_path);
+                if size > 0 {
+                    artifacts.push(DevArtifact {
+                        path: entry_path.to_string_lossy().to_string(),
+                        size_bytes: size,
+                        size_display: format_size(size),
+                        tier: ArtifactTier::Ask,
+                        kind: "coverage report".to_string(),
+                        project: get_project_name(&entry_path),
+                        staleness_days: None,
+                        is_nested: false,
+                        hint: Some("Test coverage report \u{2014} regenerates on the next coverage run".to_string()),
+                        active_build: false,
+                    });
+                }
             }
             continue;
         }
@@ -1383,7 +1424,7 @@ const PROJECT_PROCESS_NAMES: &[&str] = &["node", "npm", "pnpm", "yarn", "bun", "
 const NPM_PROCESS_NAMES: &[&str] = &["npm", "npx", "node"];
 
 /// Artifact directory names that live directly inside a project root
-const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cache", "coverage"];
+const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cache"];
 
 /// Snapshot of running processes, taken once per delete pass
 struct ProcessSnapshot {
@@ -1774,9 +1815,38 @@ mod tests {
     }
 
     #[test]
+    fn test_reclassified_tiers() {
+        let tmp = std::env::temp_dir().join("ss-reclassify-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let caches = tmp.join("Library").join("Caches");
+        for d in ["ms-playwright", "com.example.app.ShipIt", "pip"] {
+            fs::create_dir_all(caches.join(d)).unwrap();
+            fs::write(caches.join(d).join("f"), "x").unwrap();
+        }
+        let project = tmp.join("proj");
+        fs::create_dir_all(project.join("coverage")).unwrap();
+        fs::write(project.join("coverage").join("lcov.info"), "x").unwrap();
+        fs::write(project.join("package.json"), "{}").unwrap();
+
+        let mut artifacts = Vec::new();
+        scan_library_caches(&tmp, &mut artifacts);
+        scan_project_root(&tmp, &mut artifacts, 0);
+        let tier_of = |suffix: &str| {
+            artifacts.iter().find(|a| a.path.ends_with(suffix)).map(|a| a.tier)
+        };
+
+        assert_eq!(tier_of("ms-playwright"), Some(ArtifactTier::Rebuildable));
+        assert_eq!(tier_of(".ShipIt"), Some(ArtifactTier::Rebuildable));
+        assert_eq!(tier_of("coverage"), Some(ArtifactTier::Ask));
+        assert_eq!(tier_of("pip"), Some(ArtifactTier::Safe));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn test_project_root_for() {
         assert_eq!(project_root_for(Path::new("/w/app/.next")), Some(Path::new("/w/app")));
-        assert_eq!(project_root_for(Path::new("/w/app/coverage")), Some(Path::new("/w/app")));
+        assert_eq!(project_root_for(Path::new("/w/app/.vite")), Some(Path::new("/w/app")));
         assert_eq!(
             project_root_for(Path::new("/w/app/node_modules/.cache")),
             Some(Path::new("/w/app"))
