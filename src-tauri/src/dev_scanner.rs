@@ -423,8 +423,9 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
 // ============================================================================
 
 fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
-    // ~/.npm — npm's global cache
-    check_home_cache(home, ".npm", "npm global cache", artifacts);
+    // ~/.npm/_cacache — npm's package cache. The rest of ~/.npm (_logs, _npx)
+    // is never touched: _logs is npm's debug history, _npx holds npx installs.
+    check_home_cache(home, ".npm/_cacache", "npm package cache", artifacts);
 
     // ~/.yarn/cache
     let yarn_cache = home.join(".yarn").join("cache");
@@ -507,11 +508,16 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
     }
 }
 
-/// Check a single home-level cache directory
-fn check_home_cache(home: &Path, dir_name: &str, kind: &str, artifacts: &mut Vec<DevArtifact>) {
-    let path = home.join(dir_name);
-    // Skip symlinks — .exists()/.is_dir() resolve them, which could point at real data
-    if is_symlink(&path) {
+/// Check a single home-level cache directory (`rel_path` may be nested, e.g. ".npm/_cacache")
+fn check_home_cache(home: &Path, rel_path: &str, kind: &str, artifacts: &mut Vec<DevArtifact>) {
+    let path = home.join(rel_path);
+    // Skip symlinks anywhere below home — .exists()/.is_dir() resolve them,
+    // which could point at real data
+    if path
+        .ancestors()
+        .take_while(|p| *p != home)
+        .any(is_symlink)
+    {
         return;
     }
     if path.exists() && path.is_dir() {
@@ -2275,6 +2281,10 @@ mod tests {
 
         let mut artifacts = Vec::new();
         check_home_cache(&fake_home, ".npm", "npm global cache", &mut artifacts);
+        // Nested target reached through the symlinked ~/.npm must also be skipped
+        fs::create_dir_all(important.join("_cacache")).unwrap();
+        fs::write(important.join("_cacache").join("blob"), "data").unwrap();
+        check_home_cache(&fake_home, ".npm/_cacache", "npm package cache", &mut artifacts);
 
         // With the symlink guard, check_home_cache must now skip symlinked paths
         assert!(
