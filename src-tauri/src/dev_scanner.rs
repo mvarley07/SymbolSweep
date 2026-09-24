@@ -1505,33 +1505,9 @@ fn log_artifact_deletion(path: &str, size_bytes: u64, tier: &str, trigger: &str,
     }
 }
 
-/// Format a UTC timestamp for log entries (matches cache_cleaner format)
+/// Timestamp for log entries (shared with cache_cleaner)
 fn format_log_timestamp() -> String {
-    let now = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    let secs_per_day = 86400u64;
-    let secs_per_hour = 3600u64;
-    let secs_per_min = 60u64;
-
-    let days_since_epoch = now / secs_per_day;
-    let time_of_day = now % secs_per_day;
-
-    let hours = time_of_day / secs_per_hour;
-    let minutes = (time_of_day % secs_per_hour) / secs_per_min;
-    let seconds = time_of_day % secs_per_min;
-
-    let years = 1970 + (days_since_epoch / 365);
-    let remaining_days = days_since_epoch % 365;
-    let months = remaining_days / 30 + 1;
-    let days = remaining_days % 30 + 1;
-
-    format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        years, months, days, hours, minutes, seconds
-    )
+    crate::cache_cleaner::chrono_format_now()
 }
 
 // ============================================================================
