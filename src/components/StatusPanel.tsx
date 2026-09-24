@@ -4,7 +4,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
-import type { CleanState, CleanResult } from '../types';
+import type { CleanState, CleanResult, SkippedArtifact } from '../types';
 import './StatusPanel.css';
 
 /** Format bytes to human-readable string (matches Rust format_size) */
@@ -87,6 +87,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [freshCleanFreed, setFreshCleanFreed] = useState<string | null>(null);
+  // Safe artifacts the last Clean Now left in place, labelled for display
+  const [cleanSkipped, setCleanSkipped] = useState<{ item: SkippedArtifact; label: string }[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Auto-resize window to fit panel content
@@ -174,6 +176,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       let totalFreed = sysResult.bytes_freed;
 
       // Clean ONLY Safe-tier dev artifacts
+      setCleanSkipped([]);
       if (devResult) {
         const safePaths = devResult.artifacts
           .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
@@ -181,6 +184,11 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         if (safePaths.length > 0) {
           const devDeleteResult = await deleteArtifacts(safePaths);
           totalFreed += devDeleteResult.bytes_freed;
+          setCleanSkipped((devDeleteResult.skipped ?? []).map(item => {
+            const artifact = devResult.artifacts.find(a => a.path === item.path);
+            const kind = artifact?.kind ?? item.path.replace(/^\/Users\/[^/]+/, '~');
+            return { item, label: artifact?.project ? `${kind} \u00b7 ${artifact.project}` : kind };
+          }));
         }
       }
 
@@ -375,6 +383,23 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {cleanSkipped.length > 0 && (
+          <div className="clean-skipped">
+            <div className="clean-skipped-header">
+              <span>Skipped {cleanSkipped.length} in use</span>
+              <button className="clean-skipped-dismiss" onClick={() => setCleanSkipped([])} aria-label="Dismiss skipped list">
+                &times;
+              </button>
+            </div>
+            {cleanSkipped.map(({ item, label }) => (
+              <div className="clean-skipped-row" key={item.path} title={item.path}>
+                <span className="clean-skipped-label">{label}</span>
+                <span className="clean-skipped-reason">skipped: {item.reason}</span>
+              </div>
+            ))}
           </div>
         )}
 

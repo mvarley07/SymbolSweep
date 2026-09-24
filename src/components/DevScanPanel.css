@@ -280,6 +280,56 @@
 }
 
 /* ============================================================
+   Skipped list — Safe artifacts the last delete left in place
+   ============================================================ */
+.skipped-list {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.skipped-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: rgb(251, 191, 36);
+}
+
+.skipped-dismiss {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--font-caption);
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.skipped-dismiss:hover {
+  color: var(--text-secondary);
+}
+
+.artifact-row.skipped-row:hover {
+  background: transparent;
+}
+
+.artifact-tier-badge.tier-skipped {
+  background: rgba(251, 191, 36, 0.15);
+  color: rgb(251, 191, 36);
+}
+
+.artifact-hint.skipped-reason {
+  color: rgba(251, 191, 36, 0.85);
+}
+
+/* ============================================================
    SS Trash banner — shows when SS items are sitting in Trash
    ============================================================ */
 .ss-trash-banner {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
-import type { ArtifactTier, DevArtifact, SsTrashInfo, PurgeResult } from '../types';
+import type { ArtifactTier, DevArtifact, DevDeleteResult, SkippedArtifact, SsTrashInfo, PurgeResult } from '../types';
 import './DevScanPanel.css';
 
 const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
@@ -72,6 +72,38 @@ function CopyButton({ text }: { text: string }) {
         </svg>
       )}
     </button>
+  );
+}
+
+/** Short label for a skipped path: the artifact kind if known, else ~-relative path */
+function skippedLabel(item: SkippedArtifact, artifacts: DevArtifact[] | undefined) {
+  const artifact = artifacts?.find(a => a.path === item.path);
+  return {
+    kind: artifact?.kind ?? item.path.replace(/^\/Users\/[^/]+/, '~'),
+    project: artifact?.project ?? null,
+  };
+}
+
+function SkippedRow({ item, artifacts }: { item: SkippedArtifact; artifacts: DevArtifact[] | undefined }) {
+  const { kind, project } = skippedLabel(item, artifacts);
+  const shortPath = item.path.replace(/^\/Users\/[^/]+/, '~');
+  return (
+    <div className="artifact-row skipped-row">
+      <div className="artifact-body">
+        <div className="artifact-text">
+          <div className="artifact-main">
+            <span className="artifact-tier-badge tier-skipped">SKIPPED</span>
+            <span className="artifact-kind" title={shortPath}>{kind}</span>
+            {project && <span className="artifact-project">{project}</span>}
+          </div>
+          <div className="artifact-hint skipped-reason">skipped: {item.reason}</div>
+        </div>
+        <div className="artifact-actions">
+          <span className="artifact-size">{item.size_display}</span>
+          <span className="artifact-delete-spacer" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -168,6 +200,10 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   });
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const [confirmReinstall, setConfirmReinstall] = useState(false);
+  // Artifacts the last delete left in place, with the backend's reason
+  const [skipped, setSkipped] = useState<SkippedArtifact[]>([]);
+  // Artifact list as it was when the last delete ran, for labelling skipped rows
+  const [skippedContext, setSkippedContext] = useState<DevArtifact[] | undefined>(undefined);
 
   const refreshTrashInfo = useCallback(async () => {
     try {
@@ -211,6 +247,14 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     }
   };
 
+  /** Record a delete's skips; returns a " · N skipped" suffix for the result message */
+  const noteSkipped = (res: DevDeleteResult) => {
+    const items = res.skipped ?? [];
+    setSkipped(items);
+    setSkippedContext(result?.artifacts);
+    return items.length > 0 ? ` \u00b7 ${items.length} skipped` : '';
+  };
+
   const showResult = (msg: string, trashed = false) => {
     setDeleteMessage(msg);
     setDeletedToTrash(trashed);
@@ -222,6 +266,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
       const artifact = result?.artifacts.find(a => a.path === path);
       const trashed = artifact?.tier === 'Rebuildable' || artifact?.tier === 'SafeWithReinstall';
       const res = await manualDeleteArtifacts([path]);
+      noteSkipped(res);
       if (res.deleted_count > 0) {
         showResult(
           trashed
@@ -245,7 +290,11 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     if (paths.length === 0) return;
     try {
       const res = await bulkDeleteArtifacts(paths);
-      if (res.deleted_count > 0) showResult(`Freed ${res.bytes_freed_display} (${res.deleted_count} items)`);
+      const skippedNote = noteSkipped(res);
+      // When nothing was deleted, the skipped list alone explains why
+      if (res.deleted_count > 0) {
+        showResult(`Freed ${res.bytes_freed_display} (${res.deleted_count} items)${skippedNote}`);
+      }
     } catch {
       // error state handled by hook
     }
@@ -260,6 +309,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     if (paths.length === 0) return;
     try {
       const res = await manualDeleteArtifacts(paths);
+      noteSkipped(res);
       if (res.deleted_count > 0) {
         showResult(`Moved ${res.bytes_freed_display} to Trash (${res.deleted_count} items)`, true);
         refreshTrashInfo();
@@ -278,6 +328,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     if (paths.length === 0) return;
     try {
       const res = await manualDeleteArtifacts(paths);
+      noteSkipped(res);
       if (res.deleted_count > 0) {
         showResult(`Moved ${res.bytes_freed_display} to Trash (${res.deleted_count} items)`, true);
         refreshTrashInfo();
@@ -476,6 +527,20 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                   ? `Emptying Trash\u2026 ${purgeProgress.current} of ${purgeProgress.total} items${purgeProgress.bytes_freed_so_far !== '0 B' ? ` (${purgeProgress.bytes_freed_so_far} freed)` : ''}`
                   : 'Emptying Trash\u2026'}
               </span>
+            </div>
+          )}
+
+          {skipped.length > 0 && (
+            <div className="skipped-list">
+              <div className="skipped-header">
+                <span>Skipped &mdash; left in place ({skipped.length})</span>
+                <button className="skipped-dismiss" onClick={() => setSkipped([])} aria-label="Dismiss skipped list">
+                  Dismiss
+                </button>
+              </div>
+              {skipped.map(item => (
+                <SkippedRow key={item.path} item={item} artifacts={skippedContext} />
+              ))}
             </div>
           )}
 

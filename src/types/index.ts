@@ -103,11 +103,20 @@ export interface DevScanResult {
   scan_roots: string[];
 }
 
+/** A Safe-tier artifact the delete pass left in place, e.g. reason "modified 2h ago" */
+export interface SkippedArtifact {
+  path: string;
+  size_bytes: number;
+  size_display: string;
+  reason: string;
+}
+
 export interface DevDeleteResult {
   deleted_count: number;
   bytes_freed: number;
   bytes_freed_display: string;
   errors: string[];
+  skipped: SkippedArtifact[];
 }
 
 export interface SsTrashInfo {
