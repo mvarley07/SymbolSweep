@@ -1391,8 +1391,11 @@ const RECENT_WINDOW: std::time::Duration = std::time::Duration::from_secs(24 * 6
 /// Process names whose working directory marks a project as in use
 const PROJECT_PROCESS_NAMES: &[&str] = &["node", "npm", "pnpm", "yarn", "bun", "vite", "next"];
 
-/// Process names that may be reading or writing ~/.npm
-const NPM_PROCESS_NAMES: &[&str] = &["npm", "npx", "node"];
+/// Executables that are npm itself
+const NPM_EXECUTABLES: &[&str] = &["npm", "npx"];
+
+/// Entry scripts that mark a `node` process as npm itself (node .../npm-cli.js)
+const NPM_ENTRY_SCRIPTS: &[(&str, &str)] = &[("npm-cli.js", "npm"), ("npx-cli.js", "npx")];
 
 /// Artifact directory names that live directly inside a project root
 const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cache"];
@@ -1401,7 +1404,7 @@ const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cac
 struct ProcessSnapshot {
     /// (command name, working directory) for PROJECT_PROCESS_NAMES
     cwds: Vec<(String, PathBuf)>,
-    /// First running process out of NPM_PROCESS_NAMES, if any
+    /// "npm" or "npx" if npm itself is running, else None
     npm_user: Option<String>,
 }
 
@@ -1418,12 +1421,35 @@ impl ProcessSnapshot {
             .output()
             .map(|o| parse_lsof_cwds(&String::from_utf8_lossy(&o.stdout)))
             .unwrap_or_default();
-        let npm_user = NPM_PROCESS_NAMES
-            .iter()
-            .find(|n| is_process_running(n))
-            .map(|n| n.to_string());
+        let npm_user = Command::new("ps")
+            .args(["-axww", "-o", "args="])
+            .output()
+            .ok()
+            .and_then(|o| npm_process_in(String::from_utf8_lossy(&o.stdout).lines()));
         ProcessSnapshot { cwds, npm_user }
     }
+}
+
+/// Returns "npm" or "npx" if any command line is npm itself: an npm/npx
+/// executable (including npm's retitled "npm install …" form), or node
+/// running npm-cli.js / npx-cli.js. A bare node process (editor, language
+/// server, dev server) does not count.
+fn npm_process_in<'a>(command_lines: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    command_lines.into_iter().find_map(|line| {
+        let mut args = line.split_whitespace();
+        let exe = args.next()?;
+        let exe_name = Path::new(exe).file_name()?.to_str()?;
+        if let Some(name) = NPM_EXECUTABLES.iter().find(|n| **n == exe_name) {
+            return Some(name.to_string());
+        }
+        args.find_map(|arg| {
+            let script = Path::new(arg).file_name()?.to_str()?;
+            NPM_ENTRY_SCRIPTS
+                .iter()
+                .find(|(entry, _)| *entry == script)
+                .map(|(_, name)| name.to_string())
+        })
+    })
 }
 
 /// Parse `lsof -Fcn` output into (command, cwd) pairs.
@@ -1770,6 +1796,40 @@ mod tests {
         // A process in a parent directory does not mark the child project as in use
         assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/other")), None);
         assert_eq!(process_in_project(&[], Path::new("/work/app")), None);
+    }
+
+    #[test]
+    fn test_npm_guard_matches_npm_not_bare_node() {
+        // npm itself, in each form it shows up in `ps -o args=`
+        assert_eq!(npm_process_in(["npm install lodash"]), Some("npm".into()));
+        assert_eq!(npm_process_in(["npm run dev --port 3003"]), Some("npm".into()));
+        assert_eq!(npm_process_in(["/opt/homebrew/bin/npm ci"]), Some("npm".into()));
+        assert_eq!(npm_process_in(["npx vite"]), Some("npx".into()));
+        assert_eq!(
+            npm_process_in(["/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install"]),
+            Some("npm".into())
+        );
+        assert_eq!(
+            npm_process_in(["node /usr/local/lib/node_modules/npm/bin/npx-cli.js create-vite"]),
+            Some("npx".into())
+        );
+
+        // Bare node processes must not trip the guard
+        let bare_node = [
+            "/Applications/Cursor.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin) --type=utility",
+            "/usr/local/bin/node /Users/me/.vscode/extensions/ts/tsserver.js --useInferredProjectPerProjectRoot",
+            "node /Users/me/site/node_modules/.bin/next dev",
+            "node /Users/me/npm-tools/index.js",
+            "/usr/local/bin/npmrc-switcher list",
+        ];
+        assert_eq!(npm_process_in(bare_node), None);
+        assert_eq!(npm_process_in(Vec::<&str>::new()), None);
+
+        // Found among other processes
+        assert_eq!(
+            npm_process_in(["node /x/server.js", "", "npm install"]),
+            Some("npm".into())
+        );
     }
 
     #[test]
