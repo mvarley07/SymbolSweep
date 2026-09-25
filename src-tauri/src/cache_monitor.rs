@@ -156,6 +156,9 @@ pub struct AppStatus {
     /// SAFE-tier dev artifacts (the SAFE tile)
     pub dev_safe_bytes: u64,
     pub dev_safe_display: String,
+    /// REBUILD + REINSTALL + REVIEW: what sits behind the Dev Artifacts link
+    pub dev_review_bytes: u64,
+    pub dev_review_display: String,
     /// What Clean Now removes: system cache + deletable SAFE dev artifacts
     pub safe_clean_bytes: u64,
     pub safe_clean_display: String,
@@ -270,6 +273,8 @@ pub fn compute_app_status(cache: &CacheStatus, dev: DevTotals, dev_scan_complete
         autoclean_failing: consecutive_autoclean_failures >= 3,
         dev_safe_bytes: dev.safe,
         dev_safe_display: format_size(dev.safe),
+        dev_review_bytes: dev_total.saturating_sub(dev.safe),
+        dev_review_display: format_size(dev_total.saturating_sub(dev.safe)),
         safe_clean_bytes: safe_clean,
         safe_clean_display: format_size(safe_clean),
         headline_bytes,
@@ -749,6 +754,8 @@ mod tests {
         // Clean Now scope = system cache + deletable SAFE only
         assert_eq!(status.safe_clean_bytes, GB + GB / 2);
         assert_eq!(status.dev_safe_bytes, GB);
+        assert_eq!(status.dev_review_bytes, 6 * GB + GB / 2);
+        assert_eq!(status.dev_safe_bytes + status.dev_review_bytes, status.dev_total_bytes);
 
         // Clean state with dev artifacts: headline is the dev total, labelled as such
         let small = DevTotals { total: 600 * 1024 * 1024, ..Default::default() };

@@ -83,6 +83,11 @@ pub struct DevArtifact {
     /// True if a build process is actively using this artifact (pgrep / lock-file mtime)
     #[serde(default)]
     pub active_build: bool,
+    /// SAFE rows only: why a delete right now would skip this row ("modified
+    /// 2h ago", "in use by node"). Set at scan time by the same in_use_reason()
+    /// the delete guard uses; the delete guard still re-checks at delete time.
+    #[serde(default)]
+    pub in_use: Option<String>,
 }
 
 /// Complete scan result
@@ -321,7 +326,7 @@ impl TierTotals {
             match a.tier {
                 ArtifactTier::Safe => {
                     t.safe += a.size_bytes;
-                    if !a.active_build {
+                    if !a.active_build && a.in_use.is_none() {
                         t.safe_deletable += a.size_bytes;
                     }
                 }
@@ -386,6 +391,7 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
         scan_project_root(root, &mut artifacts, 0);
     }
 
+    annotate_in_use(&mut artifacts);
     let totals = TierTotals::of(&artifacts);
 
     let duration = start.elapsed();
@@ -440,6 +446,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -460,6 +467,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -480,6 +488,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -500,6 +509,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} use pnpm store prune (removes only orphaned packages)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -531,6 +541,7 @@ fn check_home_cache(home: &Path, rel_path: &str, kind: &str, artifacts: &mut Vec
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -581,6 +592,7 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                         is_nested: false,
                         hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
                 break;
@@ -602,6 +614,7 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                     is_nested: false,
                     hint: Some("Browsers re-download on next `npx playwright install`".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
         }
@@ -621,6 +634,7 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                     is_nested: false,
                     hint: Some("In-progress app update; the app re-downloads it".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
         }
@@ -656,6 +670,7 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                 active_build: building,
+                in_use: None,
             });
         }
     }
@@ -682,6 +697,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} re-downloads on next gradle build (needs network)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -702,6 +718,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} re-downloads on next mvn build (needs network)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -725,6 +742,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} re-downloads on next go build (needs network)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -751,6 +769,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep unless you're sure \u{2014} may contain databases; use docker system prune".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -771,6 +790,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep \u{2014} holds crash symbols for shipped apps".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -791,6 +811,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep unless you're sure \u{2014} delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -811,6 +832,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep unless you're sure \u{2014} delete via Android Studio \u{2192} Device Manager".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -922,6 +944,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         is_nested: false,
                         hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
             }
@@ -946,6 +969,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next cargo build (takes minutes, needs network)".to_string()),
                     active_build: building,
+                    in_use: None,
                 });
             }
             continue;
@@ -966,6 +990,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next dotnet build".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
             continue;
@@ -986,6 +1011,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds when Unity reimports the project".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
             continue;
@@ -1006,6 +1032,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next Unreal Editor launch".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
             continue;
@@ -1027,6 +1054,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                     active_build: building,
+                    in_use: None,
                 });
             }
             continue;
@@ -1049,6 +1077,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         is_nested: false,
                         hint: Some("Test coverage report \u{2014} regenerates on the next coverage run".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
             }
@@ -1072,6 +1101,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         is_nested: false,
                         hint: Some("Keep unless you're sure \u{2014} may contain shipped output you haven't deployed".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
             }
@@ -1104,6 +1134,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
                 is_nested: true, // Excluded from the parent row's size below
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -1125,6 +1156,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
             is_nested: false,
             hint: Some("Rebuilds on next npm install \u{2014} needs network, may resolve different versions".to_string()),
             active_build: false,
+            in_use: None,
         });
     }
 }
@@ -1562,6 +1594,19 @@ where
     }
 
     None
+}
+
+/// Mark SAFE rows that a delete would skip right now, so the UI can show the
+/// reason instead of a delete button. Uses the delete guard's own predicate;
+/// lsof/ps run at most once, and only if some SAFE row is older than 24h.
+fn annotate_in_use(artifacts: &mut [DevArtifact]) {
+    let home = get_home_dir();
+    let now = SystemTime::now();
+    let mut snapshot: Option<std::rc::Rc<ProcessSnapshot>> = None;
+    let mut procs = || snapshot.get_or_insert_with(|| std::rc::Rc::new(ProcessSnapshot::capture())).clone();
+    for a in artifacts.iter_mut().filter(|a| a.tier == ArtifactTier::Safe) {
+        a.in_use = in_use_reason(Path::new(&a.path), &home, now, &mut procs);
+    }
 }
 
 fn delete_dev_artifacts_inner(
@@ -2004,6 +2049,7 @@ mod tests {
             is_nested: true,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         // Bulk (Clean Now) path: still Trash, because it sits inside a REINSTALL parent
@@ -2019,6 +2065,32 @@ mod tests {
         // Clean up: remove our Trash item and its manifest entry
         let _ = fs::remove_dir_all(&trashed);
         save_trash_manifest(&manifest.into_iter().filter(|i| i.original_path != path).collect::<Vec<_>>());
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_scan_marks_in_use_safe_rows() {
+        let tmp = std::env::temp_dir().join("ss-annotate-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let web = tmp.join("web");
+        fs::create_dir_all(web.join(".next")).unwrap();
+        fs::write(web.join(".next").join("a"), vec![0u8; 300]).unwrap();
+        fs::create_dir_all(web.join(".turbo")).unwrap();
+        fs::write(web.join(".turbo").join("b"), vec![0u8; 200]).unwrap();
+        fs::write(web.join("package.json"), "{}").unwrap();
+        backdate(&web.join(".turbo"), 48);
+
+        let mut artifacts = Vec::new();
+        scan_project_root(&tmp, &mut artifacts, 0);
+        annotate_in_use(&mut artifacts);
+        let row = |suffix: &str| artifacts.iter().find(|a| a.path.ends_with(suffix)).unwrap();
+
+        assert_eq!(row(".next").in_use.as_deref(), Some("modified just now"));
+        assert_eq!(row(".turbo").in_use, None);
+        let t = TierTotals::of(&artifacts);
+        assert_eq!(t.safe, 500, "SAFE tile counts every SAFE row");
+        assert_eq!(t.safe_deletable, 200, "Clean Now amount excludes in-use rows");
+
         let _ = fs::remove_dir_all(&tmp);
     }
 
@@ -2107,6 +2179,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         let result = delete_dev_artifacts(&[path.clone()], &[artifact]);
@@ -2231,6 +2304,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
             DevArtifact {
                 path: rebuild_dir.to_string_lossy().to_string(),
@@ -2243,6 +2317,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
             DevArtifact {
                 path: reinstall_dir.to_string_lossy().to_string(),
@@ -2255,6 +2330,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
             DevArtifact {
                 path: ask_dir.to_string_lossy().to_string(),
@@ -2267,6 +2343,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
         ];
 
@@ -2361,6 +2438,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         // Attempt deletion — this calls fs::remove_dir_all on the symlink path
@@ -2608,6 +2686,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: true, // ACTIVE BUILD
+            in_use: None,
         };
 
         // Bulk delete should refuse
@@ -2678,6 +2757,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             };
 
             // Bulk delete
@@ -2716,6 +2796,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
         let result = delete_dev_artifacts(&[deep_path.clone()], &[deep_artifact]);
         // Should NOT have a depth-guard error (may have "doesn't exist" skip, that's fine)
@@ -2834,6 +2915,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         let result = delete_dev_artifacts_manual(
@@ -2886,6 +2968,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         let result = delete_dev_artifacts(

@@ -407,57 +407,6 @@
   font-weight: 500;
 }
 
-/* Clean Now: Safe artifacts left in place, with reason */
-.clean-skipped {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-xs) var(--space-sm);
-  background: rgba(251, 191, 36, 0.06);
-  border: 1px solid rgba(251, 191, 36, 0.2);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-caption);
-}
-
-.clean-skipped-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 500;
-  color: rgb(251, 191, 36);
-}
-
-.clean-skipped-dismiss {
-  background: none;
-  border: none;
-  padding: 0 2px;
-  font-size: var(--font-xs);
-  line-height: 1;
-  color: var(--text-tertiary);
-  cursor: pointer;
-}
-
-.clean-skipped-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  min-width: 0;
-}
-
-.clean-skipped-label {
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.clean-skipped-reason {
-  color: rgba(251, 191, 36, 0.85);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* ============================================================
    The Clean Button
    ============================================================ */

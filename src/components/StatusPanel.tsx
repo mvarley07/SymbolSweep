@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
+import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
-import type { CleanState, CleanResult, SkippedArtifact } from '../types';
+import { ArtifactRow } from './ArtifactRows';
+import type { CleanState, CleanResult } from '../types';
 import './StatusPanel.css';
 
 /** Format bytes to human-readable string (matches Rust format_size) */
@@ -87,13 +88,12 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const { settings, updateSetting } = useSettings();
   const { result: devResult } = useDevScan();
   const { deleteArtifacts } = useDeleteDevArtifacts();
+  const { deleteArtifacts: deleteOneArtifact, deleting: deletingRow } = useDeleteDevArtifactsManual();
 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [freshCleanFreed, setFreshCleanFreed] = useState<string | null>(null);
-  // Safe artifacts the last Clean Now left in place, labelled for display
-  const [cleanSkipped, setCleanSkipped] = useState<{ item: SkippedArtifact; label: string }[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Auto-resize window to fit panel content
@@ -180,20 +180,16 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       const sysResult = await clean(false);
       let totalFreed = sysResult.bytes_freed;
 
-      // Clean ONLY Safe-tier dev artifacts
-      setCleanSkipped([]);
+      // Clean ONLY Safe-tier dev artifacts. Rows already marked in use are left
+      // out (the delete guard would skip them); anything that became in use since
+      // the scan is skipped by the guard and shows its reason after the rescan.
       if (devResult) {
         const safePaths = devResult.artifacts
-          .filter(a => a.tier === 'Safe' && !a.active_build)
+          .filter(a => a.tier === 'Safe' && !a.active_build && !a.in_use)
           .map(a => a.path);
         if (safePaths.length > 0) {
           const devDeleteResult = await deleteArtifacts(safePaths);
           totalFreed += devDeleteResult.bytes_freed;
-          setCleanSkipped((devDeleteResult.skipped ?? []).map(item => {
-            const artifact = devResult.artifacts.find(a => a.path === item.path);
-            const kind = artifact?.kind ?? item.path.replace(/^\/Users\/[^/]+/, '~');
-            return { item, label: artifact?.project ? `${kind} \u00b7 ${artifact.project}` : kind };
-          }));
         }
       }
 
@@ -307,8 +303,18 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   // Threshold: below 1 MB, the safe-clean button is effectively empty
   const safeCleanMeaningful = appStatus.safe_clean_bytes >= 1024 * 1024;
   // Whether non-safe dev artifacts hold meaningful space (>= 10 MB)
-  const nonSafeDevBytes = appStatus.dev_total_bytes - appStatus.dev_safe_bytes;
-  const hasNonSafeArtifacts = nonSafeDevBytes >= 10 * 1024 * 1024;
+  const hasNonSafeArtifacts = appStatus.dev_review_bytes >= 10 * 1024 * 1024;
+
+  // Every SAFE row, on the main screen: delete per row, or the reason it's skipped
+  const safeRows = devResult ? devResult.artifacts.filter(a => a.tier === 'Safe') : [];
+  const handleDeleteSafeRow = async (path: string) => {
+    try {
+      // Backend rescans and emits; rows, hero and tray refresh from that rescan
+      await deleteOneArtifact([path]);
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
 
   // Build the resting summary suffix: "freed 1.2 GB"
   const lastCleanSummary = lastCleanFreed
@@ -347,6 +353,25 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         </span>
       )}
 
+      {safeRows.length > 0 && (
+        <div className="safe-to-clean">
+          <div className="scan-total">
+            <span className="total-label">Safe to clean</span>
+            <span className="artifact-size">{appStatus.dev_safe_display}</span>
+          </div>
+          <div className="artifacts-list">
+            {safeRows.map(artifact => (
+              <ArtifactRow
+                key={artifact.path}
+                artifact={artifact}
+                onDelete={handleDeleteSafeRow}
+                deleting={deletingRow || isLoading}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="status-content">
         {/* Last clean summary — single line, no expand */}
         {lastCleanTime !== 'Never' && lastCleanTime !== 'Loading...' && (
@@ -369,23 +394,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
                 )}
               </>
             )}
-          </div>
-        )}
-
-        {cleanSkipped.length > 0 && (
-          <div className="clean-skipped">
-            <div className="clean-skipped-header">
-              <span>Skipped {cleanSkipped.length} in use</span>
-              <button className="clean-skipped-dismiss" onClick={() => setCleanSkipped([])} aria-label="Dismiss skipped list">
-                &times;
-              </button>
-            </div>
-            {cleanSkipped.map(({ item, label }) => (
-              <div className="clean-skipped-row" key={item.path} title={item.path}>
-                <span className="clean-skipped-label">{label}</span>
-                <span className="clean-skipped-reason">skipped: {item.reason}</span>
-              </div>
-            ))}
           </div>
         )}
 
@@ -431,7 +439,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             className="clean-btn review-artifacts"
             onClick={onDevScanClick}
           >
-            {`Review ${appStatus.dev_total_display} in dev artifacts`}
+            {`Review ${appStatus.dev_review_display} in dev artifacts`}
             <span className="review-arrow">&rsaquo;</span>
           </button>
         )}
@@ -439,7 +447,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         {appStatus.dev_scan_available && (
           <button className="dev-scan-link" onClick={onDevScanClick}>
             <span className="dev-scan-total">
-              {appStatus.dev_total_bytes > 0 ? `${appStatus.dev_total_display} dev artifacts` : 'Dev artifacts'}
+              {appStatus.dev_review_bytes > 0
+                ? `Dev artifacts: ${appStatus.dev_review_display} needs review`
+                : 'Dev artifacts'}
             </span>
             <span className="dev-scan-arrow">&rsaquo;</span>
           </button>

@@ -72,6 +72,9 @@ export interface AppStatus {
   /** SAFE-tier dev artifacts (the SAFE tile) */
   dev_safe_bytes: number;
   dev_safe_display: string;
+  /** REBUILD + REINSTALL + REVIEW: what sits behind the Dev Artifacts link */
+  dev_review_bytes: number;
+  dev_review_display: string;
   /** What Clean Now removes: system cache + deletable SAFE dev artifacts */
   safe_clean_bytes: number;
   safe_clean_display: string;
@@ -97,6 +100,8 @@ export interface DevArtifact {
   is_nested: boolean;
   hint: string | null;
   active_build: boolean;
+  /** SAFE rows: why a delete right now would skip it ("modified 2h ago") */
+  in_use?: string | null;
 }
 
 export interface DevScanResult {
