@@ -111,6 +111,17 @@ impl DiskHealth {
     }
 }
 
+/// Dev-scan totals that feed the unified status (one scan -> one set of numbers)
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DevTotals {
+    /// Every dev artifact row, all tiers
+    pub total: u64,
+    /// SAFE-tier rows
+    pub safe: u64,
+    /// SAFE-tier rows Clean Now will actually remove (not in use, not building)
+    pub safe_deletable: u64,
+}
+
 /// Unified app status — single source of truth for tray and popup
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppStatus {
@@ -142,11 +153,26 @@ pub struct AppStatus {
     pub dev_scan_complete: bool,
     /// Whether autoclean has failed 3+ consecutive times
     pub autoclean_failing: bool,
+    /// SAFE-tier dev artifacts (the SAFE tile)
+    pub dev_safe_bytes: u64,
+    pub dev_safe_display: String,
+    /// What Clean Now removes: system cache + deletable SAFE dev artifacts
+    pub safe_clean_bytes: u64,
+    pub safe_clean_display: String,
+    /// The one number shown by both the tray title and the popup hero
+    pub headline_bytes: u64,
+    pub headline_display: String,
+    /// What the headline counts: "to clean", "dev artifacts", "cache runaway", …
+    pub headline_label: String,
+    /// "7.6 GB dev artifacts + 1.1 GB system cache = 8.7 GB" — states how the
+    /// dev-only total and the combined total relate, wherever both appear
+    pub breakdown_display: String,
 }
 
 /// Compute the unified app status from cache + dev scan data.
 /// Both tray and popup read from this same struct.
-pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete: bool, consecutive_autoclean_failures: u32) -> AppStatus {
+pub fn compute_app_status(cache: &CacheStatus, dev: DevTotals, dev_scan_complete: bool, consecutive_autoclean_failures: u32) -> AppStatus {
+    let dev_total = dev.total;
     let disk_free = get_disk_free_bytes();
     let disk_total = get_disk_total_bytes();
     let disk_health = DiskHealth::from_free_bytes(disk_free);
@@ -202,6 +228,29 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete
         (format_size(displayed_free), format_size(disk_total))
     };
 
+    // Headline: the single number tray and hero both show
+    let (headline_bytes, headline_label) = match clean_state {
+        CleanState::Runaway => (cache.size_bytes, "cache runaway"),
+        CleanState::Clean if dev_total > 0 => (dev_total, "dev artifacts"),
+        CleanState::Clean if show_gap_banner => (0, "Nothing to clean"),
+        CleanState::Clean => (0, "All clean"),
+        CleanState::Moderate | CleanState::Heavy => (reclaimable, "to clean"),
+    };
+
+    let breakdown_display = match (dev_total > 0, cache.size_bytes > 0) {
+        (true, true) => format!(
+            "{} dev artifacts + {} system cache = {}",
+            format_size(dev_total),
+            format_size(cache.size_bytes),
+            format_size(reclaimable)
+        ),
+        (true, false) => format!("{} dev artifacts", format_size(dev_total)),
+        (false, true) => format!("{} system cache", format_size(cache.size_bytes)),
+        (false, false) => String::new(),
+    };
+
+    let safe_clean = cache.size_bytes + dev.safe_deletable;
+
     AppStatus {
         disk_free_bytes: disk_free,
         disk_free_display: display_free,
@@ -219,6 +268,14 @@ pub fn compute_app_status(cache: &CacheStatus, dev_total: u64, dev_scan_complete
         snapshot_count,
         dev_scan_complete,
         autoclean_failing: consecutive_autoclean_failures >= 3,
+        dev_safe_bytes: dev.safe,
+        dev_safe_display: format_size(dev.safe),
+        safe_clean_bytes: safe_clean,
+        safe_clean_display: format_size(safe_clean),
+        headline_bytes,
+        headline_display: if headline_bytes > 0 { format_size(headline_bytes) } else { String::new() },
+        headline_label: headline_label.to_string(),
+        breakdown_display,
     }
 }
 
@@ -624,7 +681,7 @@ mod tests {
 
     #[test]
     fn test_runaway_21gb_cache_no_dev() {
-        let status = compute_app_status(&test_cache(21 * 1024 * 1024 * 1024), 0, true, 0);
+        let status = compute_app_status(&test_cache(21 * 1024 * 1024 * 1024), DevTotals::default(), true, 0);
         assert_eq!(status.clean_state, CleanState::Runaway,
             "21 GB cache alone should be Runaway");
     }
@@ -633,7 +690,7 @@ mod tests {
     fn test_runaway_21gb_cache_with_15gb_dev() {
         let status = compute_app_status(
             &test_cache(21 * 1024 * 1024 * 1024),
-            15 * 1024 * 1024 * 1024,
+            DevTotals { total: 15 * 1024 * 1024 * 1024, ..Default::default() },
             true,
             0,
         );
@@ -643,36 +700,66 @@ mod tests {
 
     #[test]
     fn test_19gb_cache_is_not_runaway() {
-        let status = compute_app_status(&test_cache(19 * 1024 * 1024 * 1024), 0, true, 0);
+        let status = compute_app_status(&test_cache(19 * 1024 * 1024 * 1024), DevTotals::default(), true, 0);
         assert_eq!(status.clean_state, CleanState::Heavy,
             "19 GB cache should be Heavy, not Runaway");
     }
 
     #[test]
     fn test_20gb_boundary_is_runaway() {
-        let status = compute_app_status(&test_cache(20 * 1024 * 1024 * 1024), 0, true, 0);
+        let status = compute_app_status(&test_cache(20 * 1024 * 1024 * 1024), DevTotals::default(), true, 0);
         assert_eq!(status.clean_state, CleanState::Runaway,
             "Exactly 20 GB cache should be Runaway (>= threshold)");
     }
 
     #[test]
     fn test_autoclean_failing_under_threshold() {
-        let status = compute_app_status(&test_cache(0), 0, true, 2);
+        let status = compute_app_status(&test_cache(0), DevTotals::default(), true, 2);
         assert!(!status.autoclean_failing,
             "2 consecutive failures should NOT trigger the banner");
     }
 
     #[test]
     fn test_autoclean_failing_at_threshold() {
-        let status = compute_app_status(&test_cache(0), 0, true, 3);
+        let status = compute_app_status(&test_cache(0), DevTotals::default(), true, 3);
         assert!(status.autoclean_failing,
             "3 consecutive failures should trigger the banner");
     }
 
     #[test]
     fn test_autoclean_failing_above_threshold() {
-        let status = compute_app_status(&test_cache(0), 0, true, 10);
+        let status = compute_app_status(&test_cache(0), DevTotals::default(), true, 10);
         assert!(status.autoclean_failing,
             "10 consecutive failures should trigger the banner");
+    }
+
+    #[test]
+    fn test_headline_and_breakdown_share_one_computation() {
+        const GB: u64 = 1024 * 1024 * 1024;
+        let dev = DevTotals { total: 7 * GB + GB / 2, safe: GB, safe_deletable: GB / 2 };
+        let status = compute_app_status(&test_cache(GB), dev, true, 0);
+
+        // Moderate: tray and hero headline is the combined total
+        assert_eq!(status.clean_state, CleanState::Moderate);
+        assert_eq!(status.headline_bytes, status.reclaimable_bytes);
+        assert_eq!(status.headline_bytes, status.dev_total_bytes + status.cache.size_bytes);
+        assert_eq!(status.headline_label, "to clean");
+        assert_eq!(status.breakdown_display, "7.5 GB dev artifacts + 1 GB system cache = 8.5 GB");
+
+        // Clean Now scope = system cache + deletable SAFE only
+        assert_eq!(status.safe_clean_bytes, GB + GB / 2);
+        assert_eq!(status.dev_safe_bytes, GB);
+
+        // Clean state with dev artifacts: headline is the dev total, labelled as such
+        let small = DevTotals { total: 600 * 1024 * 1024, ..Default::default() };
+        let status = compute_app_status(&test_cache(0), small, true, 0);
+        assert_eq!(status.headline_display, "600 MB");
+        assert_eq!(status.headline_label, "dev artifacts");
+        assert_eq!(status.breakdown_display, "600 MB dev artifacts");
+
+        // Runaway: headline is the cache alone
+        let status = compute_app_status(&test_cache(21 * GB), dev, true, 0);
+        assert_eq!(status.headline_bytes, 21 * GB);
+        assert_eq!(status.headline_label, "cache runaway");
     }
 }

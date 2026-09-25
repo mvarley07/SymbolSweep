@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
+import { useAppStatus, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import type { ArtifactTier, DevArtifact, DevDeleteResult, SkippedArtifact, SsTrashInfo, PurgeResult } from '../types';
 import './DevScanPanel.css';
 
@@ -115,8 +115,9 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
     ? `${artifact.staleness_days}d unused`
     : null;
 
-  // Delete button for SAFE/REBUILD/REINSTALL, not nested, not active builds
-  const showDelete = !artifact.is_nested && artifact.tier !== 'Ask' && !artifact.active_build;
+  // Delete button for SAFE/REBUILD/REINSTALL, not active builds. Nested rows
+  // (node_modules/.cache) are deletable on their own and go to Trash.
+  const showDelete = artifact.tier !== 'Ask' && !artifact.active_build;
 
   // REVIEW-tier: show removal command/instruction instead of delete
   const isReview = artifact.tier === 'Ask';
@@ -179,6 +180,8 @@ function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
 
 export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const { result, scanning, error, scan } = useDevScan();
+  // Same AppStatus as the tray and hero, for the dev-vs-combined breakdown line
+  const { status: appStatus } = useAppStatus();
   const { deleteArtifacts: bulkDeleteArtifacts, deleting: bulkDeleting } = useDeleteDevArtifacts();
   const { deleteArtifacts: manualDeleteArtifacts, deleting: manualDeleting } = useDeleteDevArtifactsManual();
   const deleting = bulkDeleting || manualDeleting;
@@ -264,7 +267,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const handleDeleteOne = async (path: string) => {
     try {
       const artifact = result?.artifacts.find(a => a.path === path);
-      const trashed = artifact?.tier === 'Rebuildable' || artifact?.tier === 'SafeWithReinstall';
+      const trashed = artifact?.tier === 'Rebuildable' || artifact?.tier === 'SafeWithReinstall' || !!artifact?.is_nested;
       const res = await manualDeleteArtifacts([path]);
       noteSkipped(res);
       if (res.deleted_count > 0) {
@@ -285,7 +288,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const handleCleanSafe = async () => {
     if (!result) return;
     const paths = result.artifacts
-      .filter(a => a.tier === 'Safe' && !a.is_nested && !a.active_build)
+      .filter(a => a.tier === 'Safe' && !a.active_build)
       .map(a => a.path);
     if (paths.length === 0) return;
     try {
@@ -417,9 +420,12 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
       {result && (
         <div className="scan-results">
           <div className="scan-total">
-            <span className="total-label">Dev artifacts reclaimable</span>
+            <span className="total-label">Dev artifacts</span>
             <span className="total-value">{result.total_display}</span>
           </div>
+          {appStatus?.breakdown_display && appStatus.cache.size_bytes > 0 && (
+            <div className="scan-breakdown">{appStatus.breakdown_display}</div>
+          )}
 
           <div className="tier-breakdown">
             <div className="tier-row tier-safe">
@@ -440,13 +446,13 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             </div>
           </div>
 
-          {result.safe_bytes > 0 && (
+          {result.safe_deletable_bytes > 0 && (
             <button
               className="clean-safe-btn"
               onClick={handleCleanSafe}
               disabled={deleting}
             >
-              {deleting ? 'Cleaning...' : `Clean Safe (${result.safe_display})`}
+              {deleting ? 'Cleaning...' : `Clean Safe (${result.safe_deletable_display})`}
             </button>
           )}
 

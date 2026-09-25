@@ -191,6 +191,14 @@
   margin-top: var(--space-xs);
 }
 
+/* Hero breakdown: how the headline splits into dev artifacts + system cache */
+.hero-breakdown {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-xs);
+  font-feature-settings: 'tnum' 1;
+}
+
 /* Status Badge — hero scale, intentionally distinct from dense badges */
 .status-state {
   display: inline-flex;

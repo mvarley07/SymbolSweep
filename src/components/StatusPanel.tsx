@@ -35,9 +35,11 @@ interface StatusIndicatorProps {
   state: CleanState;
   value: string | null;
   label: string;
+  /** How the headline splits into dev artifacts and system cache */
+  breakdown: string;
 }
 
-function StatusIndicator({ state, value, label }: StatusIndicatorProps) {
+function StatusIndicator({ state, value, label, breakdown }: StatusIndicatorProps) {
   const stateConfig = {
     Clean: { label: 'All clean' },
     Moderate: { label: 'Moderate' },
@@ -60,6 +62,9 @@ function StatusIndicator({ state, value, label }: StatusIndicatorProps) {
           label
         )}
       </div>
+      {value && breakdown && (
+        <div className="hero-breakdown">{breakdown}</div>
+      )}
       {state !== 'Clean' && (
         <div className={`status-state ${stateClass}`}>
           <span className="status-dot" />
@@ -179,7 +184,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       setCleanSkipped([]);
       if (devResult) {
         const safePaths = devResult.artifacts
-          .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
+          .filter(a => a.tier === 'Safe' && !a.active_build)
           .map(a => a.path);
         if (safePaths.length > 0) {
           const devDeleteResult = await deleteArtifacts(safePaths);
@@ -296,18 +301,13 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const stateClass = appStatus.clean_state.toLowerCase();
 
-  // Button scope: cache + Safe-tier artifacts only (what Clean Now actually removes)
-  const safeDevBytes = devResult
-    ? devResult.artifacts
-        .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
-        .reduce((sum, a) => sum + a.size_bytes, 0)
-    : 0;
-  const safeCleanableBytes = appStatus.cache.size_bytes + safeDevBytes;
-  const safeCleanableDisplay = formatSize(safeCleanableBytes);
+  // Button scope: cache + deletable Safe-tier artifacts (what Clean Now actually
+  // removes) — computed once in the backend alongside the hero and tray numbers
+  const safeCleanableDisplay = appStatus.safe_clean_display;
   // Threshold: below 1 MB, the safe-clean button is effectively empty
-  const safeCleanMeaningful = safeCleanableBytes >= 1024 * 1024;
+  const safeCleanMeaningful = appStatus.safe_clean_bytes >= 1024 * 1024;
   // Whether non-safe dev artifacts hold meaningful space (>= 10 MB)
-  const nonSafeDevBytes = appStatus.dev_total_bytes - safeDevBytes;
+  const nonSafeDevBytes = appStatus.dev_total_bytes - appStatus.dev_safe_bytes;
   const hasNonSafeArtifacts = nonSafeDevBytes >= 10 * 1024 * 1024;
 
   // Build the resting summary suffix: "freed 1.2 GB"
@@ -333,23 +333,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       {/* Hero -- reclaimable total (or cache-specific for Runaway) */}
       <StatusIndicator
         state={appStatus.clean_state}
-        value={
-          appStatus.clean_state === 'Clean'
-            ? (appStatus.dev_total_bytes > 0 ? appStatus.dev_total_display : null)
-            : appStatus.clean_state === 'Runaway' ? appStatus.cache.size_display
-            : appStatus.reclaimable_display
-        }
-        label={
-          appStatus.clean_state === 'Runaway'
-            ? 'cache runaway'
-            : appStatus.clean_state !== 'Clean'
-              ? 'to clean'
-              : appStatus.dev_total_bytes > 0
-                ? 'dev artifacts'
-                : appStatus.show_gap_banner
-                  ? 'Nothing to clean'
-                  : 'All clean'
-        }
+        value={appStatus.headline_bytes > 0 ? appStatus.headline_display : null}
+        label={appStatus.headline_label}
+        breakdown={appStatus.breakdown_display}
       />
 
       {/* Secondary disk context line */}

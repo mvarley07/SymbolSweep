@@ -139,6 +139,14 @@
   margin-bottom: var(--space-md);
 }
 
+/* Dev total vs combined total, from the shared AppStatus */
+.scan-breakdown {
+  margin: calc(-1 * var(--space-sm)) 0 var(--space-md);
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  font-feature-settings: 'tnum' 1;
+}
+
 .total-label {
   font-size: var(--label-size);
   color: var(--text-tertiary);

@@ -73,9 +73,10 @@ pub struct DevArtifact {
     pub project: Option<String>,
     /// Days since project's package.json or src/ was last modified (node_modules only)
     pub staleness_days: Option<u64>,
-    /// True if this artifact's size is already included in a parent artifact's size.
-    /// Used for node_modules/.cache which is a subset of node_modules.
-    /// Excluded from tier totals to prevent double-counting.
+    /// True if this artifact lives inside another artifact's directory
+    /// (node_modules/.cache inside node_modules). Its bytes are NOT counted in
+    /// the parent's size, so every row counts once toward the tier tiles.
+    /// Deleting it goes to Trash, since it sits inside a REINSTALL parent.
     pub is_nested: bool,
     /// Inline guidance for the user (restore cost or safety warning)
     pub hint: Option<String>,
@@ -94,6 +95,11 @@ pub struct DevScanResult {
     /// Breakdown by tier (excludes nested items)
     pub safe_bytes: u64,
     pub safe_display: String,
+    /// SAFE rows Clean Now will actually remove (not in use, not building)
+    #[serde(default)]
+    pub safe_deletable_bytes: u64,
+    #[serde(default)]
+    pub safe_deletable_display: String,
     pub rebuildable_bytes: u64,
     pub rebuildable_display: String,
     pub safe_with_reinstall_bytes: u64,
@@ -294,6 +300,51 @@ fn get_project_name(artifact_path: &Path) -> Option<String> {
 // Scanner entry point
 // ============================================================================
 
+/// Per-tier byte totals. Every row counts exactly once (a nested row's
+/// bytes are excluded from its parent), so the tiles always equal the rows
+/// shown under them and the tiles sum to the total.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct TierTotals {
+    total: u64,
+    safe: u64,
+    safe_deletable: u64,
+    rebuildable: u64,
+    safe_with_reinstall: u64,
+    ask: u64,
+}
+
+impl TierTotals {
+    fn of(artifacts: &[DevArtifact]) -> Self {
+        let mut t = TierTotals::default();
+        for a in artifacts {
+            t.total += a.size_bytes;
+            match a.tier {
+                ArtifactTier::Safe => {
+                    t.safe += a.size_bytes;
+                    if !a.active_build {
+                        t.safe_deletable += a.size_bytes;
+                    }
+                }
+                ArtifactTier::Rebuildable => t.rebuildable += a.size_bytes,
+                ArtifactTier::SafeWithReinstall => t.safe_with_reinstall += a.size_bytes,
+                ArtifactTier::Ask => t.ask += a.size_bytes,
+            }
+        }
+        t
+    }
+}
+
+impl DevScanResult {
+    /// The totals the unified AppStatus is computed from
+    pub fn totals(&self) -> crate::cache_monitor::DevTotals {
+        crate::cache_monitor::DevTotals {
+            total: self.total_bytes,
+            safe: self.safe_bytes,
+            safe_deletable: self.safe_deletable_bytes,
+        }
+    }
+}
+
 /// Run a full dev artifact scan. Pass custom project roots or empty slice for defaults.
 pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
     let start = std::time::Instant::now();
@@ -335,33 +386,7 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
         scan_project_root(root, &mut artifacts, 0);
     }
 
-    // Calculate totals by tier, excluding nested (double-counted) items
-    let non_nested = |a: &&DevArtifact| !a.is_nested;
-    let total_bytes: u64 = artifacts.iter().filter(non_nested).map(|a| a.size_bytes).sum();
-    let safe_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::Safe)
-        .map(|a| a.size_bytes)
-        .sum();
-    let rebuildable_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::Rebuildable)
-        .map(|a| a.size_bytes)
-        .sum();
-    let safe_with_reinstall_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::SafeWithReinstall)
-        .map(|a| a.size_bytes)
-        .sum();
-    let ask_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::Ask)
-        .map(|a| a.size_bytes)
-        .sum();
+    let totals = TierTotals::of(&artifacts);
 
     let duration = start.elapsed();
 
@@ -370,16 +395,18 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
 
     DevScanResult {
         artifacts,
-        total_bytes,
-        total_display: format_size(total_bytes),
-        safe_bytes,
-        safe_display: format_size(safe_bytes),
-        rebuildable_bytes,
-        rebuildable_display: format_size(rebuildable_bytes),
-        safe_with_reinstall_bytes,
-        safe_with_reinstall_display: format_size(safe_with_reinstall_bytes),
-        ask_bytes,
-        ask_display: format_size(ask_bytes),
+        total_bytes: totals.total,
+        total_display: format_size(totals.total),
+        safe_bytes: totals.safe,
+        safe_display: format_size(totals.safe),
+        safe_deletable_bytes: totals.safe_deletable,
+        safe_deletable_display: format_size(totals.safe_deletable),
+        rebuildable_bytes: totals.rebuildable,
+        rebuildable_display: format_size(totals.rebuildable),
+        safe_with_reinstall_bytes: totals.safe_with_reinstall,
+        safe_with_reinstall_display: format_size(totals.safe_with_reinstall),
+        ask_bytes: totals.ask,
+        ask_display: format_size(totals.ask),
         scan_duration_ms: duration.as_millis() as u64,
         scan_roots: existing_roots
             .iter()
@@ -1062,8 +1089,9 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
 fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<DevArtifact>) {
     // Check for .cache subdirectory FIRST (it hides inside node_modules)
     let cache_subdir = nm_path.join(".cache");
-    if cache_subdir.exists() && cache_subdir.is_dir() {
-        let cache_size = dir_size(&cache_subdir);
+    let mut cache_size = 0;
+    if cache_subdir.exists() && cache_subdir.is_dir() && !is_symlink(&cache_subdir) {
+        cache_size = dir_size(&cache_subdir);
         if cache_size > 0 {
             artifacts.push(DevArtifact {
                 path: cache_subdir.to_string_lossy().to_string(),
@@ -1073,15 +1101,16 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
                 kind: "node_modules/.cache (build cache)".to_string(),
                 project: get_project_name(nm_path),
                 staleness_days: None,
-                is_nested: true, // Size is included in parent node_modules total
+                is_nested: true, // Excluded from the parent row's size below
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
             });
         }
     }
 
-    // Get total node_modules size (includes .cache)
-    let total_size = dir_size(nm_path);
+    // node_modules row = everything except the nested .cache row, so each byte
+    // is counted once and the SAFE/REINSTALL tiles match their rows
+    let total_size = dir_size(nm_path).saturating_sub(cache_size);
     if total_size > 0 {
         let staleness = check_project_staleness(nm_path, project_dir);
 
@@ -1632,12 +1661,16 @@ fn delete_dev_artifacts_inner(
         let tier = artifact.map(|a| a.tier);
 
         // Decide mechanism: manual deletes of Rebuildable/SafeWithReinstall go to Trash
-        // (recoverable). Safe-tier and bulk deletes are permanent (caches regenerate instantly).
-        let use_trash = allow_non_safe
-            && matches!(
-                tier,
-                Some(ArtifactTier::Rebuildable) | Some(ArtifactTier::SafeWithReinstall)
-            );
+        // (recoverable), as does anything nested inside another artifact (e.g.
+        // node_modules/.cache inside a REINSTALL parent). Other Safe-tier deletes
+        // are permanent (caches regenerate instantly).
+        let nested = artifact.map(|a| a.is_nested).unwrap_or(false);
+        let use_trash = nested
+            || (allow_non_safe
+                && matches!(
+                    tier,
+                    Some(ArtifactTier::Rebuildable) | Some(ArtifactTier::SafeWithReinstall)
+                ));
 
         let mechanism = if use_trash { "trash" } else { "permanent" };
 
@@ -1901,6 +1934,91 @@ mod tests {
         // Nothing readable: unknown
         assert_eq!(check_project_staleness(&tmp.join("missing"), &tmp.join("nope")), None);
 
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_tier_tiles_equal_rows_and_sum_to_total() {
+        let tmp = std::env::temp_dir().join("ss-tiles-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let web = tmp.join("web");
+        let write = |p: PathBuf, n: usize| {
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, vec![0u8; n]).unwrap();
+        };
+        write(web.join("package.json"), 2);
+        write(web.join("node_modules").join("react").join("index.js"), 5_000);
+        write(web.join("node_modules").join(".cache").join("babel").join("x.json"), 700);
+        write(web.join(".next").join("cache").join("webpack.pack"), 3_000);
+        write(web.join("dist").join("app.js"), 1_100);
+        write(web.join("coverage").join("lcov.info"), 90);
+        let rust = tmp.join("svc");
+        write(rust.join("Cargo.toml"), 2);
+        write(rust.join("target").join("debug").join("svc"), 9_000);
+
+        let mut artifacts = Vec::new();
+        scan_project_root(&tmp, &mut artifacts, 0);
+        let t = TierTotals::of(&artifacts);
+        let rows = |tier: ArtifactTier| -> u64 {
+            artifacts.iter().filter(|a| a.tier == tier).map(|a| a.size_bytes).sum()
+        };
+
+        // Each tile equals the sum of the rows shown under it
+        assert_eq!(t.safe, rows(ArtifactTier::Safe));
+        assert_eq!(t.rebuildable, rows(ArtifactTier::Rebuildable));
+        assert_eq!(t.safe_with_reinstall, rows(ArtifactTier::SafeWithReinstall));
+        assert_eq!(t.ask, rows(ArtifactTier::Ask));
+        // SAFE + REBUILD + REINSTALL + REVIEW == total, and total == all rows
+        assert_eq!(t.safe + t.rebuildable + t.safe_with_reinstall + t.ask, t.total);
+        assert_eq!(t.total, artifacts.iter().map(|a| a.size_bytes).sum::<u64>());
+
+        // node_modules/.cache is its own SAFE row; the parent row excludes it
+        let row = |suffix: &str| artifacts.iter().find(|a| a.path.ends_with(suffix)).unwrap();
+        let nm_cache = row("node_modules/.cache");
+        assert_eq!((nm_cache.tier, nm_cache.is_nested, nm_cache.size_bytes), (ArtifactTier::Safe, true, 700));
+        assert_eq!(row("web/node_modules").size_bytes, 5_000);
+        assert_eq!(t.safe, 700 + 3_000); // .cache + .next
+        // Every byte on disk under the artifacts is counted exactly once
+        assert_eq!(t.total, 5_000 + 700 + 3_000 + 1_100 + 90 + 9_000);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_nested_cache_delete_goes_to_trash() {
+        let tmp = std::env::temp_dir().join("ss-nested-trash-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let cache = tmp.join("proj").join("node_modules").join(".cache");
+        fs::create_dir_all(&cache).unwrap();
+        fs::write(cache.join("x"), "x").unwrap();
+        backdate(&cache, 48);
+        let path = cache.to_string_lossy().to_string();
+        let artifact = DevArtifact {
+            path: path.clone(),
+            size_bytes: 1,
+            size_display: "1 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: "node_modules/.cache (build cache)".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: true,
+            hint: None,
+            active_build: false,
+        };
+
+        // Bulk (Clean Now) path: still Trash, because it sits inside a REINSTALL parent
+        let result = delete_dev_artifacts(&[path.clone()], &[artifact]);
+        assert_eq!(result.deleted_count, 1);
+        assert!(!cache.exists());
+        let manifest = load_trash_manifest();
+        let entry = manifest.iter().rev().find(|i| i.original_path == path);
+        assert!(entry.is_some(), "nested delete must be recorded as a Trash move");
+        let trashed = PathBuf::from(&entry.unwrap().trash_path);
+        assert!(trashed.starts_with(get_home_dir().join(".Trash")));
+
+        // Clean up: remove our Trash item and its manifest entry
+        let _ = fs::remove_dir_all(&trashed);
+        save_trash_manifest(&manifest.into_iter().filter(|i| i.original_path != path).collect::<Vec<_>>());
         let _ = fs::remove_dir_all(&tmp);
     }
 
