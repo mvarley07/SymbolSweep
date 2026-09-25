@@ -175,6 +175,31 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     }
   };
 
+  // Tier guide. Before a scan it sits under the header; once rows exist it
+  // scrolls with them, so the pinned summary never squeezes the list shut.
+  const legend = legendExpanded && (
+        <div className="tier-legend">
+          <div className="tier-legend-items">
+            <div className="tier-legend-item">
+              <span className="artifact-tier-badge tier-safe">SAFE</span>
+              <span>Free to delete, regenerates automatically</span>
+            </div>
+            <div className="tier-legend-item">
+              <span className="artifact-tier-badge tier-rebuild">REBUILD</span>
+              <span>Safe, but takes time to rebuild</span>
+            </div>
+            <div className="tier-legend-item">
+              <span className="artifact-tier-badge tier-reinstall">REINSTALL</span>
+              <span>Safe, one command to restore</span>
+            </div>
+            <div className="tier-legend-item">
+              <span className="artifact-tier-badge tier-ask">REVIEW</span>
+              <span>May contain data you want; check before deleting</span>
+            </div>
+          </div>
+        </div>
+  );
+
   return (
     <div className="devscan-panel">
       <header className="panel-header">
@@ -214,28 +239,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
         </button>
       </header>
 
-      {legendExpanded && (
-        <div className="tier-legend">
-          <div className="tier-legend-items">
-            <div className="tier-legend-item">
-              <span className="artifact-tier-badge tier-safe">SAFE</span>
-              <span>Free to delete, regenerates automatically</span>
-            </div>
-            <div className="tier-legend-item">
-              <span className="artifact-tier-badge tier-rebuild">REBUILD</span>
-              <span>Safe, but takes time to rebuild</span>
-            </div>
-            <div className="tier-legend-item">
-              <span className="artifact-tier-badge tier-reinstall">REINSTALL</span>
-              <span>Safe, one command to restore</span>
-            </div>
-            <div className="tier-legend-item">
-              <span className="artifact-tier-badge tier-ask">REVIEW</span>
-              <span>May contain data you want; check before deleting</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {!result && legend}
 
       {error && (
         <div className="scan-error">
@@ -253,6 +257,8 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
 
       {result && (
         <div className="scan-results">
+          {/* Pinned: total, tiles, action buttons, messages */}
+          <div className="scan-summary">
           <div className="scan-total">
             <span className="total-label">Dev artifacts</span>
             <span className="total-value">{result.total_display}</span>
@@ -370,6 +376,11 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             </div>
           )}
 
+          </div>
+
+          {/* Scrolls: skipped list and every artifact row */}
+          <div className="scan-list">
+          {legend}
           {skipped.length > 0 && (
             <div className="skipped-list">
               <div className="skipped-header">
@@ -396,6 +407,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             {result.artifacts.length === 0 && (
               <div className="no-artifacts">No dev artifacts found</div>
             )}
+          </div>
           </div>
 
         </div>

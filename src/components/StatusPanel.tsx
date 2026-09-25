@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
 import { ArtifactRow } from './ArtifactRows';
+import { setWindowHeight } from '../windowSize';
 import type { CleanState, CleanResult } from '../types';
 import './StatusPanel.css';
 
@@ -96,12 +96,17 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [freshCleanFreed, setFreshCleanFreed] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Auto-resize window to fit panel content
+  // Auto-resize window to fit panel content. The panel is capped by CSS at
+  // --window-max-h (its SAFE list scrolls past that), so its box height is the
+  // natural height up to the cap; add the container's borders so nothing is cut.
   const resizeWindow = useCallback(() => {
-    if (!panelRef.current) return;
-    const height = Math.ceil(panelRef.current.scrollHeight);
+    const panel = panelRef.current;
+    if (!panel) return;
+    const container = panel.parentElement;
+    const borders = container ? container.offsetHeight - container.clientHeight : 0;
+    const height = panel.offsetHeight + borders;
     if (height > 0) {
-      getCurrentWindow().setSize(new LogicalSize(280, height));
+      setWindowHeight(height);
     }
   }, []);
 

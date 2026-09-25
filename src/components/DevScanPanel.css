@@ -127,8 +127,31 @@
    ============================================================ */
 .scan-results {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-md) var(--gutter) 0;
+}
+
+/* Total, tiles and action buttons stay pinned while the rows scroll */
+.scan-summary {
+  flex-shrink: 0;
+}
+
+.scan-list {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--space-md) var(--gutter);
+  overscroll-behavior: contain;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 0 var(--gutter) var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Legend inside the scrolling list: aligned with the rows, not the panel */
+.scan-list .tier-legend {
+  margin: var(--space-md) 0 var(--space-sm);
 }
 
 /* Total reclaimable header */
@@ -502,6 +525,13 @@
   background: var(--bg-tertiary);
   padding: 1px 5px;
   border-radius: var(--badge-radius);
+  /* One line, truncated: a wrapped chip doubles the row height at 280px */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 45%;
+  flex-shrink: 1;
 }
 
 .artifact-staleness {

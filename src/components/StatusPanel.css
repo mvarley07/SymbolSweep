@@ -7,6 +7,31 @@
   padding: var(--space-md) var(--gutter) var(--gutter);
   box-sizing: border-box;
   overflow: hidden;
+  /* Never taller than the window may be (minus the container's 1px borders);
+     past that, the Safe to clean list scrolls and everything else stays put */
+  max-height: calc(var(--window-max-h, 580px) - 2px);
+}
+
+.status-panel > * {
+  flex-shrink: 0;
+}
+
+/* Safe to clean: the only part of the main screen that yields height */
+.status-panel > .safe-to-clean {
+  flex-shrink: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.safe-to-clean .scan-total {
+  margin-bottom: var(--space-xs);
+}
+
+.safe-to-clean .artifacts-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Header */
