@@ -20,7 +20,7 @@ const VIEW_HEIGHTS: Record<View, number> = {
   welcome: 320,
   status: 300,  // initial; StatusPanel self-sizes via ResizeObserver
   settings: 480,
-  devscan: 580, // as tall as allowed; its list scrolls under pinned tiles/actions
+  devscan: 300, // initial; DevScanPanel self-sizes to content via ResizeObserver
 };
 
 // Publish the height cap to CSS before any panel measures itself

@@ -4,7 +4,7 @@ import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDev
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
 import { ArtifactRow } from './ArtifactRows';
-import { setWindowHeight } from '../windowSize';
+import { fitWindowTo } from '../windowSize';
 import type { CleanState, CleanResult } from '../types';
 import './StatusPanel.css';
 
@@ -96,18 +96,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [freshCleanFreed, setFreshCleanFreed] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Auto-resize window to fit panel content. The panel is capped by CSS at
-  // --window-max-h (its SAFE list scrolls past that), so its box height is the
-  // natural height up to the cap; add the container's borders so nothing is cut.
+  // Auto-resize window to fit panel content (capped; the SAFE list scrolls past it)
   const resizeWindow = useCallback(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    const container = panel.parentElement;
-    const borders = container ? container.offsetHeight - container.clientHeight : 0;
-    const height = panel.offsetHeight + borders;
-    if (height > 0) {
-      setWindowHeight(height);
-    }
+    if (panelRef.current) fitWindowTo(panelRef.current);
   }, []);
 
   useEffect(() => {

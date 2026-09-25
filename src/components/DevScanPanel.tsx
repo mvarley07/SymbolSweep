@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAppStatus, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import type { DevArtifact, DevDeleteResult, SkippedArtifact, SsTrashInfo, PurgeResult } from '../types';
 import { ArtifactRow, SkippedRow } from './ArtifactRows';
+import { fitWindowTo } from '../windowSize';
 import './DevScanPanel.css';
 
 const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
@@ -41,6 +42,18 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const [skipped, setSkipped] = useState<SkippedArtifact[]>([]);
   // Artifact list as it was when the last delete ran, for labelling skipped rows
   const [skippedContext, setSkippedContext] = useState<DevArtifact[] | undefined>(undefined);
+
+  // Size the window to the panel's content, like the main screen: a short list
+  // gives a short window; a long one fills the allowed height and scrolls.
+  // The observer's first callback lands after App's per-view setSize.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => fitWindowTo(el));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const refreshTrashInfo = useCallback(async () => {
     try {
@@ -201,7 +214,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   );
 
   return (
-    <div className="devscan-panel">
+    <div className="devscan-panel" ref={panelRef}>
       <header className="panel-header">
         <button className="back-btn" onClick={onBack} title="Back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

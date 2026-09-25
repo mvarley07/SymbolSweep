@@ -34,6 +34,21 @@ export function publishWindowMaxHeight(): number {
   return max;
 }
 
+/**
+ * Size the window to a panel's content. The panel must be height:auto with
+ * max-height: calc(var(--window-max-h) - 2px), so its box is its natural
+ * height up to the cap (past which its list scrolls). Adds the container's
+ * borders so nothing is cut off and no empty space is left below.
+ */
+export function fitWindowTo(panel: HTMLElement): void {
+  const container = panel.parentElement;
+  const borders = container ? container.offsetHeight - container.clientHeight : 0;
+  const height = panel.offsetHeight + borders;
+  if (height > 0) {
+    setWindowHeight(height);
+  }
+}
+
 /** Resize the popup, clamped to maxWindowHeight(). Returns the height applied. */
 export function setWindowHeight(height: number): number {
   const clamped = Math.min(Math.ceil(height), publishWindowMaxHeight());
