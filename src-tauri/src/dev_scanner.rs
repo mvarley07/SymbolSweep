@@ -84,7 +84,7 @@ pub struct DevArtifact {
     #[serde(default)]
     pub active_build: bool,
     /// SAFE rows only: why a delete right now would skip this row ("modified
-    /// 2h ago", "in use by node"). Set at scan time by the same in_use_reason()
+    /// 2h ago" for project artifacts, "in use by cargo"). Set at scan time by the same in_use_reason()
     /// the delete guard uses; the delete guard still re-checks at delete time.
     #[serde(default)]
     pub in_use: Option<String>,
@@ -1216,7 +1216,7 @@ pub struct SkippedArtifact {
     pub path: String,
     pub size_bytes: u64,
     pub size_display: String,
-    /// e.g. "modified 2h ago", "in use by node"
+    /// e.g. "modified 2h ago" (project artifacts only), "in use by cargo"
     pub reason: String,
 }
 
@@ -1503,17 +1503,41 @@ fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
 // In-use guards for Safe-tier deletes
 // ============================================================================
 
-/// Safe-tier artifacts modified more recently than this are left alone
+/// Project-scoped Safe-tier artifacts modified more recently than this are
+/// left alone. Home-level caches skip this check: they are shared by every
+/// project, so their mtime says nothing about whether they are in use.
 const RECENT_WINDOW: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
 /// Process names whose working directory marks a project as in use
 const PROJECT_PROCESS_NAMES: &[&str] = &["node", "npm", "pnpm", "yarn", "bun", "vite", "next"];
 
-/// Executables that are npm itself
-const NPM_EXECUTABLES: &[&str] = &["npm", "npx"];
+/// A tool that uses a home-level cache: its executable names, and the entry
+/// scripts that mark an interpreter process as that tool (node .../npm-cli.js)
+struct CacheTool {
+    executables: &'static [&'static str],
+    entry_scripts: &'static [(&'static str, &'static str)],
+}
 
-/// Entry scripts that mark a `node` process as npm itself (node .../npm-cli.js)
-const NPM_ENTRY_SCRIPTS: &[(&str, &str)] = &[("npm-cli.js", "npm"), ("npx-cli.js", "npx")];
+const NPM: CacheTool = CacheTool {
+    executables: &["npm", "npx"],
+    entry_scripts: &[("npm-cli.js", "npm"), ("npx-cli.js", "npx")],
+};
+
+/// Home-level caches (path under home) and the tool whose running process
+/// marks each as in use
+const HOME_CACHE_TOOLS: &[(&str, CacheTool)] = &[
+    (".npm", NPM),
+    (".cargo", CacheTool { executables: &["cargo"], entry_scripts: &[] }),
+    (".yarn", CacheTool { executables: &["yarn"], entry_scripts: &[("yarn.js", "yarn"), ("yarn.cjs", "yarn")] }),
+    (".bun", CacheTool { executables: &["bun"], entry_scripts: &[] }),
+    ("Library/Caches/pnpm", CacheTool { executables: &["pnpm"], entry_scripts: &[("pnpm.cjs", "pnpm")] }),
+    ("Library/Caches/node-gyp", CacheTool { executables: &["node-gyp"], entry_scripts: &[("node-gyp.js", "node-gyp")] }),
+    ("Library/Caches/typescript", CacheTool { executables: &["tsc"], entry_scripts: &[("tsc", "tsc")] }),
+    ("Library/Caches/Homebrew", CacheTool { executables: &["brew"], entry_scripts: &[("brew.rb", "brew"), ("brew.sh", "brew")] }),
+    ("Library/Caches/pip", CacheTool { executables: &["pip", "pip3"], entry_scripts: &[] }),
+    ("Library/Caches/go-build", CacheTool { executables: &["go"], entry_scripts: &[] }),
+    ("Library/Caches/CocoaPods", CacheTool { executables: &["pod"], entry_scripts: &[("pod", "pod")] }),
+];
 
 /// Artifact directory names that live directly inside a project root
 const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cache"];
@@ -1522,8 +1546,8 @@ const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cac
 struct ProcessSnapshot {
     /// (command name, working directory) for PROJECT_PROCESS_NAMES
     cwds: Vec<(String, PathBuf)>,
-    /// "npm" or "npx" if npm itself is running, else None
-    npm_user: Option<String>,
+    /// Full command line of every running process (`ps -o args=`)
+    command_lines: Vec<String>,
 }
 
 impl ProcessSnapshot {
@@ -1539,30 +1563,30 @@ impl ProcessSnapshot {
             .output()
             .map(|o| parse_lsof_cwds(&String::from_utf8_lossy(&o.stdout)))
             .unwrap_or_default();
-        let npm_user = Command::new("ps")
+        let command_lines = Command::new("ps")
             .args(["-axww", "-o", "args="])
             .output()
-            .ok()
-            .and_then(|o| npm_process_in(String::from_utf8_lossy(&o.stdout).lines()));
-        ProcessSnapshot { cwds, npm_user }
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(String::from).collect())
+            .unwrap_or_default();
+        ProcessSnapshot { cwds, command_lines }
     }
 }
 
-/// Returns "npm" or "npx" if any command line is npm itself: an npm/npx
-/// executable (including npm's retitled "npm install …" form), or node
-/// running npm-cli.js / npx-cli.js. A bare node process (editor, language
-/// server, dev server) does not count.
-fn npm_process_in<'a>(command_lines: impl IntoIterator<Item = &'a str>) -> Option<String> {
+/// Returns the tool's name if any command line is that tool: one of its
+/// executables (including npm's retitled "npm install …" form), or an
+/// interpreter running one of its entry scripts (node npm-cli.js). A bare
+/// interpreter (editor, language server, dev server) does not count.
+fn tool_process_in<'a>(tool: &CacheTool, command_lines: impl IntoIterator<Item = &'a str>) -> Option<String> {
     command_lines.into_iter().find_map(|line| {
         let mut args = line.split_whitespace();
         let exe = args.next()?;
         let exe_name = Path::new(exe).file_name()?.to_str()?;
-        if let Some(name) = NPM_EXECUTABLES.iter().find(|n| **n == exe_name) {
+        if let Some(name) = tool.executables.iter().find(|n| **n == exe_name) {
             return Some(name.to_string());
         }
         args.find_map(|arg| {
             let script = Path::new(arg).file_name()?.to_str()?;
-            NPM_ENTRY_SCRIPTS
+            tool.entry_scripts
                 .iter()
                 .find(|(entry, _)| *entry == script)
                 .map(|(_, name)| name.to_string())
@@ -1626,23 +1650,30 @@ fn project_root_for(path: &Path) -> Option<&Path> {
 }
 
 /// Decide whether a Safe-tier artifact should be left alone right now.
-/// `procs` is consulted only when the mtime check passes, so lsof/pgrep run
-/// at most once per delete pass (the caller caches the snapshot).
+/// Project-scoped artifacts (found under a scan root) are guarded by mtime,
+/// then by a process working in the project. Home-level caches (~/.npm,
+/// ~/.cargo, ~/Library/Caches/*) are guarded only by their tool running.
+/// `procs` is not consulted for a recently modified project artifact; the
+/// caller caches the snapshot so lsof/ps run at most once per pass.
 fn in_use_reason<F>(path: &Path, home: &Path, now: SystemTime, procs: &mut F) -> Option<String>
 where
     F: FnMut() -> std::rc::Rc<ProcessSnapshot>,
 {
+    let project_root = project_root_for(path);
+
+    if project_root.is_none() && path.starts_with(home) {
+        let (_, tool) = HOME_CACHE_TOOLS
+            .iter()
+            .find(|(rel, _)| path.starts_with(home.join(rel)))?;
+        let name = tool_process_in(tool, procs().command_lines.iter().map(String::as_str))?;
+        return Some(format!("in use by {}", name));
+    }
+
     if let Some(age) = recently_modified(path, now, RECENT_WINDOW) {
         return Some(format!("modified {}", format_age(age)));
     }
 
-    if path.starts_with(home.join(".npm")) {
-        if let Some(name) = &procs().npm_user {
-            return Some(format!("in use by {}", name));
-        }
-    }
-
-    if let Some(root) = project_root_for(path) {
+    if let Some(root) = project_root {
         // lsof reports resolved paths (/private/tmp, not /tmp)
         let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
         if let Some(name) = process_in_project(&procs().cwds, &root) {
@@ -1655,7 +1686,7 @@ where
 
 /// Mark SAFE rows that a delete would skip right now, so the UI can show the
 /// reason instead of a delete button. Uses the delete guard's own predicate;
-/// lsof/ps run at most once, and only if some SAFE row is older than 24h.
+/// lsof/ps run at most once per scan.
 fn annotate_in_use(artifacts: &mut [DevArtifact]) {
     let home = get_home_dir();
     let now = SystemTime::now();
@@ -1740,8 +1771,8 @@ fn delete_dev_artifacts_inner(
             continue;
         }
 
-        // In-use guard: leave Safe-tier artifacts alone if recently modified
-        // or a relevant process is working in them
+        // In-use guard: leave Safe-tier artifacts alone if a relevant process
+        // is using them, or (project artifacts only) they were recently modified
         if let Some(a) = artifact.filter(|a| a.tier == ArtifactTier::Safe) {
             if let Some(reason) = in_use_reason(path, &home, now, &mut procs) {
                 crate::cache_cleaner::log_deletion(&format!(
@@ -1874,10 +1905,10 @@ mod tests {
         fs::File::open(path).unwrap().set_modified(when).unwrap();
     }
 
-    fn snapshot(cwds: &[(&str, &str)], npm_user: Option<&str>) -> std::rc::Rc<ProcessSnapshot> {
+    fn snapshot(cwds: &[(&str, &str)], command_lines: &[&str]) -> std::rc::Rc<ProcessSnapshot> {
         std::rc::Rc::new(ProcessSnapshot {
             cwds: cwds.iter().map(|(c, p)| (c.to_string(), PathBuf::from(p))).collect(),
-            npm_user: npm_user.map(String::from),
+            command_lines: command_lines.iter().map(|l| l.to_string()).collect(),
         })
     }
 
@@ -1922,7 +1953,7 @@ mod tests {
     fn test_process_in_project_predicate() {
         let cwds = snapshot(
             &[("node", "/work/app/packages/web"), ("vite", "/work/app2"), ("npm", "/work")],
-            None,
+            &[],
         );
         assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/app")), Some("node".into()));
         assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/app2")), Some("vite".into()));
@@ -1936,16 +1967,16 @@ mod tests {
     #[test]
     fn test_npm_guard_matches_npm_not_bare_node() {
         // npm itself, in each form it shows up in `ps -o args=`
-        assert_eq!(npm_process_in(["npm install lodash"]), Some("npm".into()));
-        assert_eq!(npm_process_in(["npm run dev --port 3003"]), Some("npm".into()));
-        assert_eq!(npm_process_in(["/opt/homebrew/bin/npm ci"]), Some("npm".into()));
-        assert_eq!(npm_process_in(["npx vite"]), Some("npx".into()));
+        assert_eq!(tool_process_in(&NPM, ["npm install lodash"]), Some("npm".into()));
+        assert_eq!(tool_process_in(&NPM, ["npm run dev --port 3003"]), Some("npm".into()));
+        assert_eq!(tool_process_in(&NPM, ["/opt/homebrew/bin/npm ci"]), Some("npm".into()));
+        assert_eq!(tool_process_in(&NPM, ["npx vite"]), Some("npx".into()));
         assert_eq!(
-            npm_process_in(["/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install"]),
+            tool_process_in(&NPM, ["/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install"]),
             Some("npm".into())
         );
         assert_eq!(
-            npm_process_in(["node /usr/local/lib/node_modules/npm/bin/npx-cli.js create-vite"]),
+            tool_process_in(&NPM, ["node /usr/local/lib/node_modules/npm/bin/npx-cli.js create-vite"]),
             Some("npx".into())
         );
 
@@ -1957,12 +1988,12 @@ mod tests {
             "node /Users/me/npm-tools/index.js",
             "/usr/local/bin/npmrc-switcher list",
         ];
-        assert_eq!(npm_process_in(bare_node), None);
-        assert_eq!(npm_process_in(Vec::<&str>::new()), None);
+        assert_eq!(tool_process_in(&NPM, bare_node), None);
+        assert_eq!(tool_process_in(&NPM, Vec::<&str>::new()), None);
 
         // Found among other processes
         assert_eq!(
-            npm_process_in(["node /x/server.js", "", "npm install"]),
+            tool_process_in(&NPM, ["node /x/server.js", "", "npm install"]),
             Some("npm".into())
         );
     }
@@ -2201,18 +2232,42 @@ mod tests {
         let root = project.canonicalize().unwrap();
         let root_str = root.to_string_lossy().to_string();
 
-        // Recent: skipped on mtime alone, process list never consulted
+        let cargo_registry = home.join(".cargo").join("registry");
+        fs::create_dir_all(&cargo_registry).unwrap();
+        let pip_cache = home.join("Library").join("Caches").join("pip");
+        fs::create_dir_all(&pip_cache).unwrap();
+
+        // Recent project artifact: skipped on mtime alone, process list never consulted
         let mut calls = 0;
-        let mut procs = || { calls += 1; snapshot(&[], None) };
+        let mut procs = || { calls += 1; snapshot(&[], &[]) };
         let reason = in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs);
         assert_eq!(reason.as_deref(), Some("modified just now"));
         assert_eq!(calls, 0);
 
+        // Home caches ignore mtime: freshly modified, tool idle -> deletable
+        for cache in [&npm_cache, &cargo_registry, &pip_cache] {
+            let mut procs = || snapshot(&[], &[]);
+            assert_eq!(in_use_reason(cache, &home, SystemTime::now(), &mut procs), None, "{:?}", cache);
+        }
+
+        // Home caches while their tool runs: named by the tool, never by age
+        let running = ["/Users/me/.cargo/bin/cargo build --release", "npm install", "pip3 install requests"];
+        let mut procs = || snapshot(&[], &running);
+        for (cache, tool) in [(&npm_cache, "npm"), (&cargo_registry, "cargo"), (&pip_cache, "pip3")] {
+            assert_eq!(
+                in_use_reason(cache, &home, SystemTime::now(), &mut procs),
+                Some(format!("in use by {}", tool))
+            );
+        }
+
+        // Another tool running does not mark an unrelated home cache
+        let mut procs = || snapshot(&[], &["npm install"]);
+        assert_eq!(in_use_reason(&cargo_registry, &home, SystemTime::now(), &mut procs), None);
+
         backdate(&next_dir, 48);
-        backdate(&npm_cache, 48);
 
         // Old + dev server running in the project: skipped
-        let mut procs = || snapshot(&[("node", &root_str)], None);
+        let mut procs = || snapshot(&[("node", &root_str)], &[]);
         assert_eq!(
             in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs).as_deref(),
             Some("in use by node")
@@ -2220,17 +2275,8 @@ mod tests {
 
         // Old + dev server in a sibling project: deletable
         let sibling = tmp.join("site-two").to_string_lossy().to_string();
-        let mut procs = || snapshot(&[("node", &sibling)], None);
+        let mut procs = || snapshot(&[("node", &sibling)], &[]);
         assert_eq!(in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs), None);
-
-        // ~/.npm while npm runs: skipped; idle: deletable
-        let mut procs = || snapshot(&[], Some("npm"));
-        assert_eq!(
-            in_use_reason(&npm_cache, &home, SystemTime::now(), &mut procs).as_deref(),
-            Some("in use by npm")
-        );
-        let mut procs = || snapshot(&[], None);
-        assert_eq!(in_use_reason(&npm_cache, &home, SystemTime::now(), &mut procs), None);
 
         let _ = fs::remove_dir_all(&tmp);
     }
