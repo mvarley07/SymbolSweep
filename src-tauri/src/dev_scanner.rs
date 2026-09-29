@@ -702,7 +702,7 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
     if derived_data.exists() && derived_data.is_dir() {
         let size = dir_size(&derived_data);
         if size > 0 {
-            let building = is_active_build(&derived_data, "DerivedData");
+            let building = is_active_build(&derived_data);
             artifacts.push(DevArtifact {
                 path: derived_data.to_string_lossy().to_string(),
                 size_bytes: size,
@@ -886,43 +886,152 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
 // Active build detection
 // ============================================================================
 
-/// Check if a build process is currently running that would use this directory.
-/// Uses pgrep to detect cargo/xcodebuild and lock-file mtime to detect recent builds.
-fn is_active_build(dir: &Path, artifact_name: &str) -> bool {
-    match artifact_name {
-        "target" => {
-            // Check for Cargo.lock mtime < 5 minutes (indicates recent/active build)
-            let cargo_lock = dir.join("Cargo.lock");
-            if cargo_lock.exists() {
-                if let Ok(meta) = fs::metadata(&cargo_lock) {
-                    if let Ok(modified) = meta.modified() {
-                        if let Ok(elapsed) = modified.elapsed() {
-                            if elapsed < std::time::Duration::from_secs(300) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-            // Also check if cargo is running
-            is_process_running("cargo")
+/// A build tool running right now: command name and working directory
+#[derive(Debug, Default)]
+struct BuildProcs {
+    cwds: Vec<(String, PathBuf)>,
+}
+
+/// Build tools whose working directory marks their project as building
+const BUILD_TOOLS: &[&str] = &["cargo", "rustc", "xcodebuild"];
+
+/// How recently Cargo.lock or target/.rustc_info.json must have changed for
+/// a Rust target to count as building with no cargo process in sight
+const BUILD_RECENT_WINDOW: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+impl BuildProcs {
+    /// cargo/rustc/xcodebuild working directories, from one lsof call.
+    /// Processes started by rust-analyzer (its background `cargo check`)
+    /// are not builds and are dropped.
+    fn capture() -> Self {
+        let mut args = vec!["-a", "-d", "cwd", "-Fpcn"];
+        for tool in BUILD_TOOLS {
+            args.extend(["-c", tool]);
         }
-        "DerivedData" => {
-            // Check if xcodebuild is running
-            is_process_running("xcodebuild")
-        }
-        _ => false,
+        let lsof = Command::new("lsof")
+            .args(&args)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default();
+        let ps = Command::new("ps")
+            .args(["-axo", "pid=,ppid=,comm="])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default();
+        let tree = parse_ps_tree(&ps);
+        let cwds = parse_lsof_pid_cwds(&lsof)
+            .into_iter()
+            .filter(|(pid, _, _)| !has_ancestor(*pid, &tree, "rust-analyzer"))
+            .map(|(_, name, cwd)| (name, cwd))
+            .collect();
+        BuildProcs { cwds }
+    }
+
+    /// Is `tool` (a prefix: "cargo" covers cargo-clippy) working inside `project`?
+    fn in_project(&self, tools: &[&str], project: &Path) -> bool {
+        // lsof reports resolved paths (/private/tmp, not /tmp)
+        let project = project.canonicalize().unwrap_or_else(|_| project.to_path_buf());
+        self.cwds
+            .iter()
+            .any(|(name, cwd)| tools.iter().any(|t| name.starts_with(t)) && cwd.starts_with(&project))
+    }
+
+    fn any(&self, tools: &[&str]) -> bool {
+        self.cwds.iter().any(|(name, _)| tools.iter().any(|t| name.starts_with(t)))
     }
 }
 
-/// Check if a named process is currently running via pgrep
-fn is_process_running(name: &str) -> bool {
-    Command::new("pgrep")
-        .arg("-x")
-        .arg(name)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+/// `lsof -F pcn` output as (pid, command, cwd)
+fn parse_lsof_pid_cwds(output: &str) -> Vec<(u32, String, PathBuf)> {
+    let (mut pid, mut command) = (0u32, String::new());
+    let mut found = Vec::new();
+    for line in output.lines() {
+        match line.split_at(line.len().min(1)) {
+            ("p", n) => {
+                pid = n.parse().unwrap_or(0);
+                command.clear();
+            }
+            ("c", name) => command = name.to_string(),
+            ("n", path) if !path.is_empty() => found.push((pid, command.clone(), PathBuf::from(path))),
+            _ => {}
+        }
+    }
+    found
+}
+
+/// `ps -o pid=,ppid=,comm=` output as pid -> (parent pid, command basename)
+fn parse_ps_tree(output: &str) -> std::collections::HashMap<u32, (u32, String)> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let pid = parts.next()?.parse().ok()?;
+            let ppid = parts.next()?.parse().ok()?;
+            let comm: Vec<&str> = parts.collect();
+            let comm = comm.join(" ");
+            let name = Path::new(&comm).file_name()?.to_string_lossy().into_owned();
+            Some((pid, (ppid, name)))
+        })
+        .collect()
+}
+
+/// Whether any ancestor of `pid` is named `name`
+fn has_ancestor(pid: u32, tree: &std::collections::HashMap<u32, (u32, String)>, name: &str) -> bool {
+    let mut current = pid;
+    for _ in 0..64 {
+        let Some((parent, _)) = tree.get(&current) else { return false };
+        if *parent <= 1 {
+            return false;
+        }
+        if tree.get(parent).map(|(_, n)| n == name).unwrap_or(false) {
+            return true;
+        }
+        current = *parent;
+    }
+    false
+}
+
+/// One lsof/ps snapshot shared by every check in a scan (a scan checks many
+/// targets); reused for 2 seconds
+fn build_procs() -> std::sync::Arc<BuildProcs> {
+    use std::sync::{Arc, Mutex};
+    static CACHE: Mutex<Option<(std::time::Instant, Arc<BuildProcs>)>> = Mutex::new(None);
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, procs)) = cache.as_ref() {
+        if at.elapsed() < std::time::Duration::from_secs(2) {
+            return Arc::clone(procs);
+        }
+    }
+    let procs = Arc::new(BuildProcs::capture());
+    *cache = Some((std::time::Instant::now(), Arc::clone(&procs)));
+    procs
+}
+
+/// Is this build artifact being built right now? Per project: another
+/// project's cargo, or rust-analyzer, never holds it back.
+fn is_active_build(artifact: &Path) -> bool {
+    building(artifact, &get_home_dir(), &build_procs(), SystemTime::now())
+}
+
+/// - Rust `target`: cargo/rustc working inside its project, or the project's
+///   Cargo.lock or target/.rustc_info.json changed in the last 5 minutes
+/// - project DerivedData: xcodebuild working inside that project
+/// - ~/Library/Developer/Xcode/DerivedData: any xcodebuild, since every Xcode
+///   project builds into it
+fn building(artifact: &Path, home: &Path, procs: &BuildProcs, now: SystemTime) -> bool {
+    let Some(project) = artifact.parent() else { return false };
+    match artifact.file_name().and_then(|n| n.to_str()) {
+        Some("target") => {
+            recently_modified(&project.join("Cargo.lock"), now, BUILD_RECENT_WINDOW).is_some()
+                || recently_modified(&artifact.join(".rustc_info.json"), now, BUILD_RECENT_WINDOW).is_some()
+                || procs.in_project(&["cargo", "rustc"], project)
+        }
+        Some("DerivedData") if artifact == home.join("Library/Developer/Xcode/DerivedData") => {
+            procs.any(&["xcodebuild"])
+        }
+        Some("DerivedData") => procs.in_project(&["xcodebuild"], project),
+        _ => false,
+    }
 }
 
 // ============================================================================
@@ -1001,7 +1110,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
         if name_str == "target" && dir.join("Cargo.toml").exists() {
             let size = dir_size(&entry_path);
             if size > 0 {
-                let building = is_active_build(dir, "target");
+                let building = is_active_build(&entry_path);
                 artifacts.push(DevArtifact {
                     path: entry_path.to_string_lossy().to_string(),
                     size_bytes: size,
@@ -1086,7 +1195,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
         if name_str == "DerivedData" {
             let size = dir_size(&entry_path);
             if size > 0 {
-                let building = is_active_build(dir, "DerivedData");
+                let building = is_active_build(&entry_path);
                 artifacts.push(DevArtifact {
                     path: entry_path.to_string_lossy().to_string(),
                     size_bytes: size,
@@ -2916,6 +3025,124 @@ mod tests {
         assert!(dir.exists(), "Directory must survive manual delete too");
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ----------------------------------------------------------------
+    // Build guard: per project
+    // ----------------------------------------------------------------
+
+    /// A Rust project with an old Cargo.lock and target/.rustc_info.json
+    fn rust_project(root: &Path) -> PathBuf {
+        let old = SystemTime::now() - std::time::Duration::from_secs(3600);
+        fs::create_dir_all(root.join("target")).unwrap();
+        fs::write(root.join("Cargo.toml"), "[package]").unwrap();
+        for f in [root.join("Cargo.lock"), root.join("target").join(".rustc_info.json")] {
+            fs::write(&f, "x").unwrap();
+            fs::File::options().write(true).open(&f).unwrap().set_modified(old).unwrap();
+        }
+        root.join("target")
+    }
+
+    fn procs(cwds: &[(&str, &Path)]) -> BuildProcs {
+        BuildProcs {
+            cwds: cwds
+                .iter()
+                .map(|(n, p)| (n.to_string(), p.canonicalize().unwrap_or_else(|_| p.to_path_buf())))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn test_cargo_in_one_project_does_not_hold_back_another() {
+        let tmp = std::env::temp_dir().join("ss-build-guard-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let a = tmp.join("a");
+        let b = tmp.join("b");
+        let a_target = rust_project(&a);
+        let b_target = rust_project(&b);
+        let now = SystemTime::now();
+        let home = tmp.join("home");
+
+        // cargo building A (from a subfolder, like a workspace member)
+        fs::create_dir_all(a.join("crates").join("core")).unwrap();
+        let p = procs(&[("cargo", &a.join("crates").join("core"))]);
+        assert!(building(&a_target, &home, &p, now), "cargo in A holds back A's target");
+        assert!(!building(&b_target, &home, &p, now), "cargo in A must not hold back B's target");
+
+        // rustc counts too; nothing running at all holds back nothing
+        assert!(building(&b_target, &home, &procs(&[("rustc", &b)]), now));
+        assert!(!building(&a_target, &home, &procs(&[]), now));
+
+        // A sibling folder whose name starts the same is a different project
+        let a2 = tmp.join("a2");
+        let a2_target = rust_project(&a2);
+        assert!(!building(&a2_target, &home, &procs(&[("cargo", &a)]), now));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_recent_cargo_lock_or_rustc_info_means_building() {
+        let tmp = std::env::temp_dir().join("ss-build-recent-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let home = tmp.join("home");
+        let none = procs(&[]);
+
+        let lock_proj = tmp.join("lock");
+        let lock_target = rust_project(&lock_proj);
+        fs::write(lock_proj.join("Cargo.lock"), "changed").unwrap();
+        assert!(building(&lock_target, &home, &none, SystemTime::now()), "Cargo.lock changed just now");
+
+        let info_proj = tmp.join("info");
+        let info_target = rust_project(&info_proj);
+        fs::write(info_target.join(".rustc_info.json"), "changed").unwrap();
+        assert!(building(&info_target, &home, &none, SystemTime::now()), ".rustc_info.json changed just now");
+
+        // Six minutes later neither counts
+        let later = SystemTime::now() + std::time::Duration::from_secs(6 * 60);
+        assert!(!building(&lock_target, &home, &none, later));
+        assert!(!building(&info_target, &home, &none, later));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_xcodebuild_is_per_project_except_shared_derived_data() {
+        let tmp = std::env::temp_dir().join("ss-build-xcode-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let home = tmp.join("home");
+        let app_a = tmp.join("AppA");
+        let app_b = tmp.join("AppB");
+        for app in [&app_a, &app_b] {
+            fs::create_dir_all(app.join("DerivedData")).unwrap();
+        }
+        let shared = home.join("Library/Developer/Xcode/DerivedData");
+        fs::create_dir_all(&shared).unwrap();
+        let now = SystemTime::now();
+
+        let p = procs(&[("xcodebuild", &app_a)]);
+        assert!(building(&app_a.join("DerivedData"), &home, &p, now));
+        assert!(!building(&app_b.join("DerivedData"), &home, &p, now), "xcodebuild in A must not hold back B");
+        // Every Xcode project builds into the shared folder
+        assert!(building(&shared, &home, &p, now));
+        assert!(!building(&shared, &home, &procs(&[]), now));
+        // cargo is not an Xcode build
+        assert!(!building(&shared, &home, &procs(&[("cargo", &app_a)]), now));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_rust_analyzer_cargo_is_not_a_build() {
+        let lsof = "p30\nccargo\nn/w/a\np40\nccargo\nn/w/b\np50\ncrustc\nn/w/c\n";
+        let ps = "  1     0 /sbin/launchd\n 20     1 /Applications/Code.app/rust-analyzer\n 30    20 /Users/me/.cargo/bin/cargo\n 35     1 -zsh\n 40    35 cargo\n 45    30 rustc\n 50    45 rustc\n";
+        let tree = parse_ps_tree(ps);
+        let kept: Vec<(u32, String, PathBuf)> = parse_lsof_pid_cwds(lsof)
+            .into_iter()
+            .filter(|(pid, _, _)| !has_ancestor(*pid, &tree, "rust-analyzer"))
+            .collect();
+        // 30 is rust-analyzer's cargo check; 50 is a rustc under it; 40 is a terminal cargo build
+        assert_eq!(kept, vec![(40, "cargo".to_string(), PathBuf::from("/w/b"))]);
     }
 
     /// Test: unknown paths (not in scan result) are never deleted
