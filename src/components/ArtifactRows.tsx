@@ -20,6 +20,12 @@ export interface ArtifactRowProps {
 
 const STALE_THRESHOLD_DAYS = 14;
 
+const TRASH_ICON = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M2.5 4.5h11M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4 4.5l.5 8.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1l.5-8.5" />
+  </svg>
+);
+
 /** Generate the removal command/instruction for REVIEW-tier artifacts */
 function getRemovalInfo(artifact: DevArtifact): { command: string; note?: string } | { instruction: string } | null {
   const shortPath = artifact.path.replace(/^\/Users\/[^/]+/, '~');
@@ -183,9 +189,16 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
               data-tip="Remove from rack"
               aria-label="Remove from rack"
             >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M2.5 4.5h11M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4 4.5l.5 8.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1l.5-8.5" />
-              </svg>
+              {TRASH_ICON}
+            </button>
+          ) : artifact.in_use ? (
+            <button
+              className="artifact-delete-btn"
+              disabled
+              title="In use, will retry"
+              aria-label="In use, will retry"
+            >
+              {TRASH_ICON}
             </button>
           ) : (
             <span className="artifact-delete-spacer" />
