@@ -319,6 +319,11 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   // Every SAFE row, on the main screen: delete per row, or the reason it's skipped
   const safeRows = devResult ? devResult.artifacts.filter(a => a.tier === 'Safe') : [];
+  // Header value: what the rows can delete now, then what's held back as in use
+  const safeInUseBytes = devResult ? devResult.safe_bytes - devResult.safe_deletable_bytes : 0;
+  const safeHeaderValue = devResult
+    ? `${formatSize(devResult.safe_deletable_bytes)}${safeInUseBytes > 0 ? ` \u00b7 ${formatSize(safeInUseBytes)} in use` : ''}`
+    : appStatus.dev_safe_display;
   const handleDeleteSafeRow = async (path: string) => {
     try {
       // Backend rescans and emits; rows, hero and tray refresh from that rescan
@@ -378,7 +383,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         <div className="safe-to-clean">
           <div className="scan-total">
             <span className="total-label">Safe to clean</span>
-            <span className="artifact-size">{appStatus.dev_safe_display}</span>
+            <span className="artifact-size">{safeHeaderValue}</span>
           </div>
           <div className="artifacts-list">
             {safeRows.map(artifact => (
