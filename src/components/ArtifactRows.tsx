@@ -150,14 +150,17 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
               {artifact.active_build ? 'BUILDING' : config.label}
             </span>
             <RowTitle kind={artifact.kind} project={artifact.project} title={shortPath} />
-            {staleness && (
-              <span className="artifact-staleness" data-tip={`Unused for ${artifact.staleness_days} days`} aria-label={`Unused for ${artifact.staleness_days} days`}>{staleness}</span>
-            )}
           </div>
           {artifact.in_use ? (
             <div className="artifact-hint in-use-reason">{inUseLabel(artifact.in_use)}</div>
-          ) : artifact.hint && (
-            <div className="artifact-hint" title={artifact.hint}>{artifact.hint}</div>
+          ) : (artifact.hint || staleness) && (
+            <div className="artifact-hint" title={artifact.hint ?? undefined}>
+              {staleness && (
+                <span className="artifact-staleness" aria-label={`Unused for ${artifact.staleness_days} days`}>{staleness}</span>
+              )}
+              {staleness && artifact.hint && ' \u00b7 '}
+              {artifact.hint}
+            </div>
           )}
           {removalInfo && 'command' in removalInfo && (
             <div className="removal-command">

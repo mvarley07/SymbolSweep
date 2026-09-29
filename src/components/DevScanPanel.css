@@ -931,13 +931,6 @@
   transform: none;
 }
 
-/* Staleness chip: keep centered, it sits mid-row */
-.artifact-staleness[data-tip]::after {
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
-}
-
 @keyframes slideIn {
   from {
     opacity: 0;
