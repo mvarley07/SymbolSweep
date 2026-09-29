@@ -1,11 +1,11 @@
 {
-  "version": "2.1.5",
-  "notes": "SymbolSweep 2.1.5",
-  "pub_date": "2026-09-29T19:55:06Z",
+  "version": "2.1.6",
+  "notes": "SymbolSweep 2.1.6",
+  "pub_date": "2026-09-29T20:22:06Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVReXdxeERGdGRoWSswTVJUWTByMGU2Q2ZTeldFTUllVlZNc2dnaklzL1ZGWEMxM09JQ3NuckxXMzg2NFErMGJoOGdqeVNPb0JMb2JNd202VWdHbG5NbVJMK09USmdpQmdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNzExNjc4CWZpbGU6U3ltYm9sU3dlZXAuYXBwLnRhci5negpBczFGU2pYTlFmK3FYSlhBY0thUk1WYm9HQ3VVV0ZTWnNuek1ZM1NSUGhQNW9xNmllU0kwWFZOZ25qOXZNemQ4R3lYN2wwZE1XMmJmcFkxOUJOQ2xCUT09Cg==",
-      "url": "https://github.com/mvarley07/symbolsweep-releases/releases/download/v2.1.5/SymbolSweep.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVReXdxeERGdGRoWXdQWllUZ2xsWnRkUkh6SUlrUThEM0o4VHR1QVZRMGFIT1ExMmJWd2htRUcwc0xRaEQ3bGlsSGh5WFFid2szWFA3blIxQUpQMmRZbUZtNkMyT3lpWGcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNzEzMjkyCWZpbGU6U3ltYm9sU3dlZXAuYXBwLnRhci5negpYclFoUDNTdk5qTGRSV25kMmUzKy9BOEcyeDhMc21IeFdvMmNZblQrR0VEWnEvOTNkK3VUa0J3K0wxeHk1a25wZWlmN05pVi9oT0x0R2pzVGl3ZmVBZz09Cg==",
+      "url": "https://github.com/mvarley07/symbolsweep-releases/releases/download/v2.1.6/SymbolSweep.app.tar.gz"
     }
   }
 }
