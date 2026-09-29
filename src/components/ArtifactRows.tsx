@@ -92,10 +92,26 @@ function RowTitle({ kind, project, title }: { kind: string; project: string | nu
   );
 }
 
-/** Row copy for the scan's in-use reason: "modified 6m ago" (project artifacts only) -> "Changed 6m ago · will retry"; "in use by cargo" -> "In use by cargo" */
+/** Project caches wait this long after their last change (the scanner's RECENT_WINDOW) */
+const RECENT_WINDOW_HOURS = 24;
+
+/** When a recently changed row can be cleaned: "2h ago" -> "22h". The scanner
+ *  rounds ages down, so rounding the wait up to the hour never promises early */
+function readyIn(age: string): string {
+  const hours = /^(\d+)h ago$/.exec(age);
+  return `${Math.max(1, RECENT_WINDOW_HOURS - (hours ? Number(hours[1]) : 0))}h`;
+}
+
+/** Row copy for the scan's held-back reason, with when it clears:
+ *  "modified 2h ago" (project artifacts only) -> "Changed 2h ago · ready in 22h";
+ *  "in use by cargo" -> "In use by cargo · ready when it stops" */
 function inUseLabel(reason: string): string {
-  if (reason.startsWith('modified ')) return `Changed ${reason.slice('modified '.length)} \u00b7 will retry`;
-  return reason.charAt(0).toUpperCase() + reason.slice(1);
+  if (reason.startsWith('modified ')) {
+    const age = reason.slice('modified '.length);
+    return `Changed ${age} \u00b7 ready in ${readyIn(age)}`;
+  }
+  const label = reason.charAt(0).toUpperCase() + reason.slice(1);
+  return reason.startsWith('in use by ') ? `${label} \u00b7 ready when it stops` : label;
 }
 
 /** Short label for a skipped path: the artifact kind if known, else ~-relative path */
@@ -158,7 +174,7 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
             <RowTitle kind={artifact.kind} project={artifact.project} title={shortPath} />
           </div>
           {artifact.active_build ? (
-            <div className="artifact-hint in-use-reason">Building now &middot; will retry</div>
+            <div className="artifact-hint in-use-reason">Building now &middot; ready when the build ends</div>
           ) : artifact.in_use ? (
             <div className="artifact-hint in-use-reason">{inUseLabel(artifact.in_use)}</div>
           ) : (artifact.hint || staleness) && (
