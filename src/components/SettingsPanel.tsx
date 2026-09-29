@@ -18,7 +18,7 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [appVersion, setAppVersion] = useState('');
   const [buildSha, setBuildSha] = useState('');
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up_to_date' | 'installed' | 'error'>('idle');
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up_to_date' | 'installed' | 'restarting' | 'restart_stalled' | 'error'>('idle');
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deactivating, setDeactivating] = useState(false);
@@ -31,6 +31,13 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
     getVersion().then(setAppVersion);
     invoke<string>('get_build_sha').then(setBuildSha).catch(() => {});
   }, []);
+
+  // app.restart() never returns when it works; still here after 3s means it didn't
+  const handleRestart = () => {
+    setUpdateStatus('restarting');
+    invoke('restart_app').catch(() => {});
+    setTimeout(() => setUpdateStatus('restart_stalled'), 3000);
+  };
 
   const handleCheckUpdate = async () => {
     setUpdateStatus('checking');
@@ -243,17 +250,20 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
             <div className="setting-info">
               <label>Updates</label>
               <span className="setting-description">
-                {updateStatus === 'installed' ? 'Restart to apply update' : `v${appVersion}${buildSha ? ` (${buildSha})` : ''}`}
+                {updateStatus === 'installed' || updateStatus === 'restarting' ? 'Restart to apply update' :
+                 updateStatus === 'restart_stalled' ? 'Quit and reopen SymbolSweep to finish updating.' :
+                 `v${appVersion}${buildSha ? ` (${buildSha})` : ''}`}
               </span>
             </div>
             <button
               className="update-check-btn"
-              onClick={updateStatus === 'installed' ? () => invoke('restart_app') : handleCheckUpdate}
-              disabled={updateStatus === 'checking'}
+              onClick={updateStatus === 'installed' || updateStatus === 'restart_stalled' ? handleRestart : handleCheckUpdate}
+              disabled={updateStatus === 'checking' || updateStatus === 'restarting'}
             >
               {updateStatus === 'checking' ? 'Checking...' :
                updateStatus === 'up_to_date' ? 'Up to date' :
-               updateStatus === 'installed' ? 'Restart' :
+               updateStatus === 'installed' || updateStatus === 'restart_stalled' ? 'Restart' :
+               updateStatus === 'restarting' ? 'Restarting\u2026' :
                updateStatus === 'error' ? 'Couldn\'t check' :
                'Check'}
             </button>
