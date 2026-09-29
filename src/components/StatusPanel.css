@@ -28,6 +28,10 @@
   margin-bottom: var(--space-xs);
 }
 
+.safe-to-clean .total-label {
+  white-space: nowrap;
+}
+
 .safe-to-clean .artifacts-list {
   min-height: 0;
   overflow-y: auto;

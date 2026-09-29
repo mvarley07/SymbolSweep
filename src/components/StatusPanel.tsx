@@ -296,11 +296,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   // Every SAFE row, on the main screen: delete per row, or the reason it's skipped
   const safeRows = devResult ? devResult.artifacts.filter(a => a.tier === 'Safe') : [];
-  // Header value: what the rows can delete now, then what's held back as in use
-  const safeInUseBytes = devResult ? devResult.safe_bytes - devResult.safe_deletable_bytes : 0;
-  const safeHeaderValue = devResult
-    ? `${formatSize(devResult.safe_deletable_bytes)}${safeInUseBytes > 0 ? ` \u00b7 ${formatSize(safeInUseBytes)} recently used` : ''}`
-    : appStatus.dev_safe_display;
+  // Header value: what the rows can delete now. Held-back rows are dimmed
+  // below with their reason, so the header doesn't repeat it
+  const safeHeaderValue = formatSize(devResult?.safe_deletable_bytes ?? 0);
   const handleDeleteSafeRow = async (path: string) => {
     try {
       // Backend rescans and emits; rows, hero and tray refresh from that rescan
