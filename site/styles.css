@@ -1368,25 +1368,27 @@ code {
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ═══════════════════════════════════════════════════════════════
-   Mockup stage and 14s loop (site-owned). The panels above render at
-   the app's 1x size (280px window); the site scales them with transform.
-   Loop: hover the hero, slide to Dev Artifacts and back, press Clean,
-   count 16.2 → 14.4 GB, the SAFE rows fade, the disk line rises 1.8 GB.
+   Mockup stage and motion (site-owned). The panels above render at the
+   app's 1x size (280px window); the site scales them with transform.
+   The loop itself is driven by the script at the end of index.html: it
+   toggles the state classes below, and these transitions do the motion.
+   Without the script (or with reduced motion) the idle state shows.
    ═══════════════════════════════════════════════════════════════ */
 .mock-slot {
   --s: 1.25;
-  --h-main: 417px;  /* measured: main view, border included */
-  --h-dev: 607px;   /* measured: Dev Artifacts view, border included */
   width: calc(280px * var(--s));
-  height: calc(var(--h-dev) * var(--s));
+  /* --slot-h: the tallest view, set by the script so the page never jumps */
+  height: calc(var(--slot-h, 417px) * var(--s));
   margin: 0 auto;
 }
 @media (max-width: 799px) { .mock-slot { --s: 1.15; } }
 @media (max-width: 599px) { .mock-slot { --s: 1.05; } }
 
 .mock {
-  /* The app sets this from the screen height; here, room for all rows */
+  /* The app sets this from the screen height; here, room for every row */
   --window-max-h: 900px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
   width: 280px;
   text-align: left;
   transform: scale(var(--s));
@@ -1394,81 +1396,65 @@ code {
 }
 .mock .mock-win {
   width: 280px;
-  height: var(--h-main);
-  animation: mock-win 14s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transition: height 300ms var(--ease);  /* height: set per view by the script */
 }
 .mock-rail {
-  display: flex;
-  align-items: flex-start;
-  width: 556px;
-  animation: mock-slide 14s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  position: relative;
+  width: 278px;
+  will-change: transform;
+  transition: transform 450ms var(--ease);
 }
-.mock-view { width: 278px; flex-shrink: 0; }
-.mock-view:first-child { animation: mock-loop 14s linear infinite; }
+.mock.is-dev .mock-rail { transform: translateX(-278px); }
+.mock-view { width: 278px; transition: opacity 300ms var(--ease); }
+/* Dev Artifacts sits beside the main view, out of flow, so the frame
+   takes the main view's height until the script says otherwise */
+.mock-view + .mock-view { position: absolute; left: 278px; top: 0; }
+.mock.is-resetting .mock-view:first-child { opacity: 0; }
+.mock.no-motion, .mock.no-motion * { transition: none !important; }
 
-@keyframes mock-slide {
-  0%, 15%   { transform: translateX(0); }
-  21%, 51%  { transform: translateX(-278px); }
-  57%, 100% { transform: translateX(0); }
+/* The pointer that hovers and presses */
+.mock-cursor {
+  position: absolute; left: 0; top: 0; z-index: 2;
+  width: 12px; height: 17px;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform;
+  transition: transform 300ms var(--ease), opacity 200ms var(--ease);
 }
-@keyframes mock-win {
-  0%, 15%   { height: var(--h-main); }
-  21%, 51%  { height: var(--h-dev); }
-  57%, 100% { height: var(--h-main); }
-}
-/* Hides the reset to 16.2 GB as the loop restarts */
-@keyframes mock-loop { 0% { opacity: 0; } 2%, 97% { opacity: 1; } 100% { opacity: 0; } }
+.mock-cursor.is-on { opacity: 1; }
 
-/* The hero is the way into Dev Artifacts: the app's :hover, just before the slide */
-.mock .mock-hover { animation: mock-hover 14s ease-in-out infinite; }
-@keyframes mock-hover {
-  0%, 8%    { background: transparent; }
-  11%, 17%  { background: var(--bg-hover); }
-  21%, 100% { background: transparent; }
+/* Hover: the app's own :hover values for these two buttons */
+.mock .hero-link.mock-hovered { background: var(--bg-hover); }
+.mock .clean-btn.heavy.mock-hovered { background: var(--heavy-hover); box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3); }
+/* Press: the app's :active scale, plus a 1px inset highlight
+   (the cursor always hovers first, so this outranks the hover shadow) */
+.mock .hero-link.mock-hovered.mock-pressed,
+.mock .clean-btn.heavy.mock-hovered.mock-pressed {
+  transform: scale(0.98);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  transition: transform 150ms var(--ease), box-shadow 150ms var(--ease);
 }
 
-/* Stacked states: before the clean, after it */
+/* Before the clean / after it */
 .mock .mock-swap { display: grid; }
 .mock .mock-swap > * { grid-area: 1 / 1; }
 .mock .scan-total .mock-swap { justify-items: end; }
-.mock .mock-before { animation: mock-before 14s linear infinite; }
-.mock .mock-after { opacity: 0; animation: mock-after 14s linear infinite; }
-@keyframes mock-before { 0%, 82% { opacity: 1; } 84%, 100% { opacity: 0; } }
-@keyframes mock-after  { 0%, 82% { opacity: 0; } 84%, 100% { opacity: 1; } }
+.mock .mock-before, .mock .mock-after { transition: opacity 300ms var(--ease); }
+.mock .mock-after { opacity: 0; }
+.mock.is-cleaned .mock-before { opacity: 0; }
+.mock.is-cleaned .mock-after { opacity: 1; }
 
-/* The button: pressed (the app's :active scale), Cleaning…, then Review.
-   The fades sit on wrappers: the app's .clean-btn.loading runs its own animation */
-.mock .mock-press { animation: mock-press 14s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
-.mock .mock-btn-clean { animation: mock-btn-clean 14s linear infinite; }
-.mock .mock-btn-busy { opacity: 0; animation: mock-btn-busy 14s linear infinite; }
-.mock .mock-btn-review { opacity: 0; animation: mock-btn-review 14s linear infinite; }
-@keyframes mock-press {
-  0%, 61%   { transform: scale(1); }
-  63.5%     { transform: scale(0.98); }
-  66%, 100% { transform: scale(1); }
-}
-@keyframes mock-btn-clean  { 0%, 67% { opacity: 1; } 68%, 100% { opacity: 0; } }
-@keyframes mock-btn-busy   { 0%, 67% { opacity: 0; } 68%, 82% { opacity: 1; } 83%, 100% { opacity: 0; } }
-@keyframes mock-btn-review { 0%, 82% { opacity: 0; } 84%, 100% { opacity: 1; } }
+/* The SAFE rows fade as each is cleaned; then the section collapses */
+.mock [data-mock="row"] { transition: opacity 300ms var(--ease); }
+.mock [data-mock="row"].is-gone { opacity: 0; }
+.mock [data-mock="safe"] { overflow: hidden; transition: max-height 400ms var(--ease), opacity 300ms var(--ease); }
+.mock [data-mock="safe"].is-collapsed { max-height: 0 !important; opacity: 0; }
 
-/* 16.2 → 14.4 GB: a strip of values behind a one-line window */
-.mock .mock-count { display: block; height: 1em; overflow: hidden; }
-.mock .mock-strip { display: block; animation: mock-count 14s steps(1, end) infinite; }
-.mock .mock-strip > span { display: block; height: 1em; }
-@keyframes mock-count {
-  0%, 70%   { transform: translateY(0); }
-  72%       { transform: translateY(-1em); }
-  74.5%     { transform: translateY(-2em); }
-  77%       { transform: translateY(-3em); }
-  79.5%     { transform: translateY(-4em); }
-  82%, 100% { transform: translateY(-5em); }
-}
-
-/* The SAFE rows Clean removes */
-.mock .mock-fade { animation: mock-fade 14s ease-out infinite; }
-@keyframes mock-fade { 0%, 70% { opacity: 1; } 78%, 100% { opacity: 0; } }
-
-@media (prefers-reduced-motion: reduce) {
-  .mock *, .mock .mock-win { animation: none !important; }
-  .mock .mock-after, .mock .mock-btn-busy, .mock .mock-btn-review { opacity: 0; }
-}
+/* One button slot: Clean, then the clean in progress, then Review */
+.mock .mock-btn-clean, .mock .mock-btn-busy, .mock .mock-btn-review { transition: opacity 200ms var(--ease); }
+.mock .mock-btn-busy, .mock .mock-btn-review { opacity: 0; }
+.mock[data-btn="busy"] .mock-btn-clean, .mock[data-btn="review"] .mock-btn-clean,
+.mock[data-btn="review"] .mock-btn-busy { opacity: 0; }
+.mock[data-btn="busy"] .mock-btn-busy, .mock[data-btn="review"] .mock-btn-review { opacity: 1; }
+.mock .mock-busy-text { transition: opacity 150ms var(--ease); }
+.mock .mock-busy-text.is-swapping { opacity: 0; }
