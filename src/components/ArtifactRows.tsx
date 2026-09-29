@@ -157,7 +157,9 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
             </span>
             <RowTitle kind={artifact.kind} project={artifact.project} title={shortPath} />
           </div>
-          {artifact.in_use ? (
+          {artifact.active_build ? (
+            <div className="artifact-hint in-use-reason">Building now &middot; will retry</div>
+          ) : artifact.in_use ? (
             <div className="artifact-hint in-use-reason">{inUseLabel(artifact.in_use)}</div>
           ) : (artifact.hint || staleness) && (
             <div className="artifact-hint" title={artifact.hint ?? undefined}>
