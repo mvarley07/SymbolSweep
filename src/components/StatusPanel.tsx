@@ -312,7 +312,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const heroReady = appStatus.safe_clean_bytes > 0
     ? `${safeCleanableDisplay} ready to clean now`
     : appStatus.safe_in_use_bytes > 0
-      ? `0 B ready \u00b7 ${appStatus.safe_in_use_display} recently used`
+      ? `0 B ready \u00b7 ${appStatus.safe_in_use_display} held back`
       : null;
 
   // Build the resting summary suffix: "freed 1.2 GB"
