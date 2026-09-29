@@ -294,11 +294,25 @@ fn has_sibling_with_ext(dir: &Path, extensions: &[&str]) -> bool {
     false
 }
 
-/// Get the project name from an artifact path (its parent directory name)
+/// Get the project name from an artifact path: the enclosing git repo's root
+/// folder (so src-tauri/target reads as the repo, not "src-tauri"), else the
+/// artifact's parent directory name
 fn get_project_name(artifact_path: &Path) -> Option<String> {
-    artifact_path
-        .parent()
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+    project_name_in(artifact_path, &get_home_dir())
+}
+
+/// get_project_name with an explicit home. The search for .git stops below
+/// `home`, so a dotfiles repo at ~ never renames every project.
+fn project_name_in(artifact_path: &Path, home: &Path) -> Option<String> {
+    let project_dir = artifact_path.parent()?;
+    let repo_root = project_dir
+        .ancestors()
+        .take_while(|dir| *dir != home && dir.starts_with(home))
+        .find(|dir| dir.join(".git").exists());
+    repo_root
+        .unwrap_or(project_dir)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
 }
 
 // ============================================================================
@@ -2090,6 +2104,28 @@ mod tests {
         let t = TierTotals::of(&artifacts);
         assert_eq!(t.safe, 500, "SAFE tile counts every SAFE row");
         assert_eq!(t.safe_deletable, 200, "Clean Now amount excludes in-use rows");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_project_name_uses_git_repo_root() {
+        let tmp = std::env::temp_dir().join("ss-project-name-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let home = tmp.join("home");
+        let repo = home.join("code/SymbolSweep");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::create_dir_all(repo.join("src-tauri/target")).unwrap();
+        fs::create_dir_all(home.join("code/loose/target")).unwrap();
+
+        // Inside a repo: the repo root's folder name, however deep
+        assert_eq!(project_name_in(&repo.join("src-tauri/target"), &home).as_deref(), Some("SymbolSweep"));
+        assert_eq!(project_name_in(&repo.join("node_modules"), &home).as_deref(), Some("SymbolSweep"));
+        // No .git above: the parent folder, as before
+        assert_eq!(project_name_in(&home.join("code/loose/target"), &home).as_deref(), Some("loose"));
+        // A .git at home itself (dotfiles) is ignored
+        fs::create_dir_all(home.join(".git")).unwrap();
+        assert_eq!(project_name_in(&home.join("code/loose/target"), &home).as_deref(), Some("loose"));
 
         let _ = fs::remove_dir_all(&tmp);
     }
