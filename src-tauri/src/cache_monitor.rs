@@ -162,10 +162,13 @@ pub struct AppStatus {
     /// What Clean Now removes: system cache + deletable SAFE dev artifacts
     pub safe_clean_bytes: u64,
     pub safe_clean_display: String,
+    /// SAFE rows Clean Now leaves in place right now (in use or recently modified)
+    pub safe_in_use_bytes: u64,
+    pub safe_in_use_display: String,
     /// The one number shown by both the tray title and the popup hero
     pub headline_bytes: u64,
     pub headline_display: String,
-    /// What the headline counts: "to clean", "dev artifacts", "cache runaway", …
+    /// What the headline counts: "found", "dev artifacts", "cache runaway", …
     pub headline_label: String,
     /// "7.6 GB dev artifacts + 1.1 GB system cache = 8.7 GB" — states how the
     /// dev-only total and the combined total relate, wherever both appear
@@ -237,7 +240,7 @@ pub fn compute_app_status(cache: &CacheStatus, dev: DevTotals, dev_scan_complete
         CleanState::Clean if dev_total > 0 => (dev_total, "dev artifacts"),
         CleanState::Clean if show_gap_banner => (0, "Nothing to clean"),
         CleanState::Clean => (0, "All clean"),
-        CleanState::Moderate | CleanState::Heavy => (reclaimable, "to clean"),
+        CleanState::Moderate | CleanState::Heavy => (reclaimable, "found"),
     };
 
     let breakdown_display = match (dev_total > 0, cache.size_bytes > 0) {
@@ -253,6 +256,7 @@ pub fn compute_app_status(cache: &CacheStatus, dev: DevTotals, dev_scan_complete
     };
 
     let safe_clean = cache.size_bytes + dev.safe_deletable;
+    let safe_in_use = dev.safe.saturating_sub(dev.safe_deletable);
 
     AppStatus {
         disk_free_bytes: disk_free,
@@ -277,6 +281,8 @@ pub fn compute_app_status(cache: &CacheStatus, dev: DevTotals, dev_scan_complete
         dev_review_display: format_size(dev_total.saturating_sub(dev.safe)),
         safe_clean_bytes: safe_clean,
         safe_clean_display: format_size(safe_clean),
+        safe_in_use_bytes: safe_in_use,
+        safe_in_use_display: format_size(safe_in_use),
         headline_bytes,
         headline_display: if headline_bytes > 0 { format_size(headline_bytes) } else { String::new() },
         headline_label: headline_label.to_string(),
@@ -748,11 +754,12 @@ mod tests {
         assert_eq!(status.clean_state, CleanState::Moderate);
         assert_eq!(status.headline_bytes, status.reclaimable_bytes);
         assert_eq!(status.headline_bytes, status.dev_total_bytes + status.cache.size_bytes);
-        assert_eq!(status.headline_label, "to clean");
+        assert_eq!(status.headline_label, "found");
         assert_eq!(status.breakdown_display, "7.5 GB dev artifacts + 1 GB system cache = 8.5 GB");
 
         // Clean Now scope = system cache + deletable SAFE only
         assert_eq!(status.safe_clean_bytes, GB + GB / 2);
+        assert_eq!(status.safe_in_use_bytes, GB / 2);
         assert_eq!(status.dev_safe_bytes, GB);
         assert_eq!(status.dev_review_bytes, 6 * GB + GB / 2);
         assert_eq!(status.dev_safe_bytes + status.dev_review_bytes, status.dev_total_bytes);

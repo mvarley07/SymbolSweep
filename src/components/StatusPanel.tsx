@@ -36,11 +36,13 @@ interface StatusIndicatorProps {
   state: CleanState;
   value: string | null;
   label: string;
+  /** What Clean Now removes right now: "225 MB ready to clean now" */
+  ready: string | null;
   /** How the headline splits into dev artifacts and system cache */
   breakdown: string;
 }
 
-function StatusIndicator({ state, value, label, breakdown }: StatusIndicatorProps) {
+function StatusIndicator({ state, value, label, ready, breakdown }: StatusIndicatorProps) {
   const stateConfig = {
     Clean: { label: 'All clean' },
     Moderate: { label: 'Moderate' },
@@ -63,6 +65,9 @@ function StatusIndicator({ state, value, label, breakdown }: StatusIndicatorProp
           label
         )}
       </div>
+      {value && ready && (
+        <div className="hero-ready">{ready}</div>
+      )}
       {value && breakdown && (
         <div className="hero-breakdown">{breakdown}</div>
       )}
@@ -312,6 +317,13 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     }
   };
 
+  // Hero sub-line: what Clean Now removes right now, or why that's nothing
+  const heroReady = appStatus.safe_clean_bytes > 0
+    ? `${safeCleanableDisplay} ready to clean now`
+    : appStatus.safe_in_use_bytes > 0
+      ? `0 B ready \u00b7 ${appStatus.safe_in_use_display} in use`
+      : null;
+
   // Build the resting summary suffix: "freed 1.2 GB"
   const lastCleanSummary = lastCleanFreed
     ? `freed ${lastCleanFreed}`
@@ -337,7 +349,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         state={appStatus.clean_state}
         value={appStatus.headline_bytes > 0 ? appStatus.headline_display : null}
         label={appStatus.headline_label}
-        breakdown={appStatus.breakdown_display}
+        ready={heroReady}
+        breakdown={appStatus.cache.size_bytes > 0 ? appStatus.breakdown_display : ''}
       />
 
       {/* Secondary disk context line */}

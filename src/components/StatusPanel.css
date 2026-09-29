@@ -216,6 +216,14 @@
   margin-top: var(--space-xs);
 }
 
+/* Hero ready line: what Clean Now removes right now */
+.hero-ready {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Hero breakdown: how the headline splits into dev artifacts + system cache */
 .hero-breakdown {
   font-size: var(--font-xs);

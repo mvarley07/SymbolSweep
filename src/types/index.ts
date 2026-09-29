@@ -78,6 +78,9 @@ export interface AppStatus {
   /** What Clean Now removes: system cache + deletable SAFE dev artifacts */
   safe_clean_bytes: number;
   safe_clean_display: string;
+  /** SAFE rows Clean Now leaves in place right now (in use or recently modified) */
+  safe_in_use_bytes: number;
+  safe_in_use_display: string;
   /** The one number shown by both the tray title and the popup hero */
   headline_bytes: number;
   headline_display: string;
