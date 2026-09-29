@@ -1207,7 +1207,7 @@ pub struct SkippedArtifact {
 }
 
 // ============================================================================
-// SS Trash Manifest — track items SS moved to Trash for selective purge
+// SymbolSweep Trash manifest — track items SymbolSweep moved to Trash for selective purge
 // ============================================================================
 
 /// A single item that SS moved to macOS Trash

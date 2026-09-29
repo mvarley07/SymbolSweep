@@ -384,7 +384,7 @@
 }
 
 /* ============================================================
-   SS Trash banner — shows when SS items are sitting in Trash
+   SymbolSweep Trash banner — shows when 1 MB+ of its items sit in Trash
    ============================================================ */
 .ss-trash-banner {
   display: flex;

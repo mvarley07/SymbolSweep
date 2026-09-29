@@ -9,6 +9,7 @@ import './DevScanPanel.css';
 
 const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
 const REVIEW_MIN_BYTES = 10 * 1024 * 1024;
+const TRASH_BANNER_MIN_BYTES = 1024 * 1024;
 
 interface DevScanPanelProps {
   onBack: () => void;
@@ -59,13 +60,14 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const refreshTrashInfo = useCallback(async () => {
     try {
       const info = await invoke<SsTrashInfo>('get_ss_trash_info');
-      setTrashInfo(info.count > 0 ? info : null);
+      // Under 1 MB isn't worth a banner
+      setTrashInfo(info.count > 0 && info.total_bytes >= TRASH_BANNER_MIN_BYTES ? info : null);
     } catch {
       setTrashInfo(null);
     }
   }, []);
 
-  // Check for SS items in Trash on mount and after deletes
+  // Check for SymbolSweep items in Trash on mount and after deletes
   useEffect(() => { refreshTrashInfo(); }, [refreshTrashInfo]);
 
   const handlePurgeSsTrash = async () => {
@@ -382,7 +384,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                 </div>
               ) : (
                 <button className="ss-trash-purge-btn" onClick={() => setConfirmPurge(true)}>
-                  Empty SS Trash to reclaim space
+                  Empty SymbolSweep Trash
                 </button>
               )}
             </div>
