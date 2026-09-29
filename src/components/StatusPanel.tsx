@@ -299,7 +299,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   // Header value: what the rows can delete now, then what's held back as in use
   const safeInUseBytes = devResult ? devResult.safe_bytes - devResult.safe_deletable_bytes : 0;
   const safeHeaderValue = devResult
-    ? `${formatSize(devResult.safe_deletable_bytes)}${safeInUseBytes > 0 ? ` \u00b7 ${formatSize(safeInUseBytes)} in use` : ''}`
+    ? `${formatSize(devResult.safe_deletable_bytes)}${safeInUseBytes > 0 ? ` \u00b7 ${formatSize(safeInUseBytes)} recently used` : ''}`
     : appStatus.dev_safe_display;
   const handleDeleteSafeRow = async (path: string) => {
     try {
@@ -314,7 +314,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const heroReady = appStatus.safe_clean_bytes > 0
     ? `${safeCleanableDisplay} ready to clean now`
     : appStatus.safe_in_use_bytes > 0
-      ? `0 B ready \u00b7 ${appStatus.safe_in_use_display} in use`
+      ? `0 B ready \u00b7 ${appStatus.safe_in_use_display} recently used`
       : null;
 
   // Build the resting summary suffix: "freed 1.2 GB"

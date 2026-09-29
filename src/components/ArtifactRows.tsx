@@ -92,9 +92,9 @@ function RowTitle({ kind, project, title }: { kind: string; project: string | nu
   );
 }
 
-/** Row copy for the scan's in-use reason: "modified 6m ago" (project artifacts only) -> "In use · changed 6m ago"; "in use by cargo" -> "In use by cargo" */
+/** Row copy for the scan's in-use reason: "modified 6m ago" (project artifacts only) -> "Changed 6m ago · will retry"; "in use by cargo" -> "In use by cargo" */
 function inUseLabel(reason: string): string {
-  if (reason.startsWith('modified ')) return `In use \u00b7 changed ${reason.slice('modified '.length)}`;
+  if (reason.startsWith('modified ')) return `Changed ${reason.slice('modified '.length)} \u00b7 will retry`;
   return reason.charAt(0).toUpperCase() + reason.slice(1);
 }
 
