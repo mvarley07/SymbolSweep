@@ -283,9 +283,6 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   // Every SAFE row, on the main screen: delete per row, or the reason it's skipped
   const safeRows = devResult ? devResult.artifacts.filter(a => a.tier === 'Safe') : [];
-  // Header value: what the rows can delete now. Held-back rows are dimmed
-  // below with their reason, so the header doesn't repeat it
-  const safeHeaderValue = formatSize(sumBytes(cleanRows));
   // Safe rows held back right now (building or in use)
   const heldBackBytes = sumBytes(safeRows.filter(a => a.active_build || a.in_use));
   const handleDeleteSafeRow = async (path: string) => {
@@ -346,8 +343,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       {safeRows.length > 0 && (
         <div className="safe-to-clean">
           <div className="scan-total">
+            {/* Label only: the ready line and the button already give the amount */}
             <span className="total-label">Safe to clean</span>
-            <span className="artifact-size">{safeHeaderValue}</span>
           </div>
           <div className="artifacts-list">
             {safeRows.map(artifact => (
