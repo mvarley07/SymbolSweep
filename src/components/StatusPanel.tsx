@@ -6,8 +6,17 @@ import { CleanConfirmation } from './CleanConfirmation';
 import { ArtifactRow } from './ArtifactRows';
 import { fitWindowTo } from '../windowSize';
 import { formatSize } from '../formatSize';
-import type { CleanState, CleanResult } from '../types';
+import type { CleanState, CleanResult, DevScanResult } from '../types';
 import './StatusPanel.css';
+
+/** The Safe rows Clean deletes: exactly the ones shown as deletable (not
+ *  building, not held back). The button, the ready line and the delete all
+ *  use this one list, so the amount shown is the amount removed. */
+function cleanableRows(devResult: DevScanResult | null) {
+  return devResult ? devResult.artifacts.filter(a => a.tier === 'Safe' && !a.active_build && !a.in_use) : [];
+}
+
+const sumBytes = (rows: { size_bytes: number }[]) => rows.reduce((n, a) => n + a.size_bytes, 0);
 
 interface StatusIndicatorProps {
   state: CleanState;
@@ -162,49 +171,26 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
     // Yield to browser so "Cleaning..." state paints before heavy I/O
     await new Promise(resolve => requestAnimationFrame(resolve));
     try {
-      // Snapshot disk free space BEFORE cleaning
-      const beforeFree = appStatus?.disk_free_bytes ?? 0;
+      // The rows the button counted, taken before anything changes. Rows that
+      // were held back when the popup rendered are never added; one that became
+      // held back since is skipped by the backend guard and shown after the rescan.
+      const paths = cleanableRows(devResult).map(a => a.path);
 
       // Clean system cache
       const sysResult = await clean(false);
       let totalFreed = sysResult.bytes_freed;
 
-      // Clean ONLY Safe-tier dev artifacts. Rows already marked in use are left
-      // out (the delete guard would skip them); anything that became in use since
-      // the scan is skipped by the guard and shows its reason after the rescan.
-      if (devResult) {
-        const safePaths = devResult.artifacts
-          .filter(a => a.tier === 'Safe' && !a.active_build && !a.in_use)
-          .map(a => a.path);
-        if (safePaths.length > 0) {
-          const devDeleteResult = await deleteArtifacts(safePaths);
-          totalFreed += devDeleteResult.bytes_freed;
-        }
+      if (paths.length > 0) {
+        const devDeleteResult = await deleteArtifacts(paths);
+        totalFreed += devDeleteResult.bytes_freed;
       }
 
       refresh();
       await refreshLastClean();
 
-      // Snapshot disk free space AFTER cleaning (re-fetch from backend)
-      let diskDelta = totalFreed;
-      try {
-        const afterStatus = await invoke<{ disk_free_bytes: number }>('get_app_status');
-        const afterFree = afterStatus.disk_free_bytes;
-        if (afterFree > beforeFree) {
-          diskDelta = afterFree - beforeFree;
-        }
-      } catch {
-        // fall back to reported bytes freed
-      }
-
-      // Show freed amount inline in the cache-cleaned line
-      if (diskDelta > 0) {
-        setFreshCleanFreed(`Cache cleaned ${formatSize(diskDelta)}`);
-      } else if (totalFreed > 0) {
-        setFreshCleanFreed(`Cache cleaned ${formatSize(totalFreed)}`);
-      } else {
-        setFreshCleanFreed(null);
-      }
+      // Report what was removed, not the change in free disk space (which
+      // other apps move too), so it matches the button
+      setFreshCleanFreed(totalFreed > 0 ? `Cache cleaned ${formatSize(totalFreed)}` : null);
     } catch (err) {
       console.error('Clean failed:', err);
     } finally {
@@ -286,11 +272,12 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const stateClass = appStatus.clean_state.toLowerCase();
 
-  // Button scope: cache + deletable Safe-tier artifacts (what Clean Now actually
-  // removes) — computed once in the backend alongside the hero and tray numbers
-  const safeCleanableDisplay = appStatus.safe_clean_display;
+  // Button scope: cache + the deletable Safe rows, the same list Clean deletes
+  const cleanRows = cleanableRows(devResult);
+  const cleanBytes = appStatus.cache.size_bytes + sumBytes(cleanRows);
+  const safeCleanableDisplay = formatSize(cleanBytes);
   // Threshold: below 1 MB, the safe-clean button is effectively empty
-  const safeCleanMeaningful = appStatus.safe_clean_bytes >= 1024 * 1024;
+  const safeCleanMeaningful = cleanBytes >= 1024 * 1024;
   // Whether non-safe dev artifacts hold meaningful space (>= 10 MB)
   const hasNonSafeArtifacts = appStatus.dev_review_bytes >= 10 * 1024 * 1024;
 
@@ -298,7 +285,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const safeRows = devResult ? devResult.artifacts.filter(a => a.tier === 'Safe') : [];
   // Header value: what the rows can delete now. Held-back rows are dimmed
   // below with their reason, so the header doesn't repeat it
-  const safeHeaderValue = formatSize(devResult?.safe_deletable_bytes ?? 0);
+  const safeHeaderValue = formatSize(sumBytes(cleanRows));
+  // Safe rows held back right now (building or in use)
+  const heldBackBytes = sumBytes(safeRows.filter(a => a.active_build || a.in_use));
   const handleDeleteSafeRow = async (path: string) => {
     try {
       // Backend rescans and emits; rows, hero and tray refresh from that rescan
@@ -309,10 +298,10 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   };
 
   // Hero sub-line: what Clean Now removes right now, or why that's nothing
-  const heroReady = appStatus.safe_clean_bytes > 0
+  const heroReady = cleanBytes > 0
     ? `${safeCleanableDisplay} ready to clean now`
-    : appStatus.safe_in_use_bytes > 0
-      ? `0 B ready \u00b7 ${appStatus.safe_in_use_display} held back`
+    : heldBackBytes > 0
+      ? `0 B ready \u00b7 ${formatSize(heldBackBytes)} held back`
       : null;
 
   // Build the resting summary suffix: "freed 1.2 GB"
