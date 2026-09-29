@@ -1377,7 +1377,7 @@ code {
 .mock-slot {
   --s: 1.25;
   width: calc(280px * var(--s));
-  /* --slot-h: the tallest view, set by the script so the page never jumps */
+  /* --slot-h: the idle window, measured by the script */
   height: calc(var(--slot-h, 417px) * var(--s));
   margin: 0 auto;
 }
@@ -1385,8 +1385,10 @@ code {
 @media (max-width: 599px) { .mock-slot { --s: 1.05; } }
 
 .mock {
-  /* The app sets this from the screen height; here, room for every row */
-  --window-max-h: 900px;
+  /* The app caps its window at this and scrolls the list past it. Here the
+     cap is the idle main view (set by the script), so the window keeps one
+     size and Dev Artifacts scrolls, as the app does on a short screen */
+  --window-max-h: 417px;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   width: 280px;
@@ -1395,8 +1397,7 @@ code {
   transform-origin: top left;
 }
 .mock .mock-win {
-  width: 280px;
-  transition: height 300ms var(--ease);  /* height: set per view by the script */
+  width: 280px;  /* height: follows the current view, set by the script */
 }
 .mock-rail {
   position: relative;
@@ -1407,10 +1408,16 @@ code {
 .mock.is-dev .mock-rail { transform: translateX(-278px); }
 .mock-view { width: 278px; transition: opacity 300ms var(--ease); }
 /* Dev Artifacts sits beside the main view, out of flow, so the frame
-   takes the main view's height until the script says otherwise */
+   takes the main view's height */
 .mock-view + .mock-view { position: absolute; left: 278px; top: 0; }
 .mock.is-resetting .mock-view:first-child { opacity: 0; }
 .mock.no-motion, .mock.no-motion * { transition: none !important; }
+
+/* Browsing Dev Artifacts: the rows glide up inside the list (a transform,
+   not a scroll), so the list's own scrollbar stays hidden */
+.mock [data-mock="list"] { scrollbar-width: none; }
+.mock [data-mock="list"]::-webkit-scrollbar { display: none; }
+.mock [data-mock="list"] > .artifacts-list { will-change: transform; transition: transform 1600ms var(--ease); }
 
 /* The pointer that hovers and presses */
 .mock-cursor {
@@ -1423,31 +1430,36 @@ code {
 }
 .mock-cursor.is-on { opacity: 1; }
 
-/* Hover: the app's own :hover values for these two buttons */
+/* Hover: the app's own :hover values for these buttons */
 .mock .hero-link.mock-hovered { background: var(--bg-hover); }
+.mock .back-btn.mock-hovered { color: var(--text-primary); background: var(--bg-hover); }
 .mock .clean-btn.heavy.mock-hovered { background: var(--heavy-hover); box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3); }
 /* Press: the app's :active scale, plus a 1px inset highlight
    (the cursor always hovers first, so this outranks the hover shadow) */
 .mock .hero-link.mock-hovered.mock-pressed,
+.mock .back-btn.mock-hovered.mock-pressed,
 .mock .clean-btn.heavy.mock-hovered.mock-pressed {
   transform: scale(0.98);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   transition: transform 150ms var(--ease), box-shadow 150ms var(--ease);
 }
 
-/* Before the clean / after it */
+/* The last-clean line: before the clean / after it */
 .mock .mock-swap { display: grid; }
 .mock .mock-swap > * { grid-area: 1 / 1; }
-.mock .scan-total .mock-swap { justify-items: end; }
 .mock .mock-before, .mock .mock-after { transition: opacity 300ms var(--ease); }
 .mock .mock-after { opacity: 0; }
 .mock.is-cleaned .mock-before { opacity: 0; }
 .mock.is-cleaned .mock-after { opacity: 1; }
 
-/* The SAFE rows fade as each is cleaned; then the section collapses */
-.mock [data-mock="row"] { transition: opacity 300ms var(--ease); }
-.mock [data-mock="row"].is-gone { opacity: 0; }
-.mock [data-mock="safe"] { overflow: hidden; transition: max-height 400ms var(--ease), opacity 300ms var(--ease); }
+/* Each SAFE row folds away as it's cleaned; the last takes the section
+   with it. No row ever leaves a gap. (max-height is set from a measurement) */
+.mock [data-mock="row"], .mock [data-mock="safe"] {
+  overflow: hidden;
+  transition: max-height 400ms var(--ease), opacity 250ms var(--ease),
+              padding 400ms var(--ease), border-color 250ms var(--ease);
+}
+.mock [data-mock="row"].is-gone { max-height: 0 !important; opacity: 0; padding-top: 0; padding-bottom: 0; border-bottom-color: transparent; }
 .mock [data-mock="safe"].is-collapsed { max-height: 0 !important; opacity: 0; }
 
 /* One button slot: Clean, then the clean in progress, then Review */
