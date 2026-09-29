@@ -181,6 +181,11 @@
   margin-bottom: var(--space-md);
 }
 
+/* Dev Artifacts: the title bar names it; just the total, right-aligned */
+.scan-total.scan-total-only {
+  justify-content: flex-end;
+}
+
 /* Dev total vs combined total, from the shared AppStatus */
 .scan-breakdown {
   margin: calc(-1 * var(--space-sm)) 0 var(--space-md);
