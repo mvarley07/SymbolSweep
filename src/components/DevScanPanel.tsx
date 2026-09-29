@@ -5,6 +5,7 @@ import { useAppStatus, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsM
 import type { DevArtifact, DevDeleteResult, SkippedArtifact, SsTrashInfo, PurgeResult } from '../types';
 import { ArtifactRow, SkippedRow } from './ArtifactRows';
 import { fitWindowTo } from '../windowSize';
+import { formatSize } from '../formatSize';
 import './DevScanPanel.css';
 
 const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
@@ -153,12 +154,16 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     }
   };
 
+  /** Top-level rows of a tier the tier button deletes now: not building, not in use */
+  const tierCleanable = (tier: DevArtifact['tier']) => (result?.artifacts ?? [])
+    .filter(a => a.tier === tier && !a.is_nested && !a.active_build && !a.in_use);
+  const rebuildCleanableBytes = tierCleanable('Rebuildable').reduce((n, a) => n + a.size_bytes, 0);
+  const reinstallCleanableBytes = tierCleanable('SafeWithReinstall').reduce((n, a) => n + a.size_bytes, 0);
+
   const handleCleanRebuild = async () => {
     if (!result) return;
     setConfirmRebuild(false);
-    const paths = result.artifacts
-      .filter(a => a.tier === 'Rebuildable' && !a.is_nested && !a.active_build)
-      .map(a => a.path);
+    const paths = tierCleanable('Rebuildable').map(a => a.path);
     if (paths.length === 0) return;
     try {
       const res = await manualDeleteArtifacts(paths);
@@ -175,9 +180,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const handleCleanReinstall = async () => {
     if (!result) return;
     setConfirmReinstall(false);
-    const paths = result.artifacts
-      .filter(a => a.tier === 'SafeWithReinstall' && !a.is_nested && !a.active_build)
-      .map(a => a.path);
+    const paths = tierCleanable('SafeWithReinstall').map(a => a.path);
     if (paths.length === 0) return;
     try {
       const res = await manualDeleteArtifacts(paths);
@@ -330,9 +333,9 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
               <button
                 className="clean-tier-btn tier-rebuild"
                 onClick={() => setConfirmRebuild(true)}
-                disabled={deleting}
+                disabled={deleting || rebuildCleanableBytes === 0}
               >
-                Clean Rebuild ({result.rebuildable_display})
+                {rebuildCleanableBytes > 0 ? `Clean Rebuild (${formatSize(rebuildCleanableBytes)})` : 'Nothing to clean now'}
               </button>
             )
           )}
@@ -348,9 +351,9 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
               <button
                 className="clean-tier-btn tier-reinstall"
                 onClick={() => setConfirmReinstall(true)}
-                disabled={deleting}
+                disabled={deleting || reinstallCleanableBytes === 0}
               >
-                Clean Reinstall ({result.safe_with_reinstall_display})
+                {reinstallCleanableBytes > 0 ? `Clean Reinstall (${formatSize(reinstallCleanableBytes)})` : 'Nothing to clean now'}
               </button>
             )
           )}
