@@ -45,11 +45,13 @@ interface StatusIndicatorProps {
 }
 
 function StatusIndicator({ state, value, label, ready, breakdown, onOpen }: StatusIndicatorProps) {
+  // Prefixed with what the state measures: Moderate/Heavy grade everything
+  // found (cache + all dev tiers); Runaway is the system cache alone
   const stateConfig = {
     Clean: { label: 'All clean' },
-    Moderate: { label: 'Moderate' },
-    Heavy: { label: 'Heavy' },
-    Runaway: { label: 'Cache runaway' },
+    Moderate: { label: 'Found: moderate' },
+    Heavy: { label: 'Found: heavy' },
+    Runaway: { label: 'Cache: runaway' },
   };
 
   const config = stateConfig[state];
