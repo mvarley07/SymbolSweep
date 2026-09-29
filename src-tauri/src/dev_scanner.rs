@@ -176,6 +176,35 @@ pub fn default_scan_roots() -> Vec<String> {
     .collect()
 }
 
+/// Top-level home folders never treated as projects
+const HOME_SKIP_DIRS: &[&str] = &["Library", "Applications"];
+
+/// Files or folders that mark a top-level home folder as a project
+const HOME_PROJECT_MARKERS: &[&str] = &["Cargo.toml", "package.json", ".git"];
+
+/// Projects that live directly in home (~/shotrack), one level deep only:
+/// folders holding Cargo.toml, package.json or .git. Skips Library,
+/// Applications, dotfolders, symlinks and folders already in `roots`.
+fn home_project_roots(home: &Path, roots: &[PathBuf]) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(home) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .flatten()
+        .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+        .filter(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            !name.starts_with('.') && !HOME_SKIP_DIRS.contains(&name.as_ref())
+        })
+        .map(|e| e.path())
+        .filter(|p| !roots.contains(p))
+        .filter(|p| HOME_PROJECT_MARKERS.iter().any(|m| p.join(m).exists()))
+        .collect();
+    found.sort();
+    found
+}
+
 /// Validate a scan root — reject dangerous paths that should never be scanned.
 /// Returns true if the root is safe to scan, false if it should be rejected.
 fn is_safe_scan_root(root: &Path) -> bool {
@@ -376,7 +405,8 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
     } else {
         custom_roots.to_vec()
     };
-    let scan_roots: Vec<PathBuf> = root_strings.iter().map(PathBuf::from).collect();
+    let mut scan_roots: Vec<PathBuf> = root_strings.iter().map(PathBuf::from).collect();
+    scan_roots.extend(home_project_roots(&home, &scan_roots));
 
     // Phase 1: Home-level caches
     scan_home_caches(&home, &mut artifacts);
@@ -2066,6 +2096,61 @@ mod tests {
 
         // Nothing readable: unknown
         assert_eq!(check_project_staleness(&tmp.join("missing"), &tmp.join("nope")), None);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_home_level_projects_are_scan_roots() {
+        let tmp = std::env::temp_dir().join("ss-home-roots-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let home = tmp.join("home");
+        let write = |p: PathBuf, n: usize| {
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, vec![0u8; n]).unwrap();
+        };
+
+        // ~/shotrack: Tauri app, package.json at the top, Cargo.toml one level down
+        let shotrack = home.join("shotrack");
+        write(shotrack.join("package.json"), 2);
+        fs::create_dir_all(shotrack.join(".git")).unwrap();
+        write(shotrack.join("node_modules").join("react").join("index.js"), 4_000);
+        write(shotrack.join("src-tauri").join("Cargo.toml"), 2);
+        write(shotrack.join("src-tauri").join("target").join("release").join("shotrack"), 8_000);
+        // ~/cli: Rust crate at the top
+        write(home.join("cli").join("Cargo.toml"), 2);
+        write(home.join("cli").join("target").join("debug").join("cli"), 3_000);
+        // ~/notes-repo: marked by .git alone
+        fs::create_dir_all(home.join("notes-repo").join(".git")).unwrap();
+
+        // Not project roots
+        write(home.join("Documents").join("report.txt"), 1); // no marker
+        write(home.join("Library").join("package.json"), 2);
+        write(home.join("Applications").join("Cargo.toml"), 2);
+        write(home.join(".rustup").join("Cargo.toml"), 2);
+        write(home.join("Desktop").join("package.json"), 2); // already a root
+        write(home.join("deep").join("inner").join("package.json"), 2); // two levels down
+        write(home.join("stray.json"), 1); // file, not folder
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&shotrack, home.join("shotrack-link")).unwrap();
+
+        let existing = vec![home.join("Desktop"), home.join("dev")];
+        let roots = home_project_roots(&home, &existing);
+        assert_eq!(roots, vec![home.join("cli"), home.join("notes-repo"), shotrack.clone()]);
+
+        // The discovered roots find the same artifacts a configured root would
+        let mut artifacts = Vec::new();
+        for root in &roots {
+            scan_project_root(root, &mut artifacts, 0);
+        }
+        let find = |suffix: &str| artifacts.iter().find(|a| a.path.ends_with(suffix));
+        assert_eq!(find("shotrack/src-tauri/target").map(|a| a.size_bytes), Some(8_000));
+        assert_eq!(find("shotrack/node_modules").map(|a| a.tier), Some(ArtifactTier::SafeWithReinstall));
+        assert_eq!(find("cli/target").map(|a| a.size_bytes), Some(3_000));
+        assert_eq!(artifacts.len(), 3, "{:#?}", artifacts);
+
+        // Missing home: nothing to add
+        assert!(home_project_roots(&tmp.join("missing"), &[]).is_empty());
 
         let _ = fs::remove_dir_all(&tmp);
     }
