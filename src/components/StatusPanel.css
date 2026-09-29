@@ -251,6 +251,7 @@
   color: var(--text-tertiary);
   margin-bottom: var(--space-xs);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Status Badge — hero scale, intentionally distinct from dense badges */

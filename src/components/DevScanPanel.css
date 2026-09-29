@@ -162,6 +162,17 @@
   margin: var(--space-md) 0 var(--space-sm);
 }
 
+/* Row sizes end left of the delete column; totals above rows use the same edge */
+:root {
+  --row-action-w: 22px;
+  --size-edge: calc(var(--row-action-w) + var(--space-xs));
+}
+
+.scan-total .total-value,
+.scan-total .artifact-size {
+  padding-right: var(--size-edge);
+}
+
 /* Total reclaimable header */
 .scan-total {
   display: flex;
@@ -176,6 +187,7 @@
   font-size: var(--font-xs);
   color: var(--text-tertiary);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .total-label {
@@ -192,6 +204,7 @@
   color: var(--text-primary);
   letter-spacing: -0.03em;
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================
@@ -249,6 +262,7 @@
   font-weight: 600;
   color: var(--text-primary);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================
@@ -393,6 +407,7 @@
   font-weight: 600;
   color: var(--text-primary);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .ss-trash-purge-btn {
@@ -521,6 +536,7 @@
   font-weight: 600;
   color: var(--text-primary);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
   min-width: 52px;
   text-align: right;
   flex-shrink: 0;
@@ -580,7 +596,7 @@
 
 .artifact-delete-spacer {
   display: inline-block;
-  width: 22px;
+  width: var(--row-action-w);
   height: 22px;
   flex-shrink: 0;
 }
@@ -589,7 +605,7 @@
    Per-artifact delete button — always visible, muted at rest
    ============================================================ */
 .artifact-delete-btn {
-  width: 22px;
+  width: var(--row-action-w);
   height: 22px;
   flex-shrink: 0;
   padding: 0;
