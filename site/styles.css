@@ -1413,11 +1413,11 @@ code {
 .mock.is-resetting .mock-view:first-child { opacity: 0; }
 .mock.no-motion, .mock.no-motion * { transition: none !important; }
 
-/* Browsing Dev Artifacts: the rows glide up inside the list (a transform,
-   not a scroll), so the list's own scrollbar stays hidden */
-.mock [data-mock="list"] { scrollbar-width: none; }
-.mock [data-mock="list"]::-webkit-scrollbar { display: none; }
-.mock [data-mock="list"] > .artifacts-list { will-change: transform; transition: transform 1600ms var(--ease); }
+/* Browsing Dev Artifacts: everything under the header glides up together,
+   buttons and rows as one page (a transform, not a scroll), so no row ever
+   slides under a pinned button */
+.mock [data-mock="list"] { overflow: visible; flex: none; }
+.mock [data-mock="results"] > * { will-change: transform; transition: transform 1800ms var(--ease); }
 
 /* The pointer that hovers and presses */
 .mock-cursor {
@@ -1461,6 +1461,9 @@ code {
 }
 .mock [data-mock="row"].is-gone { max-height: 0 !important; opacity: 0; padding-top: 0; padding-bottom: 0; border-bottom-color: transparent; }
 .mock [data-mock="safe"].is-collapsed { max-height: 0 !important; opacity: 0; }
+/* With nothing ready and nothing in use the app drops the ready line (and its gap) */
+.mock [data-mock="ready"] { overflow: hidden; transition: max-height 400ms var(--ease), opacity 250ms var(--ease), margin 400ms var(--ease); }
+.mock [data-mock="ready"].is-collapsed { max-height: 0 !important; opacity: 0; margin-top: calc(-1 * var(--space-sm)); }
 
 /* One button slot: Clean, then the clean in progress, then Review */
 .mock .mock-btn-clean, .mock .mock-btn-busy, .mock .mock-btn-review { transition: opacity 200ms var(--ease); }
@@ -1468,5 +1471,3 @@ code {
 .mock[data-btn="busy"] .mock-btn-clean, .mock[data-btn="review"] .mock-btn-clean,
 .mock[data-btn="review"] .mock-btn-busy { opacity: 0; }
 .mock[data-btn="busy"] .mock-btn-busy, .mock[data-btn="review"] .mock-btn-review { opacity: 1; }
-.mock .mock-busy-text { transition: opacity 150ms var(--ease); }
-.mock .mock-busy-text.is-swapping { opacity: 0; }
