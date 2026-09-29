@@ -335,7 +335,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                 onClick={() => setConfirmRebuild(true)}
                 disabled={deleting || rebuildCleanableBytes === 0}
               >
-                {rebuildCleanableBytes > 0 ? `Clean Rebuild (${formatSize(rebuildCleanableBytes)})` : 'Nothing to clean now'}
+                {rebuildCleanableBytes > 0 ? `Clean Rebuild (${formatSize(rebuildCleanableBytes)})` : 'Nothing to rebuild now'}
               </button>
             )
           )}
@@ -353,7 +353,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                 onClick={() => setConfirmReinstall(true)}
                 disabled={deleting || reinstallCleanableBytes === 0}
               >
-                {reinstallCleanableBytes > 0 ? `Clean Reinstall (${formatSize(reinstallCleanableBytes)})` : 'Nothing to clean now'}
+                {reinstallCleanableBytes > 0 ? `Clean Reinstall (${formatSize(reinstallCleanableBytes)})` : 'Nothing to reinstall now'}
               </button>
             )
           )}
