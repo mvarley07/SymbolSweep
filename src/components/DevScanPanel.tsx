@@ -8,6 +8,7 @@ import { fitWindowTo } from '../windowSize';
 import './DevScanPanel.css';
 
 const LEGEND_SEEN_KEY = 'symbolsweep:tier-legend-seen';
+const REVIEW_MIN_BYTES = 10 * 1024 * 1024;
 
 interface DevScanPanelProps {
   onBack: () => void;
@@ -188,6 +189,12 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     }
   };
 
+  // REVIEW under 10 MB isn't worth a tile or rows: it's shipped output to leave alone
+  const showReview = !!result && result.ask_bytes >= REVIEW_MIN_BYTES;
+  const visibleArtifacts = result
+    ? result.artifacts.filter(a => showReview || a.tier !== 'Ask')
+    : [];
+
   // Tier guide. Before a scan it sits under the header; once rows exist it
   // scrolls with them, so the pinned summary never squeezes the list shut.
   const legend = legendExpanded && (
@@ -293,10 +300,12 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
               <span className="tier-label">REINSTALL</span>
               <span className="tier-value">{result.safe_with_reinstall_bytes > 0 ? result.safe_with_reinstall_display : '0 B'}</span>
             </div>
-            <div className="tier-row tier-ask">
-              <span className="tier-label">REVIEW</span>
-              <span className="tier-value">{result.ask_bytes > 0 ? result.ask_display : '0 B'}</span>
-            </div>
+            {showReview && (
+              <div className="tier-row tier-ask">
+                <span className="tier-label">REVIEW</span>
+                <span className="tier-value">{result.ask_display}</span>
+              </div>
+            )}
           </div>
 
           {result.safe_deletable_bytes > 0 && (
@@ -409,7 +418,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           )}
 
           <div className="artifacts-list">
-            {result.artifacts.map((artifact, i) => (
+            {visibleArtifacts.map((artifact, i) => (
               <ArtifactRow
                 key={i}
                 artifact={artifact}
@@ -417,7 +426,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                 deleting={deleting}
               />
             ))}
-            {result.artifacts.length === 0 && (
+            {visibleArtifacts.length === 0 && (
               <div className="no-artifacts">No dev artifacts found</div>
             )}
           </div>

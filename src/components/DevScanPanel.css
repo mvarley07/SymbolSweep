@@ -238,9 +238,10 @@
   border: 1px solid rgba(251, 191, 36, 0.12);
 }
 
+/* REVIEW: outlined, not filled — a caution, not an alarm */
 .tier-row.tier-ask {
-  background: rgba(248, 113, 113, 0.06);
-  border: 1px solid rgba(248, 113, 113, 0.10);
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.35);
 }
 
 .tier-label {
