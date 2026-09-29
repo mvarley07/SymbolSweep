@@ -198,23 +198,6 @@ code {
   text-align: center;
 }
 
-.demo-frame {
-  display: inline-block;
-}
-
-.demo-frame > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.demo-slot .ssv-stage {
-  transform: scale(1.4);
-  transform-origin: top center;
-  margin-bottom: 118px;
-}
-
 /* ─── Origin note ────────────────────────────────────────────────────── */
 .origin-note {
   margin-bottom: 16px;
@@ -372,13 +355,6 @@ code {
   }
 }
 
-@media (max-width: 799px) {
-  .demo-slot .ssv-stage {
-    transform: scale(1.2);
-    margin-bottom: 59px;
-  }
-}
-
 @media (max-width: 599px) {
   .page {
     padding: 40px 16px 32px;
@@ -409,11 +385,6 @@ code {
 
   .band--origin {
     padding: 16px 0;
-  }
-
-  .demo-slot .ssv-stage {
-    transform: none;
-    margin-bottom: 0;
   }
 
   .hero h1 {
@@ -496,198 +467,1008 @@ code {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SymbolSweep hero vignette · CSS-only · 14s loop
-   Fixed height, pure horizontal slide. Inline SVG icons.
-   Honors prefers-reduced-motion.
+   App mockups. Everything down to the next banner is copied from the
+   app (src/App.css, StatusPanel.css, DevScanPanel.css), scoped to .mock
+   and trimmed to the classes the mockups use. Regenerate, don't edit.
    ═══════════════════════════════════════════════════════════════ */
 
-.ssv-stage {
-  --a:#14b8a6; --hv:#f87171; --sf:#34d399; --rb:#9382ff; --ri:#fbbf24; --rv:#f87171;
-  --t1:rgba(255,255,255,0.92); --t2:rgba(255,255,255,0.55); --t3:rgba(255,255,255,0.35);
-  --bd:rgba(255,255,255,0.06); --sr:rgba(255,255,255,0.035);
-
-  width:320px; margin:0 auto;
-  font-family:-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  font-size:13px; line-height:1.4; letter-spacing:-0.01em;
-  -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums;
+/* ── from src/App.css ── */
+.mock {
+  --gutter: 14px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --accent: #14b8a6;
+  --accent-hover: #0d9488;
+  --accent-glow: rgba(20, 184, 166, 0.25);
+  --accent-gradient: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
+  --accent-subtle: rgba(20, 184, 166, 0.08);
+  --status-normal: #34d399;
+  --status-normal-glow: rgba(52, 211, 153, 0.15);
+  --status-warning: #fbbf24;
+  --status-warning-glow: rgba(251, 191, 36, 0.15);
+  --status-critical: #f87171;
+  --status-critical-glow: rgba(248, 113, 113, 0.18);
+  --moderate-color: #eab308;
+  --moderate-hover: #d4a017;
+  --heavy-color: #f87171;
+  --heavy-hover: #ef4444;
+  --bg-primary: #24272C;
+  --bg-secondary: rgba(255, 255, 255, 0.035);
+  --bg-tertiary: rgba(255, 255, 255, 0.055);
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-active: rgba(255, 255, 255, 0.10);
+  --bg-elevated: rgba(255, 255, 255, 0.045);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.10);
+  --border-accent: rgba(20, 184, 166, 0.2);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 24px var(--accent-glow);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --badge-radius: 4px;
+  --font-caption: 9px;
+  --font-xs: 10px;
+  --font-sm: 11px;
+  --font-base: 13px;
+  --font-md: 14px;
+  --font-lg: 15px;
+  --font-xl: 16px;
+  --font-hero: 44px;
+  --label-size: var(--font-xs);
+  --label-weight: 600;
+  --label-spacing: 0.06em;
+  --badge-size: 8px;
+  --badge-weight: 700;
+  --badge-padding: 2px 6px;
+  --btn-height: 36px;
+  --btn-size: var(--font-sm);
+  --btn-weight: 600;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+  font-size: var(--font-base);
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  background-color: transparent;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.ssv-win {
-  position:relative; width:320px; height:296px;
-  background:#121216; border:1px solid var(--bd); border-radius:12px;
-  overflow:hidden;
+.mock * {
+  box-sizing: border-box;
 }
 
-.ssv-rail {
-  display:flex; width:640px; height:100%;
-  animation: ssv-slide 14s cubic-bezier(0.4,0,0.2,1) infinite;
-}
-@keyframes ssv-slide {
-  0%,  15%  { transform:translateX(0); }
-  21%, 51%  { transform:translateX(-320px); }
-  57%, 100% { transform:translateX(0); }
-}
-.ssv-view { width:320px; flex-shrink:0; padding:0 13px; box-sizing:border-box; }
-
-/* ── nav (one per view) ── */
-.ssv-nav { display:flex; align-items:center; gap:6px; height:37px; }
-.ssv-nav svg { flex-shrink:0; }
-.ssv-broom { display:block; width:10px; height:10px; flex-shrink:0; background-color:var(--a); -webkit-mask-image:url('assets/broom-mark.png'); -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; -webkit-mask-position:center; mask-image:url('assets/broom-mark.png'); mask-size:contain; mask-repeat:no-repeat; mask-position:center; }
-.ssv-mark { font-size:12.5px; font-weight:700; letter-spacing:-0.02em; color:var(--t1); line-height:1; }
-.ssv-mark em { font-style:normal; color:var(--a); }
-.ssv-navbtn {
-  margin-left:auto; width:19px; height:19px; border-radius:5px;
-  background:var(--sr); border:1px solid var(--bd);
-  display:flex; align-items:center; justify-content:center; color:var(--t3);
-}
-.ssv-navbtn svg { width:10px; height:10px; }
-.ssv-back { width:13px; height:13px; color:var(--t3); }
-.ssv-title { font-size:12.5px; font-weight:600; color:var(--t1); }
-.ssv-navr { margin-left:auto; display:flex; gap:9px; color:var(--t3); }
-.ssv-navr svg { width:13px; height:13px; }
-
-/* ══════ POPUP ══════ */
-.ssv-hero { position:relative; height:77px; margin-top:5px; }
-.ssv-num {
-  position:absolute; left:0; right:0; top:0;
-  font-size:37px; font-weight:700; letter-spacing:-0.04em; line-height:40px;
-  color:var(--hv); text-align:center;
-  animation: ssv-out 14s linear infinite;
-}
-.ssv-lab {
-  position:absolute; left:0; right:0; top:43px; text-align:center;
-  font-size:10px; font-weight:500; letter-spacing:0.07em;
-  color:var(--t3); text-transform:uppercase;
-  animation: ssv-out 14s linear infinite;
-}
-.ssv-ready {
-  position:absolute; left:0; right:0; top:60px; text-align:center;
-  font-size:10.5px; font-weight:500; color:var(--t2);
-  animation: ssv-out 14s linear infinite;
-}
-.ssv-clean {
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  font-size:30px; font-weight:700; letter-spacing:-0.035em; color:var(--t1);
-  opacity:0; animation: ssv-in 14s linear infinite;
-}
-@keyframes ssv-out { 0%,83% { opacity:1; } 86%,100% { opacity:0; } }
-@keyframes ssv-in  { 0%,85% { opacity:0; } 88%,97% { opacity:1; } 100% { opacity:0; } }
-
-.ssv-digits { display:inline-block; height:40px; overflow:hidden; vertical-align:top; }
-.ssv-strip { animation: ssv-count 14s steps(1,end) infinite; }
-.ssv-strip span { display:block; height:40px; line-height:40px; }
-@keyframes ssv-count {
-  0%,  70% { transform:translateY(0); }
-  72%      { transform:translateY(-40px); }
-  74.5%    { transform:translateY(-80px); }
-  77%      { transform:translateY(-120px); }
-  79.5%    { transform:translateY(-160px); }
-  82%,100% { transform:translateY(-200px); }
+.mock .app-container {
+  height: 100%;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  box-shadow:
+  var(--shadow-lg),
+  inset 0 0.5px 0 rgba(255, 255, 255, 0.06),
+  inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
 }
 
-.ssv-badgerow { display:flex; justify-content:center; height:17px; margin-top:7px; }
-.ssv-badge {
-  display:inline-flex; align-items:center; gap:5px;
-  padding:2.5px 8px; border-radius:4px;
-  font-size:9px; font-weight:700; letter-spacing:0.06em;
-  color:var(--hv); background:rgba(248,113,113,0.10);
-  animation: ssv-out 14s linear infinite;
-}
-.ssv-badge::before { content:""; width:4px; height:4px; border-radius:50%; background:currentColor; }
-
-.ssv-disk { position:relative; height:13px; margin-top:8px; text-align:center; font-size:9.5px; color:var(--t3); letter-spacing:0; }
-.ssv-disk span { position:absolute; left:0; right:0; }
-.ssv-disk-a { animation: ssv-out 14s linear infinite; }
-.ssv-disk-b { opacity:0; animation: ssv-in 14s linear infinite; }
-
-.ssv-rule { height:1px; background:var(--bd); margin:10px 0 8px; }
-.ssv-last { font-size:9px; letter-spacing:0.06em; color:var(--t3); text-transform:uppercase; margin-bottom:10px; }
-.ssv-last b { font-weight:400; color:var(--t2); text-transform:none; letter-spacing:-0.01em; font-size:10.5px; margin-left:6px; }
-
-.ssv-btnwrap { overflow:hidden; animation: ssv-btnwrap 14s ease-in-out infinite; }
-@keyframes ssv-btnwrap {
-  0%,  89%  { max-height:44px; opacity:1; }
-  93%, 99%  { max-height:0; opacity:0; }
-  100%      { max-height:44px; opacity:1; }
-}
-.ssv-btn {
-  position:relative; height:36px; border-radius:6px; overflow:hidden;
-  background:var(--a);
-  animation: ssv-press 14s cubic-bezier(0.4,0,0.2,1) infinite;
-}
-.ssv-btn span {
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  font-size:12.5px; font-weight:600; color:white; opacity:0;
-}
-.ssv-bt1 { animation: ssv-bt1 14s linear infinite; }
-.ssv-bt2 { animation: ssv-bt2 14s linear infinite; }
-.ssv-bt3 { animation: ssv-bt3 14s linear infinite; }
-
-/* press fully completes, THEN the label changes */
-@keyframes ssv-press {
-  0%,  61%  { transform:scale(1); filter:brightness(1); }
-  63.5%     { transform:scale(0.965); filter:brightness(1.15); }
-  66%,100%  { transform:scale(1); filter:brightness(1); }
-}
-@keyframes ssv-bt1 { 0%,67% { opacity:1; } 69%,100% { opacity:0; } }
-@keyframes ssv-bt2 { 0%,68% { opacity:0; } 70%,82% { opacity:1; } 84%,100% { opacity:0; } }
-@keyframes ssv-bt3 { 0%,83% { opacity:0; } 85%,89% { opacity:1; } 91%,100% { opacity:0; } }
-
-/* ══════ DEV PANEL ══════ */
-.ssv-total { display:flex; align-items:baseline; margin:2px 0 8px; }
-.ssv-total b { margin-left:auto; font-size:17px; font-weight:700; letter-spacing:-0.03em; color:var(--t1); }
-
-.ssv-tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:8px; }
-.ssv-tile { border-radius:5px; padding:5px 2px; text-align:center; border:1px solid; }
-.ssv-tile i { display:block; font-style:normal; font-size:6.5px; font-weight:700; letter-spacing:0.05em; margin-bottom:2px; }
-.ssv-tile b { font-size:10.5px; font-weight:700; color:var(--t1); letter-spacing:-0.02em; }
-.ssv-tl-sf { background:rgba(52,211,153,0.05);  border-color:rgba(52,211,153,0.14); }
-.ssv-tl-sf i { color:var(--sf); }
-.ssv-tl-rb { background:rgba(147,130,255,0.05); border-color:rgba(147,130,255,0.14); }
-.ssv-tl-rb i { color:var(--rb); }
-.ssv-tl-ri { background:rgba(251,191,36,0.05);  border-color:rgba(251,191,36,0.14); }
-.ssv-tl-ri i { color:var(--ri); }
-
-.ssv-bulk { height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center;
-  font-size:11px; font-weight:600; margin-bottom:5px; }
-.ssv-bk-sf { background:rgba(52,211,153,0.75); color:#04231a; }
-.ssv-bk-rb { border:1px solid rgba(147,130,255,0.45); color:var(--rb); }
-
-.ssv-rows { margin-top:3px; }
-.ssv-row { display:grid; grid-template-columns:46px 1fr auto auto; align-items:center; gap:0 7px; padding:7px 0; border-bottom:1px solid var(--bd); text-align:left; opacity:0; animation: ssv-rowin 14s ease-out infinite; }
-.ssv-row:last-child { border-bottom:0; }
-.ssv-row:nth-child(1) { animation-delay:-13.3s; }
-@keyframes ssv-rowin {
-  0%,3%    { opacity:0; transform:translateY(3px); }
-  7%,45%   { opacity:1; transform:translateY(0); }
-  51%,100% { opacity:0; }
+.mock button {
+  font-family: inherit;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.ssv-tag { font-size:6.5px; font-weight:700; letter-spacing:0.05em; padding:2.5px 0; border-radius:4px; text-align:center; }
-.ssv-tg-rb { color:var(--rb); background:rgba(147,130,255,0.15); }
-.ssv-nm { font-size:11px; color:var(--t2); }
-.ssv-nm b { font-weight:500; color:var(--t1); }
-.ssv-sz { font-size:11px; font-weight:700; color:var(--t1); letter-spacing:-0.02em; text-align:right; }
-.ssv-can { width:12px; height:12px; color:var(--t3); }
-.ssv-slot { width:12px; }
-.ssv-hint { grid-column: 2 / -1; font-size:9px; color:var(--t2); line-height:1.45; }
-.ssv-hint em { font-style:normal; color:var(--t1); }
-.ssv-cmd {
-  display:inline-flex; align-items:center; gap:5px; margin-top:5px;
-  font-family:'SF Mono', Menlo, monospace; font-size:8px; color:var(--t2);
-  background:rgba(255,255,255,0.055); border-radius:4px; padding:3px 6px;
+.mock button:focus {
+  outline: none;
 }
-.ssv-cmd svg { width:9px; height:9px; color:var(--t3); flex-shrink:0; }
 
-/* ── reduced motion ── */
+.mock button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mock button:active {
+  transform: scale(0.98);
+}
+
+.mock .status-panel {
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── from src/components/StatusPanel.css ── */
+.mock .status-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--gutter) var(--gutter);
+  box-sizing: border-box;
+  overflow: hidden;
+  max-height: calc(var(--window-max-h, 580px) - 2px);
+}
+
+.mock .status-panel > * {
+  flex-shrink: 0;
+}
+
+.mock .status-panel > .safe-to-clean {
+  flex-shrink: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mock .safe-to-clean .scan-total {
+  margin-bottom: var(--space-xs);
+}
+
+.mock .safe-to-clean .artifacts-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mock .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+
+.mock .header-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.mock .logo-icon {
+  height: 14px;
+  width: 14px;
+  flex-shrink: 0;
+  background-color: var(--accent);
+  -webkit-mask-image: url('assets/broom-mark.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-image: url('assets/broom-mark.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+}
+
+.mock .logo-text {
+  font-size: var(--font-base);
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.mock .logo-sym {
+  color: var(--text-primary);
+}
+
+.mock .settings-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: all 0.15s ease;
+}
+
+.mock .settings-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.mock .settings-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mock .status-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-sm) 0 var(--space-sm);
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.mock .status-size {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-align: center;
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+.mock .status-size.heavy {
+  color: var(--heavy-color);
+}
+
+.mock .hero-link {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.mock .hero-link:hover {
+  background: var(--bg-hover);
+}
+
+.mock .hero-arrow {
+  margin-left: 3px;
+  font-size: 1.2em;
+  line-height: 1;
+}
+
+.mock .hero-value {
+  display: block;
+}
+
+.mock .hero-label {
+  display: block;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: var(--space-xs);
+}
+
+.mock .hero-ready {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.mock .status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: var(--badge-radius);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: all 0.3s ease;
+}
+
+.mock .status-state.heavy {
+  color: var(--heavy-color);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.mock .status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mock .disk-context {
+  text-align: center;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--space-xs);
+  margin-bottom: 0;
+  padding-bottom: var(--space-sm);
+  flex-shrink: 0;
+  letter-spacing: 0.01em;
+}
+
+.mock .status-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-sm);
+}
+
+.mock .last-clean-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.mock .last-clean-label {
+  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-size: var(--font-caption);
+}
+
+.mock .last-clean-time {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mock .last-clean-sep {
+  opacity: 0.4;
+}
+
+.mock .status-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  padding-top: var(--space-lg);
+}
+
+.mock .status-footer:empty {
+  display: none;
+}
+
+.mock .loading-text {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mock .loading-dots span {
+  animation: dot-reveal 1.5s steps(1) infinite;
+  opacity: 0;
+}
+
+.mock .loading-dots span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.mock .loading-dots span:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.mock .loading-dots span:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+.mock .clean-btn.loading {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.85;
+  transform: none !important;
+  animation: btn-loading-pulse 1.8s ease-in-out infinite;
+}
+
+.mock .last-clean-summary.fresh {
+  color: var(--accent);
+}
+
+.mock .last-clean-freed-highlight {
+  font-weight: 500;
+}
+
+.mock .clean-btn {
+  position: relative;
+  width: 100%;
+  height: var(--btn-height);
+  padding: 0 var(--space-lg);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  letter-spacing: 0.01em;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition: box-shadow 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mock .clean-btn.heavy {
+  background: var(--heavy-color);
+  color: white;
+  box-shadow: 0 1px 4px rgba(248, 113, 113, 0.2);
+}
+
+.mock .clean-btn.heavy:hover:not(:disabled):not(.loading) {
+  background: var(--heavy-hover);
+  box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3);
+}
+
+.mock .clean-btn.heavy:active:not(:disabled):not(.loading) {
+  box-shadow: none;
+  transition: box-shadow 0.06s ease;
+}
+
+.mock .clean-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.mock .clean-btn.review-artifacts {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+  box-shadow: none;
+  gap: var(--space-xs);
+}
+
+.mock .clean-btn.review-artifacts:hover {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.5);
+}
+
+.mock .clean-btn.review-artifacts:active {
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.mock .review-arrow {
+  font-size: 1.2em;
+  line-height: 1;
+}
+
+/* ── from src/components/DevScanPanel.css ── */
+.mock .devscan-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--window-max-h, 580px) - 2px);
+  overflow: hidden;
+}
+
+.mock .devscan-panel > * {
+  flex-shrink: 0;
+}
+
+.mock .devscan-panel > .scan-results {
+  flex-shrink: 1;
+}
+
+.mock .devscan-panel .panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--gutter) var(--gutter) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mock .devscan-panel .back-btn,
+.mock .devscan-panel .rescan-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-xs);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.mock .devscan-panel .back-btn:hover,
+.mock .devscan-panel .rescan-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.mock .devscan-panel .rescan-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mock .devscan-panel .back-btn svg,
+.mock .devscan-panel .rescan-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mock .devscan-panel .header-title {
+  flex: 1;
+  font-size: var(--font-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mock .legend-help-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-xs);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.mock .legend-help-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.mock .legend-help-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mock .scan-results {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-md) var(--gutter) 0;
+}
+
+.mock .scan-summary {
+  flex-shrink: 0;
+}
+
+.mock .scan-list {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 0 var(--gutter) var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mock {
+  --row-action-w: 22px;
+  --size-edge: calc(var(--row-action-w) + var(--space-xs));
+}
+
+.mock .scan-total .total-value,
+.mock .scan-total .artifact-size {
+  padding-right: var(--size-edge);
+}
+
+.mock .scan-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-md);
+}
+
+.mock .scan-total.scan-total-only {
+  justify-content: flex-end;
+}
+
+.mock .total-label {
+  font-size: var(--label-size);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--label-spacing);
+  font-weight: var(--label-weight);
+}
+
+.mock .total-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mock .tier-breakdown {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.mock .tier-row {
+  flex: 1;
+  padding: var(--space-sm) var(--space-xs);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.mock .tier-row.tier-safe {
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.12);
+}
+
+.mock .tier-row.tier-rebuild {
+  background: rgba(147, 130, 255, 0.08);
+  border: 1px solid rgba(147, 130, 255, 0.12);
+}
+
+.mock .tier-row.tier-reinstall {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.12);
+}
+
+.mock .tier-label {
+  display: block;
+  font-size: var(--badge-size);
+  font-weight: var(--badge-weight);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.mock .tier-safe .tier-label {
+  color: rgba(52, 211, 153, 0.8);
+}
+
+.mock .tier-rebuild .tier-label {
+  color: rgba(147, 130, 255, 0.8);
+}
+
+.mock .tier-reinstall .tier-label {
+  color: rgba(251, 191, 36, 0.8);
+}
+
+.mock .tier-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mock .clean-safe-btn {
+  width: 100%;
+  height: var(--btn-height);
+  padding: 0 var(--space-md);
+  margin-bottom: var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgba(52, 211, 153, 0.75);
+  color: white;
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(52, 211, 153, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mock .clean-safe-btn:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.9);
+  box-shadow: 0 2px 8px rgba(52, 211, 153, 0.2);
+}
+
+.mock .clean-safe-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mock .artifacts-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mock .artifact-row {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  border-radius: 0;
+  transition: background 0.15s ease;
+}
+
+.mock .artifact-row:last-child {
+  border-bottom: none;
+}
+
+.mock .artifact-row:hover {
+  background: var(--bg-hover);
+}
+
+.mock .artifact-row.in-use-row {
+  opacity: 0.6;
+}
+
+.mock .artifact-hint.in-use-reason {
+  color: var(--text-secondary);
+}
+
+.mock .artifact-body {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.mock .artifact-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mock .artifact-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  margin-bottom: 2px;
+  min-width: 0;
+}
+
+.mock .artifact-tier-badge {
+  font-size: var(--badge-size);
+  font-weight: var(--badge-weight);
+  padding: var(--badge-padding);
+  border-radius: var(--badge-radius);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 52px;
+  text-align: center;
+  display: inline-block;
+}
+
+.mock .artifact-tier-badge.tier-safe {
+  background: rgba(52, 211, 153, 0.15);
+  color: rgb(52, 211, 153);
+}
+
+.mock .artifact-tier-badge.tier-rebuild {
+  background: rgba(147, 130, 255, 0.15);
+  color: rgb(147, 130, 255);
+}
+
+.mock .artifact-tier-badge.tier-reinstall {
+  background: rgba(251, 191, 36, 0.15);
+  color: rgb(251, 191, 36);
+}
+
+.mock .artifact-size {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.mock .artifact-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.mock .artifact-title-project {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.mock .artifact-hint {
+  font-size: var(--font-caption);
+  color: var(--text-tertiary);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.mock .artifact-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding-top: 1px;
+}
+
+.mock .artifact-delete-btn {
+  width: var(--row-action-w);
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--badge-radius);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.mock .artifact-delete-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mock .artifact-delete-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mock .artifact-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.mock .clean-tier-btn {
+  width: 100%;
+  height: var(--btn-height);
+  padding: 0 var(--space-md);
+  margin-bottom: var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.mock .clean-tier-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mock .clean-tier-btn.tier-rebuild {
+  border: 1px solid rgba(147, 130, 255, 0.3);
+  color: rgba(147, 130, 255, 0.85);
+}
+
+.mock .clean-tier-btn.tier-rebuild:hover:not(:disabled) {
+  background: rgba(147, 130, 255, 0.1);
+  border-color: rgba(147, 130, 255, 0.5);
+}
+
+.mock .clean-tier-btn.tier-reinstall {
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: rgba(251, 191, 36, 0.85);
+}
+
+.mock .clean-tier-btn.tier-reinstall:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.mock .artifact-actions [data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+@keyframes btn-loading-pulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.65; } }
+
+@keyframes dot-reveal { 0% { opacity: 0; } 1% { opacity: 1; } 60% { opacity: 1; } 61% { opacity: 0; } }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ═══════════════════════════════════════════════════════════════
+   Mockup stage and 14s loop (site-owned). The panels above render at
+   the app's 1x size (280px window); the site scales them with transform.
+   Loop: hover the hero, slide to Dev Artifacts and back, press Clean,
+   count 16.2 → 14.4 GB, the SAFE rows fade, the disk line rises 1.8 GB.
+   ═══════════════════════════════════════════════════════════════ */
+.mock-slot {
+  --s: 1.25;
+  --h-main: 417px;  /* measured: main view, border included */
+  --h-dev: 607px;   /* measured: Dev Artifacts view, border included */
+  width: calc(280px * var(--s));
+  height: calc(var(--h-dev) * var(--s));
+  margin: 0 auto;
+}
+@media (max-width: 799px) { .mock-slot { --s: 1.15; } }
+@media (max-width: 599px) { .mock-slot { --s: 1.05; } }
+
+.mock {
+  /* The app sets this from the screen height; here, room for all rows */
+  --window-max-h: 900px;
+  width: 280px;
+  text-align: left;
+  transform: scale(var(--s));
+  transform-origin: top left;
+}
+.mock .mock-win {
+  width: 280px;
+  height: var(--h-main);
+  animation: mock-win 14s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.mock-rail {
+  display: flex;
+  align-items: flex-start;
+  width: 556px;
+  animation: mock-slide 14s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.mock-view { width: 278px; flex-shrink: 0; }
+.mock-view:first-child { animation: mock-loop 14s linear infinite; }
+
+@keyframes mock-slide {
+  0%, 15%   { transform: translateX(0); }
+  21%, 51%  { transform: translateX(-278px); }
+  57%, 100% { transform: translateX(0); }
+}
+@keyframes mock-win {
+  0%, 15%   { height: var(--h-main); }
+  21%, 51%  { height: var(--h-dev); }
+  57%, 100% { height: var(--h-main); }
+}
+/* Hides the reset to 16.2 GB as the loop restarts */
+@keyframes mock-loop { 0% { opacity: 0; } 2%, 97% { opacity: 1; } 100% { opacity: 0; } }
+
+/* The hero is the way into Dev Artifacts: the app's :hover, just before the slide */
+.mock .mock-hover { animation: mock-hover 14s ease-in-out infinite; }
+@keyframes mock-hover {
+  0%, 8%    { background: transparent; }
+  11%, 17%  { background: var(--bg-hover); }
+  21%, 100% { background: transparent; }
+}
+
+/* Stacked states: before the clean, after it */
+.mock .mock-swap { display: grid; }
+.mock .mock-swap > * { grid-area: 1 / 1; }
+.mock .scan-total .mock-swap { justify-items: end; }
+.mock .mock-before { animation: mock-before 14s linear infinite; }
+.mock .mock-after { opacity: 0; animation: mock-after 14s linear infinite; }
+@keyframes mock-before { 0%, 82% { opacity: 1; } 84%, 100% { opacity: 0; } }
+@keyframes mock-after  { 0%, 82% { opacity: 0; } 84%, 100% { opacity: 1; } }
+
+/* The button: pressed (the app's :active scale), Cleaning…, then Review.
+   The fades sit on wrappers: the app's .clean-btn.loading runs its own animation */
+.mock .mock-press { animation: mock-press 14s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.mock .mock-btn-clean { animation: mock-btn-clean 14s linear infinite; }
+.mock .mock-btn-busy { opacity: 0; animation: mock-btn-busy 14s linear infinite; }
+.mock .mock-btn-review { opacity: 0; animation: mock-btn-review 14s linear infinite; }
+@keyframes mock-press {
+  0%, 61%   { transform: scale(1); }
+  63.5%     { transform: scale(0.98); }
+  66%, 100% { transform: scale(1); }
+}
+@keyframes mock-btn-clean  { 0%, 67% { opacity: 1; } 68%, 100% { opacity: 0; } }
+@keyframes mock-btn-busy   { 0%, 67% { opacity: 0; } 68%, 82% { opacity: 1; } 83%, 100% { opacity: 0; } }
+@keyframes mock-btn-review { 0%, 82% { opacity: 0; } 84%, 100% { opacity: 1; } }
+
+/* 16.2 → 14.4 GB: a strip of values behind a one-line window */
+.mock .mock-count { display: block; height: 1em; overflow: hidden; }
+.mock .mock-strip { display: block; animation: mock-count 14s steps(1, end) infinite; }
+.mock .mock-strip > span { display: block; height: 1em; }
+@keyframes mock-count {
+  0%, 70%   { transform: translateY(0); }
+  72%       { transform: translateY(-1em); }
+  74.5%     { transform: translateY(-2em); }
+  77%       { transform: translateY(-3em); }
+  79.5%     { transform: translateY(-4em); }
+  82%, 100% { transform: translateY(-5em); }
+}
+
+/* The SAFE rows Clean removes */
+.mock .mock-fade { animation: mock-fade 14s ease-out infinite; }
+@keyframes mock-fade { 0%, 70% { opacity: 1; } 78%, 100% { opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .ssv-rail,.ssv-num,.ssv-lab,.ssv-ready,.ssv-clean,.ssv-strip,.ssv-badge,
-  .ssv-disk-a,.ssv-disk-b,.ssv-btnwrap,.ssv-btn,.ssv-bt1,.ssv-bt2,.ssv-bt3,
-  .ssv-row { animation:none !important; }
-  .ssv-rail { transform:translateX(0); }
-  .ssv-num,.ssv-lab,.ssv-ready,.ssv-badge,.ssv-disk-a,.ssv-bt1 { opacity:1; }
-  .ssv-clean,.ssv-disk-b,.ssv-bt2,.ssv-bt3 { opacity:0; }
-  .ssv-strip { transform:translateY(0); }
-  .ssv-btnwrap { max-height:44px; opacity:1; }
-  .ssv-row { opacity:1; transform:none; }
+  .mock *, .mock .mock-win { animation: none !important; }
+  .mock .mock-after, .mock .mock-btn-busy, .mock .mock-btn-review { opacity: 0; }
 }
