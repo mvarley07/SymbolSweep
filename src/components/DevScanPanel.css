@@ -455,6 +455,15 @@
   opacity: 0.7;
 }
 
+/* ---- In-use rows — left in place until the next clean ---- */
+.artifact-row.in-use-row {
+  opacity: 0.6;
+}
+
+.artifact-hint.in-use-reason {
+  color: var(--text-secondary);
+}
+
 /* Two-column body: text on left, size+delete pinned top-right */
 .artifact-body {
   display: flex;

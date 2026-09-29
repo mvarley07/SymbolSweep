@@ -69,6 +69,12 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/** Row copy for the scan's in-use reason: "modified 6m ago" -> "In use · changed 6m ago" */
+function inUseLabel(reason: string): string {
+  if (reason.startsWith('modified ')) return `In use \u00b7 changed ${reason.slice('modified '.length)}`;
+  return reason.charAt(0).toUpperCase() + reason.slice(1);
+}
+
 /** Short label for a skipped path: the artifact kind if known, else ~-relative path */
 function skippedLabel(item: SkippedArtifact, artifacts: DevArtifact[] | undefined) {
   const artifact = artifacts?.find(a => a.path === item.path);
@@ -120,7 +126,7 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
   const shortPath = artifact.path.replace(/^\/Users\/[^/]+/, '~');
 
   return (
-    <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''} ${artifact.active_build ? 'active-build' : ''} ${isReview ? 'tier-ask-row' : ''}`}>
+    <div className={`artifact-row ${artifact.is_nested ? 'nested' : ''} ${artifact.active_build ? 'active-build' : ''} ${isReview ? 'tier-ask-row' : ''} ${artifact.in_use ? 'in-use-row' : ''}`}>
       <div className="artifact-body">
         <div className="artifact-text">
           <div className="artifact-main">
@@ -136,7 +142,7 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
             )}
           </div>
           {artifact.in_use ? (
-            <div className="artifact-hint skipped-reason">skipped: {artifact.in_use}</div>
+            <div className="artifact-hint in-use-reason">{inUseLabel(artifact.in_use)}</div>
           ) : artifact.hint && (
             <div className="artifact-hint" title={artifact.hint}>{artifact.hint}</div>
           )}
