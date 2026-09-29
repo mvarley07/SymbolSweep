@@ -102,10 +102,24 @@ function readyIn(age: string): string {
   return `${Math.max(1, RECENT_WINDOW_HOURS - (hours ? Number(hours[1]) : 0))}h`;
 }
 
-/** Row copy for the scan's held-back reason, with when it clears:
- *  "modified 2h ago" (project artifacts only) -> "Changed 2h ago · ready in 22h";
- *  "in use by cargo" -> "In use by cargo · ready when it stops" */
-function inUseLabel(reason: string): string {
+/** Why a row is held back, short: "building", "in use by npm", "changed 2h ago";
+ *  null when it isn't held back. The tier buttons use this. */
+export function heldBackReason(artifact: DevArtifact): string | null {
+  if (artifact.active_build) return 'building';
+  const reason = artifact.in_use;
+  if (!reason) return null;
+  return reason.startsWith('modified ') ? `changed ${reason.slice('modified '.length)}` : reason;
+}
+
+/** A held-back row's label, with when it clears. The one label for held-back
+ *  rows on the main screen and in Dev Artifacts:
+ *  "Building now · ready when the build ends"
+ *  "In use by npm · ready when it stops"
+ *  "Changed 2h ago · ready in 22h" (project caches, 24h after their last change) */
+export function heldBackLabel(artifact: DevArtifact): string | null {
+  if (artifact.active_build) return 'Building now \u00b7 ready when the build ends';
+  const reason = artifact.in_use;
+  if (!reason) return null;
   if (reason.startsWith('modified ')) {
     const age = reason.slice('modified '.length);
     return `Changed ${age} \u00b7 ready in ${readyIn(age)}`;
@@ -147,6 +161,7 @@ export function SkippedRow({ item, artifacts }: { item: SkippedArtifact; artifac
 
 export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) {
   const config = TIER_CONFIG[artifact.tier];
+  const heldBack = heldBackLabel(artifact);
 
   // Only show staleness for genuinely unused artifacts (14+ days)
   const staleness = artifact.staleness_days != null && artifact.staleness_days >= STALE_THRESHOLD_DAYS
@@ -173,10 +188,8 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
             </span>
             <RowTitle kind={artifact.kind} project={artifact.project} title={shortPath} />
           </div>
-          {artifact.active_build ? (
-            <div className="artifact-hint in-use-reason">Building now &middot; ready when the build ends</div>
-          ) : artifact.in_use ? (
-            <div className="artifact-hint in-use-reason">{inUseLabel(artifact.in_use)}</div>
+          {heldBack ? (
+            <div className="artifact-hint in-use-reason">{heldBack}</div>
           ) : (artifact.hint || staleness) && (
             <div className="artifact-hint" title={artifact.hint ?? undefined}>
               {staleness && (

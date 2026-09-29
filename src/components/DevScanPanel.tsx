@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAppStatus, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import type { DevArtifact, DevDeleteResult, SkippedArtifact, SsTrashInfo, PurgeResult } from '../types';
-import { ArtifactRow, SkippedRow } from './ArtifactRows';
+import { ArtifactRow, SkippedRow, heldBackReason } from './ArtifactRows';
 import { fitWindowTo } from '../windowSize';
 import { formatSize } from '../formatSize';
 import './DevScanPanel.css';
@@ -159,11 +159,10 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     .filter(a => a.tier === tier && !a.is_nested && !a.active_build && !a.in_use);
   /** A disabled tier button says why: "Held back · building", "Held back · in use by npm" */
   const tierIdleLabel = (tier: DevArtifact['tier'], nothing: string) => {
-    const held = (result?.artifacts ?? []).filter(a => a.tier === tier && !a.is_nested && (a.active_build || a.in_use));
-    if (held.some(a => a.active_build)) return 'Held back \u00b7 building';
-    const reason = held.find(a => a.in_use)?.in_use;
-    if (reason) return `Held back \u00b7 ${reason.startsWith('modified ') ? `changed ${reason.slice('modified '.length)}` : reason}`;
-    return nothing;
+    const held = (result?.artifacts ?? []).filter(a => a.tier === tier && !a.is_nested && heldBackReason(a));
+    // Name a build first when there is one, as before
+    const row = held.find(a => a.active_build) ?? held[0];
+    return row ? `Held back \u00b7 ${heldBackReason(row)}` : nothing;
   };
   const rebuildCleanableBytes = tierCleanable('Rebuildable').reduce((n, a) => n + a.size_bytes, 0);
   const reinstallCleanableBytes = tierCleanable('SafeWithReinstall').reduce((n, a) => n + a.size_bytes, 0);
