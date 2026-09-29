@@ -157,6 +157,14 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   /** Top-level rows of a tier the tier button deletes now: not building, not in use */
   const tierCleanable = (tier: DevArtifact['tier']) => (result?.artifacts ?? [])
     .filter(a => a.tier === tier && !a.is_nested && !a.active_build && !a.in_use);
+  /** A disabled tier button says why: "Held back · building", "Held back · in use by npm" */
+  const tierIdleLabel = (tier: DevArtifact['tier'], nothing: string) => {
+    const held = (result?.artifacts ?? []).filter(a => a.tier === tier && !a.is_nested && (a.active_build || a.in_use));
+    if (held.some(a => a.active_build)) return 'Held back \u00b7 building';
+    const reason = held.find(a => a.in_use)?.in_use;
+    if (reason) return `Held back \u00b7 ${reason.startsWith('modified ') ? `changed ${reason.slice('modified '.length)}` : reason}`;
+    return nothing;
+  };
   const rebuildCleanableBytes = tierCleanable('Rebuildable').reduce((n, a) => n + a.size_bytes, 0);
   const reinstallCleanableBytes = tierCleanable('SafeWithReinstall').reduce((n, a) => n + a.size_bytes, 0);
 
@@ -335,7 +343,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                 onClick={() => setConfirmRebuild(true)}
                 disabled={deleting || rebuildCleanableBytes === 0}
               >
-                {rebuildCleanableBytes > 0 ? `Clean Rebuild (${formatSize(rebuildCleanableBytes)})` : 'Nothing to rebuild now'}
+                {rebuildCleanableBytes > 0 ? `Clean Rebuild (${formatSize(rebuildCleanableBytes)})` : tierIdleLabel('Rebuildable', 'Nothing to rebuild now')}
               </button>
             )
           )}
@@ -353,7 +361,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                 onClick={() => setConfirmReinstall(true)}
                 disabled={deleting || reinstallCleanableBytes === 0}
               >
-                {reinstallCleanableBytes > 0 ? `Clean Reinstall (${formatSize(reinstallCleanableBytes)})` : 'Nothing to reinstall now'}
+                {reinstallCleanableBytes > 0 ? `Clean Reinstall (${formatSize(reinstallCleanableBytes)})` : tierIdleLabel('SafeWithReinstall', 'Nothing to reinstall now')}
               </button>
             )
           )}
