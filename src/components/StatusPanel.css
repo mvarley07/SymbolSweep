@@ -201,6 +201,27 @@
   height: var(--btn-height);
 }
 
+/* Hero as the way into Dev Artifacts */
+.hero-link {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.hero-link:hover {
+  background: var(--bg-hover);
+}
+
+.hero-arrow {
+  margin-left: 3px;
+  font-size: 1.2em;
+  line-height: 1;
+}
+
 /* Hero split: big number + small descriptor */
 .hero-value {
   display: block;
@@ -395,6 +416,10 @@
   padding-top: var(--space-lg);
 }
 
+.status-footer:empty {
+  display: none;
+}
+
 /* Loading text with animated dots */
 .loading-text {
   display: inline-flex;
@@ -560,36 +585,4 @@
 .review-arrow {
   font-size: 1.2em;
   line-height: 1;
-}
-
-/* Dev Scan Link */
-.dev-scan-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.dev-scan-link:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-medium);
-}
-
-.dev-scan-total {
-  font-size: var(--font-xs);
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.01em;
-}
-
-.dev-scan-arrow {
-  font-size: var(--font-md);
-  color: var(--text-tertiary);
-  font-weight: 300;
 }

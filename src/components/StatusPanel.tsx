@@ -40,9 +40,11 @@ interface StatusIndicatorProps {
   ready: string | null;
   /** How the headline splits into dev artifacts and system cache */
   breakdown: string;
+  /** Opens Dev Artifacts; the hero is the way in when there are artifacts */
+  onOpen?: () => void;
 }
 
-function StatusIndicator({ state, value, label, ready, breakdown }: StatusIndicatorProps) {
+function StatusIndicator({ state, value, label, ready, breakdown, onOpen }: StatusIndicatorProps) {
   const stateConfig = {
     Clean: { label: 'All clean' },
     Moderate: { label: 'Moderate' },
@@ -55,16 +57,23 @@ function StatusIndicator({ state, value, label, ready, breakdown }: StatusIndica
 
   return (
     <div className="status-indicator">
-      <div className={`status-size ${stateClass}`}>
-        {value ? (
-          <>
-            <span className="hero-value">{value}</span>
-            <span className="hero-label">{label}</span>
-          </>
-        ) : (
-          label
-        )}
-      </div>
+      {value && onOpen ? (
+        <button className={`status-size hero-link ${stateClass}`} onClick={onOpen} title="Open Dev Artifacts" data-open-devscan>
+          <span className="hero-value">{value}</span>
+          <span className="hero-label">{label}<span className="hero-arrow">&rsaquo;</span></span>
+        </button>
+      ) : (
+        <div className={`status-size ${stateClass}`}>
+          {value ? (
+            <>
+              <span className="hero-value">{value}</span>
+              <span className="hero-label">{label}</span>
+            </>
+          ) : (
+            label
+          )}
+        </div>
+      )}
       {value && ready && (
         <div className="hero-ready">{ready}</div>
       )}
@@ -351,6 +360,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         label={appStatus.headline_label}
         ready={heroReady}
         breakdown={appStatus.cache.size_bytes > 0 ? appStatus.breakdown_display : ''}
+        onOpen={appStatus.dev_scan_available && appStatus.dev_total_bytes > 0 ? onDevScanClick : undefined}
       />
 
       {/* Secondary disk context line */}
@@ -427,7 +437,8 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       </div>
 
       <div className="status-footer">
-        {appStatus.clean_state !== 'Clean' && safeCleanMeaningful && (
+        {/* One CTA: clean what's safe now, else review the rest */}
+        {safeCleanMeaningful ? (
           <button
             className={`clean-btn ${stateClass}${isLoading ? ' loading' : ''}`}
             onClick={handleCleanClick}
@@ -441,26 +452,13 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
               `Clean ${safeCleanableDisplay} safely`
             )}
           </button>
-        )}
-
-        {appStatus.clean_state !== 'Clean' && !safeCleanMeaningful && hasNonSafeArtifacts && (
+        ) : hasNonSafeArtifacts && (
           <button
             className="clean-btn review-artifacts"
             onClick={onDevScanClick}
           >
             {`Review ${appStatus.dev_review_display} in dev artifacts`}
             <span className="review-arrow">&rsaquo;</span>
-          </button>
-        )}
-
-        {appStatus.dev_scan_available && (
-          <button className="dev-scan-link" onClick={onDevScanClick}>
-            <span className="dev-scan-total">
-              {appStatus.dev_review_bytes > 0
-                ? `Dev artifacts: ${appStatus.dev_review_display} needs review`
-                : 'Dev artifacts'}
-            </span>
-            <span className="dev-scan-arrow">&rsaquo;</span>
           </button>
         )}
       </div>
