@@ -492,7 +492,7 @@
 
 .artifact-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-xs);
   margin-bottom: 2px;
   min-width: 0;
@@ -542,29 +542,19 @@
   flex-shrink: 0;
 }
 
-/* Kind label — inline with badge, truncates when tight */
-.artifact-kind {
+/* Row title — project first, then kind; wraps rather than truncating */
+.artifact-title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-xs);
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: break-word;
 }
 
-.artifact-project {
-  font-size: var(--font-caption);
-  color: var(--text-tertiary);
-  background: var(--bg-tertiary);
-  padding: 1px 5px;
-  border-radius: var(--badge-radius);
-  /* One line, truncated: a wrapped chip doubles the row height at 280px */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  max-width: 45%;
-  flex-shrink: 1;
+.artifact-title-project {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .artifact-staleness {
@@ -572,14 +562,16 @@
   color: rgba(251, 191, 36, 0.7);
 }
 
-/* Hint — single line, truncated with tooltip for full text */
+/* Hint — wraps to two lines, clamped after that */
 .artifact-hint {
   font-size: var(--font-caption);
   color: var(--text-tertiary);
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ============================================================

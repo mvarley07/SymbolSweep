@@ -69,6 +69,23 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/** Kind without its parenthetical: "Rust target (build artifacts)" -> "Rust target" */
+function shortKind(kind: string): string {
+  return kind.replace(/\s*\([^)]*\)\s*$/, '');
+}
+
+/** Row title, project first: "padfinder · node_modules". The tier badge carries the type. */
+function RowTitle({ kind, project, title }: { kind: string; project: string | null; title: string }) {
+  return (
+    <span className="artifact-title" title={title}>
+      {project && <><span className="artifact-title-project">{project}</span> &middot; </>}
+      {shortKind(kind).split('/').map((part, i) => (
+        <span key={i}>{i > 0 && <>/<wbr /></>}{part}</span>
+      ))}
+    </span>
+  );
+}
+
 /** Row copy for the scan's in-use reason: "modified 6m ago" -> "In use · changed 6m ago" */
 function inUseLabel(reason: string): string {
   if (reason.startsWith('modified ')) return `In use \u00b7 changed ${reason.slice('modified '.length)}`;
@@ -93,8 +110,7 @@ export function SkippedRow({ item, artifacts }: { item: SkippedArtifact; artifac
         <div className="artifact-text">
           <div className="artifact-main">
             <span className="artifact-tier-badge tier-skipped">SKIPPED</span>
-            <span className="artifact-kind" title={shortPath}>{kind}</span>
-            {project && <span className="artifact-project">{project}</span>}
+            <RowTitle kind={kind} project={project} title={shortPath} />
           </div>
           <div className="artifact-hint skipped-reason">skipped: {item.reason}</div>
         </div>
@@ -133,10 +149,7 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
             <span className={`artifact-tier-badge ${config.className}`}>
               {artifact.active_build ? 'BUILDING' : config.label}
             </span>
-            <span className="artifact-kind" title={shortPath}>{artifact.kind}</span>
-            {artifact.project && (
-              <span className="artifact-project">{artifact.project}</span>
-            )}
+            <RowTitle kind={artifact.kind} project={artifact.project} title={shortPath} />
             {staleness && (
               <span className="artifact-staleness" data-tip={`Unused for ${artifact.staleness_days} days`} aria-label={`Unused for ${artifact.staleness_days} days`}>{staleness}</span>
             )}
