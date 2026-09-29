@@ -71,12 +71,19 @@ with open("latest.json", "w") as f:
 EOF
 cat latest.json
 
+# Also ship the DMG under a version-free name, so the site's /download redirect
+# (site/vercel.json -> releases/latest/download/SymbolSweep.dmg) never needs bumping.
+STABLE_DMG_DIR=$(mktemp -d)
+STABLE_DMG="$STABLE_DMG_DIR/SymbolSweep.dmg"
+cp "$DMG_PATH" "$STABLE_DMG"
+
 echo "==> 6/6  Creating GitHub release v${VERSION} on ${RELEASES_REPO}"
 gh release create "v${VERSION}" \
   --repo "$RELEASES_REPO" \
   --title "SymbolSweep ${VERSION}" \
   --notes "${NOTES}" \
-  latest.json "$TARBALL" "$SIG_FILE" "$DMG_PATH"
+  latest.json "$TARBALL" "$SIG_FILE" "$DMG_PATH" "$STABLE_DMG"
+rm -rf "$STABLE_DMG_DIR"
 
 echo ""
 echo "DONE. Release: https://github.com/${RELEASES_REPO}/releases/tag/v${VERSION}"
