@@ -288,7 +288,7 @@ document.querySelectorAll('.cta-btn').forEach(function(btn){
     await click(clean);
     mock.dataset.btn = 'busy';
     await cleanRow(rows[0], 16.2, 15.0, {
-      ready: '0 B ready \u00b7 600 MB recently used',
+      ready: '0 B ready \u00b7 600 MB held back',
       disk: '33.6 GB free of 228.3 GB',
       safeTotal: '0 B',
     });
