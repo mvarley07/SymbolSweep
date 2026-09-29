@@ -410,6 +410,14 @@ impl DevScanResult {
     }
 }
 
+/// Rows smaller than this aren't shown or counted: not worth a row, and every
+/// total (tray, hero, tiles, Clean) stays equal to the rows on screen
+const MIN_ROW_BYTES: u64 = 1024 * 1024;
+
+fn drop_small_rows(artifacts: &mut Vec<DevArtifact>) {
+    artifacts.retain(|a| a.size_bytes >= MIN_ROW_BYTES);
+}
+
 /// Run a full dev artifact scan. Pass custom project roots or empty slice for defaults.
 pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
     let start = std::time::Instant::now();
@@ -452,6 +460,7 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
         scan_project_root(root, &mut artifacts, 0);
     }
 
+    drop_small_rows(&mut artifacts);
     annotate_in_use(&mut artifacts);
     let totals = TierTotals::of(&artifacts);
 
@@ -3226,6 +3235,28 @@ mod tests {
         assert_eq!(result.rebuildable_bytes, 1000, "totals are recomputed");
         assert!(!recheck_held_back(&mut result), "nothing left to release");
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_rows_under_1_mb_are_dropped() {
+        let row = |bytes: u64| DevArtifact {
+            path: format!("/w/{}", bytes),
+            size_bytes: bytes,
+            size_display: format_size(bytes),
+            tier: ArtifactTier::Safe,
+            kind: "test".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+            in_use: None,
+        };
+        let mut rows = vec![row(0), row(1024 * 1024 - 1), row(1024 * 1024), row(5 * 1024 * 1024)];
+        drop_small_rows(&mut rows);
+        let kept: Vec<u64> = rows.iter().map(|a| a.size_bytes).collect();
+        assert_eq!(kept, vec![1024 * 1024, 5 * 1024 * 1024]);
+        assert_eq!(TierTotals::of(&rows).safe, 6 * 1024 * 1024, "totals count only the rows shown");
     }
 
     /// Test: unknown paths (not in scan result) are never deleted
