@@ -267,7 +267,7 @@
   border-radius: var(--badge-radius);
   font-size: var(--font-xs);
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   transition: all 0.3s ease;
 }
 
