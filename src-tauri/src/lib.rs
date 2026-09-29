@@ -409,23 +409,58 @@ fn test_notification(app: tauri::AppHandle) {
     tray::send_notification(&app, "SymbolSweep Test", "Notifications are working!");
 }
 
-/// Check for updates and install if available
-#[tauri::command]
-async fn check_for_update(app: tauri::AppHandle) -> Result<String, String> {
+/// Append a line to ~/Library/Logs/SymbolSweep/updater.log (same format as deletions.log)
+fn log_updater(message: &str) {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let path = std::path::PathBuf::from(home)
+        .join("Library")
+        .join("Logs")
+        .join("SymbolSweep")
+        .join("updater.log");
+    cache_cleaner::append_log_line(&path, message);
+}
+
+/// Check for an update and install it if one exists, logging each step.
+/// Returns the installed version, or None when already up to date.
+async fn check_and_install_update(app: &tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_updater::UpdaterExt;
 
+    let current = app.package_info().version.to_string();
     let updater = app.updater().map_err(|e| e.to_string())?;
     match updater.check().await {
         Ok(Some(update)) => {
             let version = update.version.clone();
+            log_updater(&format!("update check: current {}, latest {}", current, version));
             update
-                .download_and_install(|_, _| {}, || {})
+                .download_and_install(
+                    |_, _| {},
+                    || log_updater(&format!("update downloaded: {}", version)),
+                )
                 .await
-                .map_err(|e| format!("Install failed: {}", e))?;
-            Ok(format!("v{} installed -- restart to apply", version))
+                .map_err(|e| {
+                    log_updater(&format!("update install failed: {}: {}", version, e));
+                    format!("Install failed: {}", e)
+                })?;
+            log_updater(&format!("update installed: {}, restart to apply", version));
+            Ok(Some(version))
         }
-        Ok(None) => Ok("up_to_date".to_string()),
-        Err(e) => Err(format!("Update check failed: {}", e)),
+        Ok(None) => {
+            log_updater(&format!("update check: current {}, latest {}", current, current));
+            Ok(None)
+        }
+        Err(e) => {
+            log_updater(&format!("update check failed: current {}: {}", current, e));
+            Err(format!("Update check failed: {}", e))
+        }
+    }
+}
+
+/// Check for updates and install if available
+#[tauri::command]
+async fn check_for_update(app: tauri::AppHandle) -> Result<String, String> {
+    match check_and_install_update(&app).await? {
+        Some(version) => Ok(format!("v{} installed -- restart to apply", version)),
+        None => Ok("up_to_date".to_string()),
     }
 }
 
@@ -1047,12 +1082,7 @@ pub fn run() {
                 loop {
                     let handle = app_handle_updater.clone();
                     tauri::async_runtime::block_on(async move {
-                        use tauri_plugin_updater::UpdaterExt;
-                        if let Ok(updater) = handle.updater() {
-                            if let Ok(Some(update)) = updater.check().await {
-                                let _ = update.download_and_install(|_, _| {}, || {}).await;
-                            }
-                        }
+                        let _ = check_and_install_update(&handle).await;
                     });
                     std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
                 }

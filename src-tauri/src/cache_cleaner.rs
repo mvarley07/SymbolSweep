@@ -111,7 +111,7 @@ pub fn log_deletion(message: &str) {
     append_log_line(&get_log_path(), message);
 }
 
-fn append_log_line(log_path: &std::path::Path, message: &str) {
+pub(crate) fn append_log_line(log_path: &std::path::Path, message: &str) {
     // Ensure log directory exists
     if let Some(parent) = log_path.parent() {
         let _ = fs::create_dir_all(parent);
