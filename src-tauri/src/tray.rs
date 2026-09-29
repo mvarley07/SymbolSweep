@@ -131,6 +131,18 @@ fn create_tray_icon() -> Result<Image<'static>, Box<dyn std::error::Error>> {
     Ok(img)
 }
 
+/// Menu bar title: the same headline number and label as the popup hero.
+pub fn tray_title(status: &AppStatus) -> String {
+    if !status.dev_scan_complete {
+        return String::new();
+    }
+    match status.clean_state {
+        CleanState::Clean if status.headline_bytes == 0 => String::new(), // icon only
+        CleanState::Runaway => format!("Cache runaway \u{2014} {}", status.headline_display),
+        _ => format!("{} {}", status.headline_display, status.headline_label),
+    }
+}
+
 /// Update tray from the unified AppStatus — single source of truth.
 /// Both tray and popup read from the same struct, emitted at the same moment.
 pub fn update_tray<R: Runtime>(
@@ -143,29 +155,12 @@ pub fn update_tray<R: Runtime>(
             tray.set_title(Some(""))?;
             tray.set_tooltip(Some("SymbolSweep \u{2014} Scanning\u{2026}"))?;
         } else {
-            match status.clean_state {
-                CleanState::Clean => {
-                    if status.dev_total_bytes > 0 {
-                        tray.set_title(Some(&format!("{} dev artifacts", status.dev_total_display)))?;
-                    } else {
-                        // Icon only — nothing meaningful to clean
-                        tray.set_title(Some(""))?;
-                    }
-                }
-                CleanState::Runaway => {
-                    // Distinct label naming the actual problem
-                    tray.set_title(Some(&format!("Cache runaway \u{2014} {}", status.cache.size_display)))?;
-                }
-                CleanState::Moderate | CleanState::Heavy => {
-                    // Show reclaimable total (same value as popup hero)
-                    tray.set_title(Some(&format!("{} to clean", status.reclaimable_display)))?;
-                }
-            }
+            tray.set_title(Some(&tray_title(status)))?;
 
             // Tooltip always shows full breakdown
             let tooltip = format!(
-                "SymbolSweep\nReclaimable: {}\nDisk: {} free of {}\nStatus: {}",
-                status.reclaimable_display,
+                "SymbolSweep\n{}\nDisk: {} free of {}\nStatus: {}",
+                status.breakdown_display,
                 status.disk_free_display,
                 status.disk_total_display,
                 match status.clean_state {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { publishWindowMaxHeight, setWindowHeight } from './windowSize';
 import { StatusPanel } from './components/StatusPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -12,16 +13,18 @@ import './App.css';
 
 type View = 'activate' | 'welcome' | 'status' | 'settings' | 'devscan';
 
-const WINDOW_WIDTH = 280;
-
-// Fixed heights per view. Status uses dynamic measurement (see StatusPanel).
+// Fixed heights per view, each clamped by setWindowHeight() to the screen's
+// usable height. Status uses dynamic measurement (see StatusPanel).
 const VIEW_HEIGHTS: Record<View, number> = {
   activate: 360,
   welcome: 320,
   status: 300,  // initial; StatusPanel self-sizes via ResizeObserver
   settings: 480,
-  devscan: 520,
+  devscan: 300, // initial; DevScanPanel self-sizes to content via ResizeObserver
 };
+
+// Publish the height cap to CSS before any panel measures itself
+publishWindowMaxHeight();
 
 function App() {
   const { settings, loading, updateSettings } = useSettings();
@@ -54,9 +57,7 @@ function App() {
 
   // Set window size immediately on view change — fixed heights, no observer
   useEffect(() => {
-    getCurrentWindow().setSize(
-      new LogicalSize(WINDOW_WIDTH, VIEW_HEIGHTS[view]),
-    );
+    setWindowHeight(VIEW_HEIGHTS[view]);
   }, [view]);
 
   // Handle Escape key and click outside to close window

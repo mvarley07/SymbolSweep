@@ -108,8 +108,10 @@ fn get_log_path() -> PathBuf {
 }
 
 pub fn log_deletion(message: &str) {
-    let log_path = get_log_path();
+    append_log_line(&get_log_path(), message);
+}
 
+fn append_log_line(log_path: &std::path::Path, message: &str) {
     // Ensure log directory exists
     if let Some(parent) = log_path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -121,40 +123,15 @@ pub fn log_deletion(message: &str) {
     if let Ok(mut file) = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log_path)
+        .open(log_path)
     {
         let _ = file.write_all(log_line.as_bytes());
     }
 }
 
-fn chrono_format_now() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    // Simple timestamp format without external crate
-    let secs_per_day = 86400;
-    let secs_per_hour = 3600;
-    let secs_per_min = 60;
-
-    let days_since_epoch = now / secs_per_day;
-    let time_of_day = now % secs_per_day;
-
-    let hours = time_of_day / secs_per_hour;
-    let minutes = (time_of_day % secs_per_hour) / secs_per_min;
-    let seconds = time_of_day % secs_per_min;
-
-    // Approximate date calculation (good enough for logging)
-    let years = 1970 + (days_since_epoch / 365);
-    let remaining_days = days_since_epoch % 365;
-    let months = remaining_days / 30 + 1;
-    let days = remaining_days % 30 + 1;
-
-    format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        years, months, days, hours, minutes, seconds
-    )
+/// Local wall-clock time as RFC 3339 (e.g. 2026-09-24T14:47:27-04:00)
+pub(crate) fn chrono_format_now() -> String {
+    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
 }
 
 fn current_timestamp() -> u64 {
@@ -565,6 +542,32 @@ mod tests {
         }
 
         println!("PASS: {} forbidden paths correctly rejected", forbidden_paths.len());
+    }
+
+    // ----------------------------------------------------------------
+    // Log lines carry real local RFC 3339 timestamps
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_log_line_local_rfc3339() {
+        let dir = std::env::temp_dir().join("ss-log-ts-test");
+        let _ = fs::remove_dir_all(&dir);
+        let log = dir.join("deletions.log");
+
+        append_log_line(&log, "TEST: timestamp check");
+
+        let line = fs::read_to_string(&log).unwrap();
+        println!("LOG LINE: {}", line.trim_end());
+        let ts = &line[1..line.find(']').unwrap()];
+        let parsed = chrono::DateTime::parse_from_rfc3339(ts).expect("RFC 3339 timestamp");
+        let drift = (chrono::Local::now().timestamp() - parsed.timestamp()).abs();
+        assert!(drift <= 2, "timestamp should be now, drift {}s", drift);
+        assert_eq!(
+            parsed.offset().local_minus_utc(),
+            chrono::Local::now().offset().local_minus_utc(),
+            "timestamp should carry the local UTC offset"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     // ----------------------------------------------------------------

@@ -2,6 +2,13 @@
   "buildCommand": "",
   "outputDirectory": ".",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/download",
+      "destination": "https://github.com/mvarley07/symbolsweep-releases/releases/latest/download/SymbolSweep.dmg",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts } from '../hooks/useCacheStatus';
+import { useAppStatus, useCleanCache, useLastCleanTime, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsManual } from '../hooks/useCacheStatus';
 import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
+import { ArtifactRow } from './ArtifactRows';
+import { fitWindowTo } from '../windowSize';
 import type { CleanState, CleanResult } from '../types';
 import './StatusPanel.css';
 
@@ -35,9 +36,11 @@ interface StatusIndicatorProps {
   state: CleanState;
   value: string | null;
   label: string;
+  /** How the headline splits into dev artifacts and system cache */
+  breakdown: string;
 }
 
-function StatusIndicator({ state, value, label }: StatusIndicatorProps) {
+function StatusIndicator({ state, value, label, breakdown }: StatusIndicatorProps) {
   const stateConfig = {
     Clean: { label: 'All clean' },
     Moderate: { label: 'Moderate' },
@@ -60,6 +63,9 @@ function StatusIndicator({ state, value, label }: StatusIndicatorProps) {
           label
         )}
       </div>
+      {value && breakdown && (
+        <div className="hero-breakdown">{breakdown}</div>
+      )}
       {state !== 'Clean' && (
         <div className={`status-state ${stateClass}`}>
           <span className="status-dot" />
@@ -82,6 +88,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const { settings, updateSetting } = useSettings();
   const { result: devResult } = useDevScan();
   const { deleteArtifacts } = useDeleteDevArtifacts();
+  const { deleteArtifacts: deleteOneArtifact, deleting: deletingRow } = useDeleteDevArtifactsManual();
 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<CleanResult | null>(null);
@@ -89,13 +96,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const [freshCleanFreed, setFreshCleanFreed] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Auto-resize window to fit panel content
+  // Auto-resize window to fit panel content (capped; the SAFE list scrolls past it)
   const resizeWindow = useCallback(() => {
-    if (!panelRef.current) return;
-    const height = Math.ceil(panelRef.current.scrollHeight);
-    if (height > 0) {
-      getCurrentWindow().setSize(new LogicalSize(280, height));
-    }
+    if (panelRef.current) fitWindowTo(panelRef.current);
   }, []);
 
   useEffect(() => {
@@ -173,10 +176,12 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       const sysResult = await clean(false);
       let totalFreed = sysResult.bytes_freed;
 
-      // Clean ONLY Safe-tier dev artifacts
+      // Clean ONLY Safe-tier dev artifacts. Rows already marked in use are left
+      // out (the delete guard would skip them); anything that became in use since
+      // the scan is skipped by the guard and shows its reason after the rescan.
       if (devResult) {
         const safePaths = devResult.artifacts
-          .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
+          .filter(a => a.tier === 'Safe' && !a.active_build && !a.in_use)
           .map(a => a.path);
         if (safePaths.length > 0) {
           const devDeleteResult = await deleteArtifacts(safePaths);
@@ -288,19 +293,24 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
   const stateClass = appStatus.clean_state.toLowerCase();
 
-  // Button scope: cache + Safe-tier artifacts only (what Clean Now actually removes)
-  const safeDevBytes = devResult
-    ? devResult.artifacts
-        .filter(a => !a.is_nested && a.tier === 'Safe' && !a.active_build)
-        .reduce((sum, a) => sum + a.size_bytes, 0)
-    : 0;
-  const safeCleanableBytes = appStatus.cache.size_bytes + safeDevBytes;
-  const safeCleanableDisplay = formatSize(safeCleanableBytes);
+  // Button scope: cache + deletable Safe-tier artifacts (what Clean Now actually
+  // removes) — computed once in the backend alongside the hero and tray numbers
+  const safeCleanableDisplay = appStatus.safe_clean_display;
   // Threshold: below 1 MB, the safe-clean button is effectively empty
-  const safeCleanMeaningful = safeCleanableBytes >= 1024 * 1024;
+  const safeCleanMeaningful = appStatus.safe_clean_bytes >= 1024 * 1024;
   // Whether non-safe dev artifacts hold meaningful space (>= 10 MB)
-  const nonSafeDevBytes = appStatus.dev_total_bytes - safeDevBytes;
-  const hasNonSafeArtifacts = nonSafeDevBytes >= 10 * 1024 * 1024;
+  const hasNonSafeArtifacts = appStatus.dev_review_bytes >= 10 * 1024 * 1024;
+
+  // Every SAFE row, on the main screen: delete per row, or the reason it's skipped
+  const safeRows = devResult ? devResult.artifacts.filter(a => a.tier === 'Safe') : [];
+  const handleDeleteSafeRow = async (path: string) => {
+    try {
+      // Backend rescans and emits; rows, hero and tray refresh from that rescan
+      await deleteOneArtifact([path]);
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
 
   // Build the resting summary suffix: "freed 1.2 GB"
   const lastCleanSummary = lastCleanFreed
@@ -325,23 +335,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
       {/* Hero -- reclaimable total (or cache-specific for Runaway) */}
       <StatusIndicator
         state={appStatus.clean_state}
-        value={
-          appStatus.clean_state === 'Clean'
-            ? (appStatus.dev_total_bytes > 0 ? appStatus.dev_total_display : null)
-            : appStatus.clean_state === 'Runaway' ? appStatus.cache.size_display
-            : appStatus.reclaimable_display
-        }
-        label={
-          appStatus.clean_state === 'Runaway'
-            ? 'cache runaway'
-            : appStatus.clean_state !== 'Clean'
-              ? 'to clean'
-              : appStatus.dev_total_bytes > 0
-                ? 'dev artifacts'
-                : appStatus.show_gap_banner
-                  ? 'Nothing to clean'
-                  : 'All clean'
-        }
+        value={appStatus.headline_bytes > 0 ? appStatus.headline_display : null}
+        label={appStatus.headline_label}
+        breakdown={appStatus.breakdown_display}
       />
 
       {/* Secondary disk context line */}
@@ -351,6 +347,25 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         <span className={`disk-context${appStatus.disk_health !== 'Normal' ? ' disk-low' : ''}`}>
           {appStatus.disk_free_display} free of {appStatus.disk_total_display}
         </span>
+      )}
+
+      {safeRows.length > 0 && (
+        <div className="safe-to-clean">
+          <div className="scan-total">
+            <span className="total-label">Safe to clean</span>
+            <span className="artifact-size">{appStatus.dev_safe_display}</span>
+          </div>
+          <div className="artifacts-list">
+            {safeRows.map(artifact => (
+              <ArtifactRow
+                key={artifact.path}
+                artifact={artifact}
+                onDelete={handleDeleteSafeRow}
+                deleting={deletingRow || isLoading}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="status-content">
@@ -420,7 +435,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
             className="clean-btn review-artifacts"
             onClick={onDevScanClick}
           >
-            {`Review ${appStatus.dev_total_display} in dev artifacts`}
+            {`Review ${appStatus.dev_review_display} in dev artifacts`}
             <span className="review-arrow">&rsaquo;</span>
           </button>
         )}
@@ -428,7 +443,9 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
         {appStatus.dev_scan_available && (
           <button className="dev-scan-link" onClick={onDevScanClick}>
             <span className="dev-scan-total">
-              {appStatus.dev_total_bytes > 0 ? `${appStatus.dev_total_display} dev artifacts` : 'Dev artifacts'}
+              {appStatus.dev_review_bytes > 0
+                ? `Dev artifacts: ${appStatus.dev_review_display} needs review`
+                : 'Dev artifacts'}
             </span>
             <span className="dev-scan-arrow">&rsaquo;</span>
           </button>

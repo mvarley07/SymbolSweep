@@ -16,6 +16,12 @@ npm run tauri build
 
 DMG_PATH=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -n1)
 APP_PATH="src-tauri/target/release/bundle/macos/SymbolSweep.app"
+BUNDLE_DIR="src-tauri/target/release/bundle/macos"
+TARBALL="$BUNDLE_DIR/SymbolSweep.app.tar.gz"
+SIG_FILE="$BUNDLE_DIR/SymbolSweep.app.tar.gz.sig"
+
+[ -f "$TARBALL" ]  || { echo "ERROR: updater tarball not found: $TARBALL" >&2; exit 1; }
+[ -f "$SIG_FILE" ] || { echo "ERROR: updater signature not found: $SIG_FILE" >&2; exit 1; }
 
 echo "==> Verifying the app signature before submitting"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
@@ -30,14 +36,11 @@ xcrun stapler staple "$DMG_PATH"
 echo "==> 4/6  Final gatekeeper check"
 spctl -a -t open --context context:primary-signature -v "$DMG_PATH" || true
 
+# Everything above runs on every build. latest.json and the GitHub release
+# only happen with PUBLISH=1, so a local test build ships nothing.
+if [[ "${PUBLISH:-}" == "1" ]]; then
+
 echo "==> 5/6  Writing latest.json updater manifest"
-BUNDLE_DIR="src-tauri/target/release/bundle/macos"
-TARBALL="$BUNDLE_DIR/SymbolSweep.app.tar.gz"
-SIG_FILE="$BUNDLE_DIR/SymbolSweep.app.tar.gz.sig"
-
-[ -f "$TARBALL" ]  || { echo "ERROR: updater tarball not found: $TARBALL" >&2; exit 1; }
-[ -f "$SIG_FILE" ] || { echo "ERROR: updater signature not found: $SIG_FILE" >&2; exit 1; }
-
 # The .sig file is already base64 minisign output — use it verbatim, never re-encode.
 SIGNATURE=$(cat "$SIG_FILE")
 case "$SIGNATURE" in
@@ -68,14 +71,27 @@ with open("latest.json", "w") as f:
 EOF
 cat latest.json
 
+# Also ship the DMG under a version-free name, so the site's /download redirect
+# (site/vercel.json -> releases/latest/download/SymbolSweep.dmg) never needs bumping.
+STABLE_DMG_DIR=$(mktemp -d)
+STABLE_DMG="$STABLE_DMG_DIR/SymbolSweep.dmg"
+cp "$DMG_PATH" "$STABLE_DMG"
+
 echo "==> 6/6  Creating GitHub release v${VERSION} on ${RELEASES_REPO}"
 gh release create "v${VERSION}" \
   --repo "$RELEASES_REPO" \
   --title "SymbolSweep ${VERSION}" \
   --notes "${NOTES}" \
-  latest.json "$TARBALL" "$SIG_FILE" "$DMG_PATH"
+  latest.json "$TARBALL" "$SIG_FILE" "$DMG_PATH" "$STABLE_DMG"
+rm -rf "$STABLE_DMG_DIR"
 
 echo ""
 echo "DONE. Release: https://github.com/${RELEASES_REPO}/releases/tag/v${VERSION}"
+
+else
+  echo "==> 5/6, 6/6  Skipping latest.json and GitHub release (set PUBLISH=1 to publish)."
+fi
+
+echo ""
 echo "Distributable DMG:"
 echo "  $DMG_PATH"

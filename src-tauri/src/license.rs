@@ -12,10 +12,11 @@ use serde::{Deserialize, Serialize};
 const LS_API_BASE: &str = "https://api.lemonsqueezy.com/v1/licenses";
 
 // A valid LemonSqueezy key from ANY store/product would otherwise activate this
-// app. Every successful activate/validate is pinned to exactly one product.
-// !!! PLACEHOLDER — real IDs not yet supplied. Do not ship or release with 0. !!!
-const LS_STORE_ID: u64 = 0;
-const LS_PRODUCT_ID: u64 = 0;
+// app. Every successful activate/validate is pinned to our store and product:
+// the live product plus its test-mode twin (test keys exist only in test mode
+// and only the store owner can create them, so activation stays testable).
+const LS_STORE_ID: u64 = 453121;
+const LS_PRODUCT_IDS: &[u64] = &[1398010, 1293708];
 
 /// Shown when a key is genuine but belongs to a different store or product.
 const WRONG_PRODUCT_MSG: &str = "This license key is for a different product.";
@@ -111,7 +112,7 @@ fn meta_matches(meta: &Option<LsMeta>) -> bool {
     match meta {
         Some(m) => match (m.store_id, m.product_id) {
             (Some(store), Some(product)) => {
-                store == LS_STORE_ID && product == LS_PRODUCT_ID
+                store == LS_STORE_ID && LS_PRODUCT_IDS.contains(&product)
             }
             _ => false,
         },
@@ -421,9 +422,12 @@ mod tests {
         matches!(result, ValidateResult::Invalid { ref message } if message == WRONG_PRODUCT_MSG)
     }
 
+    const LIVE_PRODUCT_ID: u64 = 1398010;
+    const TEST_PRODUCT_ID: u64 = 1293708;
+
     #[test]
     fn validate_rejects_wrong_product_id() {
-        let body = validate_body(Some((LS_STORE_ID, LS_PRODUCT_ID.wrapping_add(1))));
+        let body = validate_body(Some((LS_STORE_ID, LIVE_PRODUCT_ID + 1)));
         assert!(
             is_wrong_product(decide_validate(body)),
             "a valid key for another product must be rejected"
@@ -432,7 +436,7 @@ mod tests {
 
     #[test]
     fn validate_rejects_wrong_store_id() {
-        let body = validate_body(Some((LS_STORE_ID.wrapping_add(1), LS_PRODUCT_ID)));
+        let body = validate_body(Some((LS_STORE_ID + 1, LIVE_PRODUCT_ID)));
         assert!(is_wrong_product(decide_validate(body)));
     }
 
@@ -454,16 +458,28 @@ mod tests {
     }
 
     #[test]
-    fn validate_accepts_matching_store_and_product() {
-        let body = validate_body(Some((LS_STORE_ID, LS_PRODUCT_ID)));
+    fn validate_accepts_live_product() {
+        let body = validate_body(Some((LS_STORE_ID, LIVE_PRODUCT_ID)));
         assert!(matches!(decide_validate(body), ValidateResult::Valid));
+    }
+
+    #[test]
+    fn validate_accepts_test_mode_product() {
+        let body = validate_body(Some((LS_STORE_ID, TEST_PRODUCT_ID)));
+        assert!(matches!(decide_validate(body), ValidateResult::Valid));
+    }
+
+    #[test]
+    fn validate_rejects_test_product_from_other_store() {
+        let body = validate_body(Some((LS_STORE_ID + 1, TEST_PRODUCT_ID)));
+        assert!(is_wrong_product(decide_validate(body)));
     }
 
     #[test]
     fn validate_still_rejects_invalid_key_with_its_own_message() {
         let json = format!(
             r#"{{"valid":false,"error":"license_key has been revoked","meta":{{"store_id":{},"product_id":{}}}}}"#,
-            LS_STORE_ID, LS_PRODUCT_ID
+            LS_STORE_ID, LIVE_PRODUCT_ID
         );
         let body: LsValidateResponse = serde_json::from_str(&json).unwrap();
         match decide_validate(body) {

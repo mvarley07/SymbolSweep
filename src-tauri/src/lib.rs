@@ -12,7 +12,7 @@ use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
 use cache_cleaner::{clean_cache, get_log_file_path, log_deletion, CleanResult};
-use cache_monitor::{
+use cache_monitor::{DevTotals, 
     compute_app_status, format_size, get_cache_status, get_combined_cache_status,
     get_simulated_status, is_daemon_running, AppStatus, CacheStatus,
 };
@@ -90,8 +90,8 @@ fn get_app_status(state: tauri::State<AppState>) -> AppStatus {
         .dev_scan_result
         .lock()
         .ok()
-        .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
-        .unwrap_or((0, false));
+        .and_then(|s| s.as_ref().map(|r| (r.totals(), true)))
+        .unwrap_or((DevTotals::default(), false));
     let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
     compute_app_status(&cache, dev_total, dev_scan_complete, failures)
 }
@@ -134,8 +134,8 @@ async fn clean(app: tauri::AppHandle, state: tauri::State<'_, AppState>, dry_run
         };
         let (dev_total, dev_scan_complete) = state.dev_scan_result.lock()
             .ok()
-            .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
-            .unwrap_or((0, false));
+            .and_then(|s| s.as_ref().map(|r| (r.totals(), true)))
+            .unwrap_or((DevTotals::default(), false));
         let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
         let app_status = compute_app_status(&cache, dev_total, dev_scan_complete, failures);
         let _ = update_tray(&app, &app_status);
@@ -226,7 +226,7 @@ async fn scan_dev(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> R
         }
     };
     let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
-    let app_status = compute_app_status(&cache_status, result.total_bytes, true, failures);
+    let app_status = compute_app_status(&cache_status, result.totals(), true, failures);
     let _ = update_tray(&app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -311,7 +311,7 @@ async fn delete_dev_artifacts_inner(
         }
     };
     let failures = state.settings.lock().unwrap().consecutive_autoclean_failures;
-    let app_status = compute_app_status(&cache_status, new_scan.total_bytes, true, failures);
+    let app_status = compute_app_status(&cache_status, new_scan.totals(), true, failures);
     let _ = update_tray(app, &app_status);
     let _ = app.emit("app-status-update", &app_status);
 
@@ -356,8 +356,8 @@ fn update_settings(app: tauri::AppHandle, state: tauri::State<AppState>, mut set
     };
     let (dev_total, dev_scan_complete) = state.dev_scan_result.lock()
         .ok()
-        .and_then(|s| s.as_ref().map(|r| (r.total_bytes, true)))
-        .unwrap_or((0, false));
+        .and_then(|s| s.as_ref().map(|r| (r.totals(), true)))
+        .unwrap_or((DevTotals::default(), false));
     let failures = current.consecutive_autoclean_failures;
     drop(current); // release lock before compute
     let app_status = compute_app_status(&cache, dev_total, dev_scan_complete, failures);
@@ -651,7 +651,7 @@ pub fn run() {
                 };
                 // Emit unified AppStatus (dev_total=0, scan not yet complete)
                 let failures = settings_init.lock().unwrap().consecutive_autoclean_failures;
-                let app_status = compute_app_status(&initial_cache, 0, false, failures);
+                let app_status = compute_app_status(&initial_cache, DevTotals::default(), false, failures);
                 let _ = update_tray(&app_handle_init, &app_status);
                 let _ = app_handle_init.emit("app-status-update", &app_status);
 
@@ -671,7 +671,7 @@ pub fn run() {
                         s.dev_scan_roots.clone()
                     };
                     let dev_result = dev_scanner::scan_dev_artifacts(&roots);
-                    let dev_total = dev_result.total_bytes;
+                    let dev_total = dev_result.totals();
 
                     // Cache the result
                     {
@@ -747,8 +747,8 @@ pub fn run() {
                         .lock()
                         .unwrap()
                         .as_ref()
-                        .map(|r| (r.total_bytes, true))
-                        .unwrap_or((0, false));
+                        .map(|r| (r.totals(), true))
+                        .unwrap_or((DevTotals::default(), false));
                     let failures = settings.lock().unwrap().consecutive_autoclean_failures;
                     let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete, failures);
                     let _ = update_tray(&app_handle, &app_status);
@@ -775,7 +775,7 @@ pub fn run() {
                             s.dev_scan_roots.clone()
                         };
                         let result = dev_scanner::scan_dev_artifacts(&roots);
-                        let dev_total_fresh = result.total_bytes;
+                        let dev_total_fresh = result.totals();
 
                         {
                             let mut cached = dev_result_monitor.lock().unwrap();
@@ -966,8 +966,8 @@ pub fn run() {
                         .lock()
                         .unwrap()
                         .as_ref()
-                        .map(|r| (r.total_bytes, true))
-                        .unwrap_or((0, false));
+                        .map(|r| (r.totals(), true))
+                        .unwrap_or((DevTotals::default(), false));
                     let failures = settings_show.lock().unwrap().consecutive_autoclean_failures;
                     let app_status = compute_app_status(&cache_status, dev_total, dev_scan_complete, failures);
                     let _ = update_tray(&app_handle, &app_status);
@@ -1004,7 +1004,7 @@ pub fn run() {
                                 s.dev_scan_roots.clone()
                             };
                             let result = dev_scanner::scan_dev_artifacts(&roots);
-                            let dev_total = result.total_bytes;
+                            let dev_total = result.totals();
 
                             // Cache result + update epoch
                             {

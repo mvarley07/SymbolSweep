@@ -69,6 +69,21 @@ export interface AppStatus {
   snapshot_count: number;
   dev_scan_complete: boolean;
   autoclean_failing: boolean;
+  /** SAFE-tier dev artifacts (the SAFE tile) */
+  dev_safe_bytes: number;
+  dev_safe_display: string;
+  /** REBUILD + REINSTALL + REVIEW: what sits behind the Dev Artifacts link */
+  dev_review_bytes: number;
+  dev_review_display: string;
+  /** What Clean Now removes: system cache + deletable SAFE dev artifacts */
+  safe_clean_bytes: number;
+  safe_clean_display: string;
+  /** The one number shown by both the tray title and the popup hero */
+  headline_bytes: number;
+  headline_display: string;
+  headline_label: string;
+  /** "7.6 GB dev artifacts + 1.1 GB system cache = 8.7 GB" */
+  breakdown_display: string;
 }
 
 // Dev artifact scanning types
@@ -85,6 +100,8 @@ export interface DevArtifact {
   is_nested: boolean;
   hint: string | null;
   active_build: boolean;
+  /** SAFE rows: why a delete right now would skip it ("modified 2h ago") */
+  in_use?: string | null;
 }
 
 export interface DevScanResult {
@@ -93,6 +110,9 @@ export interface DevScanResult {
   total_display: string;
   safe_bytes: number;
   safe_display: string;
+  /** SAFE rows Clean Now will actually remove */
+  safe_deletable_bytes: number;
+  safe_deletable_display: string;
   rebuildable_bytes: number;
   rebuildable_display: string;
   safe_with_reinstall_bytes: number;
@@ -103,11 +123,20 @@ export interface DevScanResult {
   scan_roots: string[];
 }
 
+/** A Safe-tier artifact the delete pass left in place, e.g. reason "modified 2h ago" */
+export interface SkippedArtifact {
+  path: string;
+  size_bytes: number;
+  size_display: string;
+  reason: string;
+}
+
 export interface DevDeleteResult {
   deleted_count: number;
   bytes_freed: number;
   bytes_freed_display: string;
   errors: string[];
+  skipped: SkippedArtifact[];
 }
 
 export interface SsTrashInfo {

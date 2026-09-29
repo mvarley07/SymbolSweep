@@ -73,15 +73,21 @@ pub struct DevArtifact {
     pub project: Option<String>,
     /// Days since project's package.json or src/ was last modified (node_modules only)
     pub staleness_days: Option<u64>,
-    /// True if this artifact's size is already included in a parent artifact's size.
-    /// Used for node_modules/.cache which is a subset of node_modules.
-    /// Excluded from tier totals to prevent double-counting.
+    /// True if this artifact lives inside another artifact's directory
+    /// (node_modules/.cache inside node_modules). Its bytes are NOT counted in
+    /// the parent's size, so every row counts once toward the tier tiles.
+    /// Deleting it goes to Trash, since it sits inside a REINSTALL parent.
     pub is_nested: bool,
     /// Inline guidance for the user (restore cost or safety warning)
     pub hint: Option<String>,
     /// True if a build process is actively using this artifact (pgrep / lock-file mtime)
     #[serde(default)]
     pub active_build: bool,
+    /// SAFE rows only: why a delete right now would skip this row ("modified
+    /// 2h ago", "in use by node"). Set at scan time by the same in_use_reason()
+    /// the delete guard uses; the delete guard still re-checks at delete time.
+    #[serde(default)]
+    pub in_use: Option<String>,
 }
 
 /// Complete scan result
@@ -94,6 +100,11 @@ pub struct DevScanResult {
     /// Breakdown by tier (excludes nested items)
     pub safe_bytes: u64,
     pub safe_display: String,
+    /// SAFE rows Clean Now will actually remove (not in use, not building)
+    #[serde(default)]
+    pub safe_deletable_bytes: u64,
+    #[serde(default)]
+    pub safe_deletable_display: String,
     pub rebuildable_bytes: u64,
     pub rebuildable_display: String,
     pub safe_with_reinstall_bytes: u64,
@@ -115,7 +126,6 @@ const KNOWN_LIBRARY_CACHES: &[(&str, &str)] = &[
     ("pnpm", "pnpm"),
     ("node-gyp", "node-gyp"),
     ("typescript", "TypeScript"),
-    ("ms-playwright", "Playwright browsers"),
     ("Homebrew", "Homebrew"),
     ("pip", "pip"),
     ("go-build", "Go build"),
@@ -250,51 +260,22 @@ fn dir_size(path: &Path) -> u64 {
     total
 }
 
-/// Check staleness of a project by looking at package.json, src/, and other
-/// project-activity indicators. Returns days since last activity.
-fn check_project_staleness(project_dir: &Path) -> Option<u64> {
-    let now = SystemTime::now();
-    let mut most_recent: Option<SystemTime> = None;
-
-    let indicators = [
-        "package.json",
-        "tsconfig.json",
-        "Cargo.toml",
-        "pom.xml",
-        "build.gradle",
-        "Makefile",
-        "Gemfile",
-    ];
-
-    // Check file indicators
-    for name in &indicators {
-        if let Ok(meta) = fs::metadata(project_dir.join(name)) {
-            if let Ok(modified) = meta.modified() {
-                match most_recent {
-                    Some(current) if modified > current => most_recent = Some(modified),
-                    None => most_recent = Some(modified),
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    // Check src/ directory
-    if let Ok(meta) = fs::metadata(project_dir.join("src")) {
-        if let Ok(modified) = meta.modified() {
-            match most_recent {
-                Some(current) if modified > current => most_recent = Some(modified),
-                None => most_recent = Some(modified),
-                _ => {}
-            }
-        }
-    }
-
-    most_recent.and_then(|mtime| {
-        now.duration_since(mtime)
-            .ok()
-            .map(|dur| dur.as_secs() / 86400)
-    })
+/// Days since an artifact's project was last active: the newer of the
+/// artifact's own mtime and <project>/.git/index (touched by checkouts,
+/// commits, staging). None if neither mtime is readable.
+fn check_project_staleness(artifact: &Path, project_dir: &Path) -> Option<u64> {
+    let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+    let most_recent = [mtime(artifact), mtime(&project_dir.join(".git").join("index"))]
+        .into_iter()
+        .flatten()
+        .max()?;
+    // A future mtime (clock skew) counts as active today
+    Some(
+        SystemTime::now()
+            .duration_since(most_recent)
+            .map(|d| d.as_secs() / 86400)
+            .unwrap_or(0),
+    )
 }
 
 /// Check if a directory has a sibling file with any of the given extensions
@@ -323,6 +304,51 @@ fn get_project_name(artifact_path: &Path) -> Option<String> {
 // ============================================================================
 // Scanner entry point
 // ============================================================================
+
+/// Per-tier byte totals. Every row counts exactly once (a nested row's
+/// bytes are excluded from its parent), so the tiles always equal the rows
+/// shown under them and the tiles sum to the total.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct TierTotals {
+    total: u64,
+    safe: u64,
+    safe_deletable: u64,
+    rebuildable: u64,
+    safe_with_reinstall: u64,
+    ask: u64,
+}
+
+impl TierTotals {
+    fn of(artifacts: &[DevArtifact]) -> Self {
+        let mut t = TierTotals::default();
+        for a in artifacts {
+            t.total += a.size_bytes;
+            match a.tier {
+                ArtifactTier::Safe => {
+                    t.safe += a.size_bytes;
+                    if !a.active_build && a.in_use.is_none() {
+                        t.safe_deletable += a.size_bytes;
+                    }
+                }
+                ArtifactTier::Rebuildable => t.rebuildable += a.size_bytes,
+                ArtifactTier::SafeWithReinstall => t.safe_with_reinstall += a.size_bytes,
+                ArtifactTier::Ask => t.ask += a.size_bytes,
+            }
+        }
+        t
+    }
+}
+
+impl DevScanResult {
+    /// The totals the unified AppStatus is computed from
+    pub fn totals(&self) -> crate::cache_monitor::DevTotals {
+        crate::cache_monitor::DevTotals {
+            total: self.total_bytes,
+            safe: self.safe_bytes,
+            safe_deletable: self.safe_deletable_bytes,
+        }
+    }
+}
 
 /// Run a full dev artifact scan. Pass custom project roots or empty slice for defaults.
 pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
@@ -365,33 +391,8 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
         scan_project_root(root, &mut artifacts, 0);
     }
 
-    // Calculate totals by tier, excluding nested (double-counted) items
-    let non_nested = |a: &&DevArtifact| !a.is_nested;
-    let total_bytes: u64 = artifacts.iter().filter(non_nested).map(|a| a.size_bytes).sum();
-    let safe_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::Safe)
-        .map(|a| a.size_bytes)
-        .sum();
-    let rebuildable_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::Rebuildable)
-        .map(|a| a.size_bytes)
-        .sum();
-    let safe_with_reinstall_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::SafeWithReinstall)
-        .map(|a| a.size_bytes)
-        .sum();
-    let ask_bytes: u64 = artifacts
-        .iter()
-        .filter(non_nested)
-        .filter(|a| a.tier == ArtifactTier::Ask)
-        .map(|a| a.size_bytes)
-        .sum();
+    annotate_in_use(&mut artifacts);
+    let totals = TierTotals::of(&artifacts);
 
     let duration = start.elapsed();
 
@@ -400,16 +401,18 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
 
     DevScanResult {
         artifacts,
-        total_bytes,
-        total_display: format_size(total_bytes),
-        safe_bytes,
-        safe_display: format_size(safe_bytes),
-        rebuildable_bytes,
-        rebuildable_display: format_size(rebuildable_bytes),
-        safe_with_reinstall_bytes,
-        safe_with_reinstall_display: format_size(safe_with_reinstall_bytes),
-        ask_bytes,
-        ask_display: format_size(ask_bytes),
+        total_bytes: totals.total,
+        total_display: format_size(totals.total),
+        safe_bytes: totals.safe,
+        safe_display: format_size(totals.safe),
+        safe_deletable_bytes: totals.safe_deletable,
+        safe_deletable_display: format_size(totals.safe_deletable),
+        rebuildable_bytes: totals.rebuildable,
+        rebuildable_display: format_size(totals.rebuildable),
+        safe_with_reinstall_bytes: totals.safe_with_reinstall,
+        safe_with_reinstall_display: format_size(totals.safe_with_reinstall),
+        ask_bytes: totals.ask,
+        ask_display: format_size(totals.ask),
         scan_duration_ms: duration.as_millis() as u64,
         scan_roots: existing_roots
             .iter()
@@ -423,8 +426,9 @@ pub fn scan_dev_artifacts(custom_roots: &[String]) -> DevScanResult {
 // ============================================================================
 
 fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
-    // ~/.npm — npm's global cache
-    check_home_cache(home, ".npm", "npm global cache", artifacts);
+    // ~/.npm/_cacache — npm's package cache. The rest of ~/.npm (_logs, _npx)
+    // is never touched: _logs is npm's debug history, _npx holds npx installs.
+    check_home_cache(home, ".npm/_cacache", "npm package cache", artifacts);
 
     // ~/.yarn/cache
     let yarn_cache = home.join(".yarn").join("cache");
@@ -442,6 +446,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -462,6 +467,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -482,6 +488,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -502,16 +509,22 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} use pnpm store prune (removes only orphaned packages)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
 }
 
-/// Check a single home-level cache directory
-fn check_home_cache(home: &Path, dir_name: &str, kind: &str, artifacts: &mut Vec<DevArtifact>) {
-    let path = home.join(dir_name);
-    // Skip symlinks — .exists()/.is_dir() resolve them, which could point at real data
-    if is_symlink(&path) {
+/// Check a single home-level cache directory (`rel_path` may be nested, e.g. ".npm/_cacache")
+fn check_home_cache(home: &Path, rel_path: &str, kind: &str, artifacts: &mut Vec<DevArtifact>) {
+    let path = home.join(rel_path);
+    // Skip symlinks anywhere below home — .exists()/.is_dir() resolve them,
+    // which could point at real data
+    if path
+        .ancestors()
+        .take_while(|p| *p != home)
+        .any(is_symlink)
+    {
         return;
     }
     if path.exists() && path.is_dir() {
@@ -528,6 +541,7 @@ fn check_home_cache(home: &Path, dir_name: &str, kind: &str, artifacts: &mut Vec
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -578,13 +592,34 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                         is_nested: false,
                         hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
                 break;
             }
         }
 
-        // Check for *.ShipIt caches
+        // Playwright browsers — not a cache: they only come back on an explicit install
+        if name_str == "ms-playwright" {
+            let size = dir_size(&entry_path);
+            if size > 0 {
+                artifacts.push(DevArtifact {
+                    path: entry_path.to_string_lossy().to_string(),
+                    size_bytes: size,
+                    size_display: format_size(size),
+                    tier: ArtifactTier::Rebuildable,
+                    kind: "Playwright browsers".to_string(),
+                    project: None,
+                    staleness_days: None,
+                    is_nested: false,
+                    hint: Some("Browsers re-download on next `npx playwright install`".to_string()),
+                    active_build: false,
+                    in_use: None,
+                });
+            }
+        }
+
+        // Check for *.ShipIt caches (an app's staged self-update)
         if name_str.ends_with(".ShipIt") {
             let size = dir_size(&entry_path);
             if size > 0 {
@@ -592,13 +627,14 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                     path: entry_path.to_string_lossy().to_string(),
                     size_bytes: size,
                     size_display: format_size(size),
-                    tier: ArtifactTier::Safe,
+                    tier: ArtifactTier::Rebuildable,
                     kind: "ShipIt update cache".to_string(),
                     project: None,
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                    hint: Some("In-progress app update; the app re-downloads it".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
         }
@@ -634,6 +670,7 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                 active_build: building,
+                in_use: None,
             });
         }
     }
@@ -660,6 +697,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} re-downloads on next gradle build (needs network)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -680,6 +718,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} re-downloads on next mvn build (needs network)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -703,6 +742,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Safe to delete \u{2014} re-downloads on next go build (needs network)".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -729,6 +769,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep unless you're sure \u{2014} may contain databases; use docker system prune".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -749,6 +790,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep \u{2014} holds crash symbols for shipped apps".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -769,6 +811,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep unless you're sure \u{2014} delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -789,6 +832,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 is_nested: false,
                 hint: Some("Keep unless you're sure \u{2014} delete via Android Studio \u{2192} Device Manager".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
@@ -884,7 +928,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
         // A bare .next/.turbo/etc. outside a project is not safe to auto-delete.
         if matches!(
             name_str.as_ref(),
-            ".next" | ".turbo" | ".parcel-cache" | ".vite" | "coverage"
+            ".next" | ".turbo" | ".parcel-cache" | ".vite"
         ) {
             if looks_like_project(dir) {
                 let size = dir_size(&entry_path);
@@ -900,6 +944,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         is_nested: false,
                         hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
             }
@@ -920,10 +965,11 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     tier: ArtifactTier::Rebuildable,
                     kind: "Rust target (build artifacts)".to_string(),
                     project: get_project_name(&entry_path),
-                    staleness_days: check_project_staleness(dir),
+                    staleness_days: check_project_staleness(&entry_path, dir),
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next cargo build (takes minutes, needs network)".to_string()),
                     active_build: building,
+                    in_use: None,
                 });
             }
             continue;
@@ -944,6 +990,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next dotnet build".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
             continue;
@@ -964,6 +1011,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds when Unity reimports the project".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
             continue;
@@ -984,6 +1032,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next Unreal Editor launch".to_string()),
                     active_build: false,
+                    in_use: None,
                 });
             }
             continue;
@@ -1005,7 +1054,32 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     is_nested: false,
                     hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
                     active_build: building,
+                    in_use: None,
                 });
+            }
+            continue;
+        }
+
+        // ── ASK tier: test coverage reports ──
+        // Output of a test run, not a cache — only flagged inside a project.
+        if name_str == "coverage" {
+            if looks_like_project(dir) {
+                let size = dir_size(&entry_path);
+                if size > 0 {
+                    artifacts.push(DevArtifact {
+                        path: entry_path.to_string_lossy().to_string(),
+                        size_bytes: size,
+                        size_display: format_size(size),
+                        tier: ArtifactTier::Ask,
+                        kind: "coverage report".to_string(),
+                        project: get_project_name(&entry_path),
+                        staleness_days: None,
+                        is_nested: false,
+                        hint: Some("Test coverage report \u{2014} regenerates on the next coverage run".to_string()),
+                        active_build: false,
+                        in_use: None,
+                    });
+                }
             }
             continue;
         }
@@ -1027,6 +1101,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         is_nested: false,
                         hint: Some("Keep unless you're sure \u{2014} may contain shipped output you haven't deployed".to_string()),
                         active_build: false,
+                        in_use: None,
                     });
                 }
             }
@@ -1044,8 +1119,9 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
 fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<DevArtifact>) {
     // Check for .cache subdirectory FIRST (it hides inside node_modules)
     let cache_subdir = nm_path.join(".cache");
-    if cache_subdir.exists() && cache_subdir.is_dir() {
-        let cache_size = dir_size(&cache_subdir);
+    let mut cache_size = 0;
+    if cache_subdir.exists() && cache_subdir.is_dir() && !is_symlink(&cache_subdir) {
+        cache_size = dir_size(&cache_subdir);
         if cache_size > 0 {
             artifacts.push(DevArtifact {
                 path: cache_subdir.to_string_lossy().to_string(),
@@ -1055,17 +1131,19 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
                 kind: "node_modules/.cache (build cache)".to_string(),
                 project: get_project_name(nm_path),
                 staleness_days: None,
-                is_nested: true, // Size is included in parent node_modules total
+                is_nested: true, // Excluded from the parent row's size below
                 hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
                 active_build: false,
+                in_use: None,
             });
         }
     }
 
-    // Get total node_modules size (includes .cache)
-    let total_size = dir_size(nm_path);
+    // node_modules row = everything except the nested .cache row, so each byte
+    // is counted once and the SAFE/REINSTALL tiles match their rows
+    let total_size = dir_size(nm_path).saturating_sub(cache_size);
     if total_size > 0 {
-        let staleness = check_project_staleness(project_dir);
+        let staleness = check_project_staleness(nm_path, project_dir);
 
         artifacts.push(DevArtifact {
             path: nm_path.to_string_lossy().to_string(),
@@ -1078,6 +1156,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
             is_nested: false,
             hint: Some("Rebuilds on next npm install \u{2014} needs network, may resolve different versions".to_string()),
             active_build: false,
+            in_use: None,
         });
     }
 }
@@ -1112,6 +1191,19 @@ pub struct DevDeleteResult {
     pub bytes_freed: u64,
     pub bytes_freed_display: String,
     pub errors: Vec<String>,
+    /// Safe-tier artifacts left in place because they look in use
+    #[serde(default)]
+    pub skipped: Vec<SkippedArtifact>,
+}
+
+/// An artifact the delete pass deliberately left alone, with a UI-ready reason
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkippedArtifact {
+    pub path: String,
+    pub size_bytes: u64,
+    pub size_display: String,
+    /// e.g. "modified 2h ago", "in use by node"
+    pub reason: String,
 }
 
 // ============================================================================
@@ -1350,6 +1442,173 @@ fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
     fs::remove_dir_all(path).map_err(|e| e.to_string()).map(|_| PathBuf::new())
 }
 
+// ============================================================================
+// In-use guards for Safe-tier deletes
+// ============================================================================
+
+/// Safe-tier artifacts modified more recently than this are left alone
+const RECENT_WINDOW: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Process names whose working directory marks a project as in use
+const PROJECT_PROCESS_NAMES: &[&str] = &["node", "npm", "pnpm", "yarn", "bun", "vite", "next"];
+
+/// Executables that are npm itself
+const NPM_EXECUTABLES: &[&str] = &["npm", "npx"];
+
+/// Entry scripts that mark a `node` process as npm itself (node .../npm-cli.js)
+const NPM_ENTRY_SCRIPTS: &[(&str, &str)] = &[("npm-cli.js", "npm"), ("npx-cli.js", "npx")];
+
+/// Artifact directory names that live directly inside a project root
+const PROJECT_SCOPED_NAMES: &[&str] = &[".next", ".vite", ".turbo", ".parcel-cache"];
+
+/// Snapshot of running processes, taken once per delete pass
+struct ProcessSnapshot {
+    /// (command name, working directory) for PROJECT_PROCESS_NAMES
+    cwds: Vec<(String, PathBuf)>,
+    /// "npm" or "npx" if npm itself is running, else None
+    npm_user: Option<String>,
+}
+
+impl ProcessSnapshot {
+    fn capture() -> Self {
+        let mut cmd = Command::new("lsof");
+        cmd.arg("-a").arg("-d").arg("cwd");
+        for name in PROJECT_PROCESS_NAMES {
+            cmd.arg("-c").arg(name);
+        }
+        cmd.arg("-Fcn");
+        // lsof exits 1 when nothing matches; stdout is still valid (empty)
+        let cwds = cmd
+            .output()
+            .map(|o| parse_lsof_cwds(&String::from_utf8_lossy(&o.stdout)))
+            .unwrap_or_default();
+        let npm_user = Command::new("ps")
+            .args(["-axww", "-o", "args="])
+            .output()
+            .ok()
+            .and_then(|o| npm_process_in(String::from_utf8_lossy(&o.stdout).lines()));
+        ProcessSnapshot { cwds, npm_user }
+    }
+}
+
+/// Returns "npm" or "npx" if any command line is npm itself: an npm/npx
+/// executable (including npm's retitled "npm install …" form), or node
+/// running npm-cli.js / npx-cli.js. A bare node process (editor, language
+/// server, dev server) does not count.
+fn npm_process_in<'a>(command_lines: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    command_lines.into_iter().find_map(|line| {
+        let mut args = line.split_whitespace();
+        let exe = args.next()?;
+        let exe_name = Path::new(exe).file_name()?.to_str()?;
+        if let Some(name) = NPM_EXECUTABLES.iter().find(|n| **n == exe_name) {
+            return Some(name.to_string());
+        }
+        args.find_map(|arg| {
+            let script = Path::new(arg).file_name()?.to_str()?;
+            NPM_ENTRY_SCRIPTS
+                .iter()
+                .find(|(entry, _)| *entry == script)
+                .map(|(_, name)| name.to_string())
+        })
+    })
+}
+
+/// Parse `lsof -Fcn` output into (command, cwd) pairs.
+fn parse_lsof_cwds(output: &str) -> Vec<(String, PathBuf)> {
+    let mut pairs = Vec::new();
+    let mut command = String::new();
+    for line in output.lines() {
+        match line.split_at(line.len().min(1)) {
+            ("p", _) => command.clear(),
+            ("c", name) => command = name.to_string(),
+            ("n", path) if !path.is_empty() => pairs.push((command.clone(), PathBuf::from(path))),
+            _ => {}
+        }
+    }
+    pairs
+}
+
+/// Returns the command name of the first process whose cwd is at or under `root`.
+fn process_in_project(cwds: &[(String, PathBuf)], root: &Path) -> Option<String> {
+    cwds.iter()
+        .find(|(_, cwd)| cwd.starts_with(root))
+        .map(|(name, _)| name.clone())
+}
+
+/// Returns the artifact's age if its own mtime is within `window` of `now`.
+fn recently_modified(path: &Path, now: SystemTime, window: std::time::Duration) -> Option<std::time::Duration> {
+    let mtime = fs::symlink_metadata(path).and_then(|m| m.modified()).ok()?;
+    // mtime in the future (clock skew) counts as recent
+    let age = now.duration_since(mtime).unwrap_or_default();
+    (age < window).then_some(age)
+}
+
+/// "just now", "45m ago", "2h ago"
+fn format_age(age: std::time::Duration) -> String {
+    let secs = age.as_secs();
+    if secs < 60 {
+        "just now".to_string()
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else {
+        format!("{}h ago", secs / 3600)
+    }
+}
+
+/// Project root for a project-scoped artifact (.next, node_modules/.cache, …), else None.
+fn project_root_for(path: &Path) -> Option<&Path> {
+    let name = path.file_name()?.to_str()?;
+    let parent = path.parent()?;
+    if PROJECT_SCOPED_NAMES.contains(&name) {
+        return Some(parent);
+    }
+    if name == ".cache" && parent.file_name().and_then(|n| n.to_str()) == Some("node_modules") {
+        return parent.parent();
+    }
+    None
+}
+
+/// Decide whether a Safe-tier artifact should be left alone right now.
+/// `procs` is consulted only when the mtime check passes, so lsof/pgrep run
+/// at most once per delete pass (the caller caches the snapshot).
+fn in_use_reason<F>(path: &Path, home: &Path, now: SystemTime, procs: &mut F) -> Option<String>
+where
+    F: FnMut() -> std::rc::Rc<ProcessSnapshot>,
+{
+    if let Some(age) = recently_modified(path, now, RECENT_WINDOW) {
+        return Some(format!("modified {}", format_age(age)));
+    }
+
+    if path.starts_with(home.join(".npm")) {
+        if let Some(name) = &procs().npm_user {
+            return Some(format!("in use by {}", name));
+        }
+    }
+
+    if let Some(root) = project_root_for(path) {
+        // lsof reports resolved paths (/private/tmp, not /tmp)
+        let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+        if let Some(name) = process_in_project(&procs().cwds, &root) {
+            return Some(format!("in use by {}", name));
+        }
+    }
+
+    None
+}
+
+/// Mark SAFE rows that a delete would skip right now, so the UI can show the
+/// reason instead of a delete button. Uses the delete guard's own predicate;
+/// lsof/ps run at most once, and only if some SAFE row is older than 24h.
+fn annotate_in_use(artifacts: &mut [DevArtifact]) {
+    let home = get_home_dir();
+    let now = SystemTime::now();
+    let mut snapshot: Option<std::rc::Rc<ProcessSnapshot>> = None;
+    let mut procs = || snapshot.get_or_insert_with(|| std::rc::Rc::new(ProcessSnapshot::capture())).clone();
+    for a in artifacts.iter_mut().filter(|a| a.tier == ArtifactTier::Safe) {
+        a.in_use = in_use_reason(Path::new(&a.path), &home, now, &mut procs);
+    }
+}
+
 fn delete_dev_artifacts_inner(
     paths: &[String],
     known_artifacts: &[DevArtifact],
@@ -1361,6 +1620,12 @@ fn delete_dev_artifacts_inner(
     let mut deleted_count = 0usize;
     let mut bytes_freed = 0u64;
     let mut errors = Vec::new();
+    let mut skipped = Vec::new();
+
+    let home = get_home_dir();
+    let now = SystemTime::now();
+    let mut snapshot: Option<std::rc::Rc<ProcessSnapshot>> = None;
+    let mut procs = || snapshot.get_or_insert_with(|| std::rc::Rc::new(ProcessSnapshot::capture())).clone();
 
     for path_str in paths {
         // Safety: only delete paths that were in the scan result
@@ -1418,17 +1683,39 @@ fn delete_dev_artifacts_inner(
             continue;
         }
 
+        // In-use guard: leave Safe-tier artifacts alone if recently modified
+        // or a relevant process is working in them
+        if let Some(a) = artifact.filter(|a| a.tier == ArtifactTier::Safe) {
+            if let Some(reason) = in_use_reason(path, &home, now, &mut procs) {
+                crate::cache_cleaner::log_deletion(&format!(
+                    "DEV_ARTIFACT_SKIPPED: {} | size={} | tier={} | reason={}",
+                    path_str, a.size_display, a.tier.label(), reason
+                ));
+                skipped.push(SkippedArtifact {
+                    path: path_str.clone(),
+                    size_bytes: a.size_bytes,
+                    size_display: a.size_display.clone(),
+                    reason,
+                });
+                continue;
+            }
+        }
+
         let expected_bytes = artifact.map(|a| a.size_bytes).unwrap_or(0);
         let tier_label = artifact.map(|a| a.tier.label()).unwrap_or("unknown");
         let tier = artifact.map(|a| a.tier);
 
         // Decide mechanism: manual deletes of Rebuildable/SafeWithReinstall go to Trash
-        // (recoverable). Safe-tier and bulk deletes are permanent (caches regenerate instantly).
-        let use_trash = allow_non_safe
-            && matches!(
-                tier,
-                Some(ArtifactTier::Rebuildable) | Some(ArtifactTier::SafeWithReinstall)
-            );
+        // (recoverable), as does anything nested inside another artifact (e.g.
+        // node_modules/.cache inside a REINSTALL parent). Other Safe-tier deletes
+        // are permanent (caches regenerate instantly).
+        let nested = artifact.map(|a| a.is_nested).unwrap_or(false);
+        let use_trash = nested
+            || (allow_non_safe
+                && matches!(
+                    tier,
+                    Some(ArtifactTier::Rebuildable) | Some(ArtifactTier::SafeWithReinstall)
+                ));
 
         let mechanism = if use_trash { "trash" } else { "permanent" };
 
@@ -1465,6 +1752,7 @@ fn delete_dev_artifacts_inner(
         bytes_freed,
         bytes_freed_display: format_size(bytes_freed),
         errors,
+        skipped,
     }
 }
 
@@ -1505,33 +1793,9 @@ fn log_artifact_deletion(path: &str, size_bytes: u64, tier: &str, trigger: &str,
     }
 }
 
-/// Format a UTC timestamp for log entries (matches cache_cleaner format)
+/// Timestamp for log entries (shared with cache_cleaner)
 fn format_log_timestamp() -> String {
-    let now = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    let secs_per_day = 86400u64;
-    let secs_per_hour = 3600u64;
-    let secs_per_min = 60u64;
-
-    let days_since_epoch = now / secs_per_day;
-    let time_of_day = now % secs_per_day;
-
-    let hours = time_of_day / secs_per_hour;
-    let minutes = (time_of_day % secs_per_hour) / secs_per_min;
-    let seconds = time_of_day % secs_per_min;
-
-    let years = 1970 + (days_since_epoch / 365);
-    let remaining_days = days_since_epoch % 365;
-    let months = remaining_days / 30 + 1;
-    let days = remaining_days % 30 + 1;
-
-    format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        years, months, days, hours, minutes, seconds
-    )
+    crate::cache_cleaner::chrono_format_now()
 }
 
 // ============================================================================
@@ -1541,6 +1805,392 @@ fn format_log_timestamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Set a path's mtime `hours` into the past (or future, if negative)
+    fn backdate(path: &Path, hours: i64) {
+        let offset = std::time::Duration::from_secs(hours.unsigned_abs() * 3600);
+        let when = if hours >= 0 {
+            SystemTime::now() - offset
+        } else {
+            SystemTime::now() + offset
+        };
+        fs::File::open(path).unwrap().set_modified(when).unwrap();
+    }
+
+    fn snapshot(cwds: &[(&str, &str)], npm_user: Option<&str>) -> std::rc::Rc<ProcessSnapshot> {
+        std::rc::Rc::new(ProcessSnapshot {
+            cwds: cwds.iter().map(|(c, p)| (c.to_string(), PathBuf::from(p))).collect(),
+            npm_user: npm_user.map(String::from),
+        })
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: mtime predicate
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_recently_modified_predicate() {
+        let tmp = std::env::temp_dir().join("ss-recency-test");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        let now = SystemTime::now();
+
+        // Fresh dir: recent
+        let age = recently_modified(&tmp, now, RECENT_WINDOW).expect("fresh dir is recent");
+        assert_eq!(format_age(age), "just now");
+
+        // 2h old: recent, reported in hours
+        backdate(&tmp, 2);
+        let age = recently_modified(&tmp, SystemTime::now(), RECENT_WINDOW).expect("2h is inside 24h");
+        assert_eq!(format!("modified {}", format_age(age)), "modified 2h ago");
+
+        // 48h old: not recent
+        backdate(&tmp, 48);
+        assert!(recently_modified(&tmp, SystemTime::now(), RECENT_WINDOW).is_none());
+
+        // Future mtime (clock skew): treated as recent
+        backdate(&tmp, -1);
+        assert!(recently_modified(&tmp, SystemTime::now(), RECENT_WINDOW).is_some());
+
+        // Missing path: not recent (nothing to guard)
+        assert!(recently_modified(&tmp.join("missing"), now, RECENT_WINDOW).is_none());
+
+        assert_eq!(format_age(std::time::Duration::from_secs(45 * 60)), "45m ago");
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: cwd-under-root predicate and lsof parsing
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_process_in_project_predicate() {
+        let cwds = snapshot(
+            &[("node", "/work/app/packages/web"), ("vite", "/work/app2"), ("npm", "/work")],
+            None,
+        );
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/app")), Some("node".into()));
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/app2")), Some("vite".into()));
+        // Component-wise match: /work/app must not match /work/app2 or /work/application
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/application")), None);
+        // A process in a parent directory does not mark the child project as in use
+        assert_eq!(process_in_project(&cwds.cwds, Path::new("/work/other")), None);
+        assert_eq!(process_in_project(&[], Path::new("/work/app")), None);
+    }
+
+    #[test]
+    fn test_npm_guard_matches_npm_not_bare_node() {
+        // npm itself, in each form it shows up in `ps -o args=`
+        assert_eq!(npm_process_in(["npm install lodash"]), Some("npm".into()));
+        assert_eq!(npm_process_in(["npm run dev --port 3003"]), Some("npm".into()));
+        assert_eq!(npm_process_in(["/opt/homebrew/bin/npm ci"]), Some("npm".into()));
+        assert_eq!(npm_process_in(["npx vite"]), Some("npx".into()));
+        assert_eq!(
+            npm_process_in(["/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install"]),
+            Some("npm".into())
+        );
+        assert_eq!(
+            npm_process_in(["node /usr/local/lib/node_modules/npm/bin/npx-cli.js create-vite"]),
+            Some("npx".into())
+        );
+
+        // Bare node processes must not trip the guard
+        let bare_node = [
+            "/Applications/Cursor.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin) --type=utility",
+            "/usr/local/bin/node /Users/me/.vscode/extensions/ts/tsserver.js --useInferredProjectPerProjectRoot",
+            "node /Users/me/site/node_modules/.bin/next dev",
+            "node /Users/me/npm-tools/index.js",
+            "/usr/local/bin/npmrc-switcher list",
+        ];
+        assert_eq!(npm_process_in(bare_node), None);
+        assert_eq!(npm_process_in(Vec::<&str>::new()), None);
+
+        // Found among other processes
+        assert_eq!(
+            npm_process_in(["node /x/server.js", "", "npm install"]),
+            Some("npm".into())
+        );
+    }
+
+    #[test]
+    fn test_parse_lsof_cwds() {
+        let out = "p101\ncnode\nfcwd\nn/Users/me/proj\np202\ncnext-server\nfcwd\nn/private/tmp/site\n";
+        assert_eq!(
+            parse_lsof_cwds(out),
+            vec![
+                ("node".to_string(), PathBuf::from("/Users/me/proj")),
+                ("next-server".to_string(), PathBuf::from("/private/tmp/site")),
+            ]
+        );
+        assert!(parse_lsof_cwds("").is_empty());
+    }
+
+    #[test]
+    fn test_reclassified_tiers() {
+        let tmp = std::env::temp_dir().join("ss-reclassify-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let caches = tmp.join("Library").join("Caches");
+        for d in ["ms-playwright", "com.example.app.ShipIt", "pip"] {
+            fs::create_dir_all(caches.join(d)).unwrap();
+            fs::write(caches.join(d).join("f"), "x").unwrap();
+        }
+        let project = tmp.join("proj");
+        fs::create_dir_all(project.join("coverage")).unwrap();
+        fs::write(project.join("coverage").join("lcov.info"), "x").unwrap();
+        fs::write(project.join("package.json"), "{}").unwrap();
+
+        let mut artifacts = Vec::new();
+        scan_library_caches(&tmp, &mut artifacts);
+        scan_project_root(&tmp, &mut artifacts, 0);
+        let tier_of = |suffix: &str| {
+            artifacts.iter().find(|a| a.path.ends_with(suffix)).map(|a| a.tier)
+        };
+
+        assert_eq!(tier_of("ms-playwright"), Some(ArtifactTier::Rebuildable));
+        assert_eq!(tier_of(".ShipIt"), Some(ArtifactTier::Rebuildable));
+        assert_eq!(tier_of("coverage"), Some(ArtifactTier::Ask));
+        assert_eq!(tier_of("pip"), Some(ArtifactTier::Safe));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_staleness_uses_artifact_and_git_index() {
+        let tmp = std::env::temp_dir().join("ss-staleness-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let project = tmp.join("proj");
+        let nm = project.join("node_modules");
+        let src = project.join("src");
+        fs::create_dir_all(&nm).unwrap();
+        fs::create_dir_all(&src).unwrap();
+
+        // src/ is fresh but no longer counts; only the artifact does
+        backdate(&nm, 10 * 24);
+        assert_eq!(check_project_staleness(&nm, &project), Some(10));
+
+        // A recent git index wins over an old artifact
+        fs::create_dir_all(project.join(".git")).unwrap();
+        fs::write(project.join(".git").join("index"), "x").unwrap();
+        backdate(&project.join(".git").join("index"), 3 * 24);
+        assert_eq!(check_project_staleness(&nm, &project), Some(3));
+
+        // An artifact newer than the git index wins
+        backdate(&nm, 0);
+        assert_eq!(check_project_staleness(&nm, &project), Some(0));
+
+        // Nothing readable: unknown
+        assert_eq!(check_project_staleness(&tmp.join("missing"), &tmp.join("nope")), None);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_tier_tiles_equal_rows_and_sum_to_total() {
+        let tmp = std::env::temp_dir().join("ss-tiles-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let web = tmp.join("web");
+        let write = |p: PathBuf, n: usize| {
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, vec![0u8; n]).unwrap();
+        };
+        write(web.join("package.json"), 2);
+        write(web.join("node_modules").join("react").join("index.js"), 5_000);
+        write(web.join("node_modules").join(".cache").join("babel").join("x.json"), 700);
+        write(web.join(".next").join("cache").join("webpack.pack"), 3_000);
+        write(web.join("dist").join("app.js"), 1_100);
+        write(web.join("coverage").join("lcov.info"), 90);
+        let rust = tmp.join("svc");
+        write(rust.join("Cargo.toml"), 2);
+        write(rust.join("target").join("debug").join("svc"), 9_000);
+
+        let mut artifacts = Vec::new();
+        scan_project_root(&tmp, &mut artifacts, 0);
+        let t = TierTotals::of(&artifacts);
+        let rows = |tier: ArtifactTier| -> u64 {
+            artifacts.iter().filter(|a| a.tier == tier).map(|a| a.size_bytes).sum()
+        };
+
+        // Each tile equals the sum of the rows shown under it
+        assert_eq!(t.safe, rows(ArtifactTier::Safe));
+        assert_eq!(t.rebuildable, rows(ArtifactTier::Rebuildable));
+        assert_eq!(t.safe_with_reinstall, rows(ArtifactTier::SafeWithReinstall));
+        assert_eq!(t.ask, rows(ArtifactTier::Ask));
+        // SAFE + REBUILD + REINSTALL + REVIEW == total, and total == all rows
+        assert_eq!(t.safe + t.rebuildable + t.safe_with_reinstall + t.ask, t.total);
+        assert_eq!(t.total, artifacts.iter().map(|a| a.size_bytes).sum::<u64>());
+
+        // node_modules/.cache is its own SAFE row; the parent row excludes it
+        let row = |suffix: &str| artifacts.iter().find(|a| a.path.ends_with(suffix)).unwrap();
+        let nm_cache = row("node_modules/.cache");
+        assert_eq!((nm_cache.tier, nm_cache.is_nested, nm_cache.size_bytes), (ArtifactTier::Safe, true, 700));
+        assert_eq!(row("web/node_modules").size_bytes, 5_000);
+        assert_eq!(t.safe, 700 + 3_000); // .cache + .next
+        // Every byte on disk under the artifacts is counted exactly once
+        assert_eq!(t.total, 5_000 + 700 + 3_000 + 1_100 + 90 + 9_000);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_nested_cache_delete_goes_to_trash() {
+        let tmp = std::env::temp_dir().join("ss-nested-trash-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let cache = tmp.join("proj").join("node_modules").join(".cache");
+        fs::create_dir_all(&cache).unwrap();
+        fs::write(cache.join("x"), "x").unwrap();
+        backdate(&cache, 48);
+        let path = cache.to_string_lossy().to_string();
+        let artifact = DevArtifact {
+            path: path.clone(),
+            size_bytes: 1,
+            size_display: "1 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: "node_modules/.cache (build cache)".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: true,
+            hint: None,
+            active_build: false,
+            in_use: None,
+        };
+
+        // Bulk (Clean Now) path: still Trash, because it sits inside a REINSTALL parent
+        let result = delete_dev_artifacts(&[path.clone()], &[artifact]);
+        assert_eq!(result.deleted_count, 1);
+        assert!(!cache.exists());
+        let manifest = load_trash_manifest();
+        let entry = manifest.iter().rev().find(|i| i.original_path == path);
+        assert!(entry.is_some(), "nested delete must be recorded as a Trash move");
+        let trashed = PathBuf::from(&entry.unwrap().trash_path);
+        assert!(trashed.starts_with(get_home_dir().join(".Trash")));
+
+        // Clean up: remove our Trash item and its manifest entry
+        let _ = fs::remove_dir_all(&trashed);
+        save_trash_manifest(&manifest.into_iter().filter(|i| i.original_path != path).collect::<Vec<_>>());
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_scan_marks_in_use_safe_rows() {
+        let tmp = std::env::temp_dir().join("ss-annotate-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let web = tmp.join("web");
+        fs::create_dir_all(web.join(".next")).unwrap();
+        fs::write(web.join(".next").join("a"), vec![0u8; 300]).unwrap();
+        fs::create_dir_all(web.join(".turbo")).unwrap();
+        fs::write(web.join(".turbo").join("b"), vec![0u8; 200]).unwrap();
+        fs::write(web.join("package.json"), "{}").unwrap();
+        backdate(&web.join(".turbo"), 48);
+
+        let mut artifacts = Vec::new();
+        scan_project_root(&tmp, &mut artifacts, 0);
+        annotate_in_use(&mut artifacts);
+        let row = |suffix: &str| artifacts.iter().find(|a| a.path.ends_with(suffix)).unwrap();
+
+        assert_eq!(row(".next").in_use.as_deref(), Some("modified just now"));
+        assert_eq!(row(".turbo").in_use, None);
+        let t = TierTotals::of(&artifacts);
+        assert_eq!(t.safe, 500, "SAFE tile counts every SAFE row");
+        assert_eq!(t.safe_deletable, 200, "Clean Now amount excludes in-use rows");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_project_root_for() {
+        assert_eq!(project_root_for(Path::new("/w/app/.next")), Some(Path::new("/w/app")));
+        assert_eq!(project_root_for(Path::new("/w/app/.vite")), Some(Path::new("/w/app")));
+        assert_eq!(
+            project_root_for(Path::new("/w/app/node_modules/.cache")),
+            Some(Path::new("/w/app"))
+        );
+        assert_eq!(project_root_for(Path::new("/Users/me/.npm/_cacache")), None);
+        assert_eq!(project_root_for(Path::new("/Users/me/Library/Caches/pip")), None);
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: full decision with a mocked process list
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_in_use_reason_with_mocked_processes() {
+        let tmp = std::env::temp_dir().join("ss-inuse-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let project = tmp.join("site");
+        let next_dir = project.join(".next");
+        fs::create_dir_all(&next_dir).unwrap();
+        let home = tmp.join("home");
+        let npm_cache = home.join(".npm").join("_cacache");
+        fs::create_dir_all(&npm_cache).unwrap();
+        let root = project.canonicalize().unwrap();
+        let root_str = root.to_string_lossy().to_string();
+
+        // Recent: skipped on mtime alone, process list never consulted
+        let mut calls = 0;
+        let mut procs = || { calls += 1; snapshot(&[], None) };
+        let reason = in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs);
+        assert_eq!(reason.as_deref(), Some("modified just now"));
+        assert_eq!(calls, 0);
+
+        backdate(&next_dir, 48);
+        backdate(&npm_cache, 48);
+
+        // Old + dev server running in the project: skipped
+        let mut procs = || snapshot(&[("node", &root_str)], None);
+        assert_eq!(
+            in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs).as_deref(),
+            Some("in use by node")
+        );
+
+        // Old + dev server in a sibling project: deletable
+        let sibling = tmp.join("site-two").to_string_lossy().to_string();
+        let mut procs = || snapshot(&[("node", &sibling)], None);
+        assert_eq!(in_use_reason(&next_dir, &home, SystemTime::now(), &mut procs), None);
+
+        // ~/.npm while npm runs: skipped; idle: deletable
+        let mut procs = || snapshot(&[], Some("npm"));
+        assert_eq!(
+            in_use_reason(&npm_cache, &home, SystemTime::now(), &mut procs).as_deref(),
+            Some("in use by npm")
+        );
+        let mut procs = || snapshot(&[], None);
+        assert_eq!(in_use_reason(&npm_cache, &home, SystemTime::now(), &mut procs), None);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ----------------------------------------------------------------
+    // In-use guard: bulk delete reports and keeps a fresh Safe artifact
+    // ----------------------------------------------------------------
+    #[test]
+    fn test_bulk_delete_skips_recent_safe_artifact() {
+        let tmp = std::env::temp_dir().join("ss-skip-recent-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let fresh = tmp.join("proj").join(".turbo");
+        fs::create_dir_all(&fresh).unwrap();
+        fs::write(fresh.join("cache.bin"), "x").unwrap();
+        let path = fresh.to_string_lossy().to_string();
+
+        let artifact = DevArtifact {
+            path: path.clone(),
+            size_bytes: 1,
+            size_display: "1 B".to_string(),
+            tier: ArtifactTier::Safe,
+            kind: ".turbo cache".to_string(),
+            project: None,
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: false,
+            in_use: None,
+        };
+
+        let result = delete_dev_artifacts(&[path.clone()], &[artifact]);
+        assert_eq!(result.deleted_count, 0);
+        assert!(fresh.exists(), "Recently modified Safe artifact must survive");
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].path, path);
+        assert_eq!(result.skipped[0].reason, "modified just now");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
 
     #[test]
     fn test_artifact_tier_labels() {
@@ -1639,6 +2289,8 @@ mod tests {
             // Write a marker file so the dir isn't empty
             fs::write(d.join("marker.txt"), "test").unwrap();
         }
+        // Age the Safe fixture past the in-use guard's recency window
+        backdate(&safe_dir, 48);
 
         let artifacts = vec![
             DevArtifact {
@@ -1652,6 +2304,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
             DevArtifact {
                 path: rebuild_dir.to_string_lossy().to_string(),
@@ -1664,6 +2317,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
             DevArtifact {
                 path: reinstall_dir.to_string_lossy().to_string(),
@@ -1676,6 +2330,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
             DevArtifact {
                 path: ask_dir.to_string_lossy().to_string(),
@@ -1688,6 +2343,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             },
         ];
 
@@ -1706,6 +2362,7 @@ mod tests {
         // Recreate safe dir for manual test
         fs::create_dir_all(&safe_dir).unwrap();
         fs::write(safe_dir.join("marker.txt"), "test").unwrap();
+        backdate(&safe_dir, 48);
 
         // --- Test 2: Manual delete should allow Safe + Rebuildable + SafeWithReinstall but reject Ask ---
         let result = delete_dev_artifacts_manual(&all_paths, &artifacts);
@@ -1781,6 +2438,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         // Attempt deletion — this calls fs::remove_dir_all on the symlink path
@@ -1950,6 +2608,10 @@ mod tests {
 
         let mut artifacts = Vec::new();
         check_home_cache(&fake_home, ".npm", "npm global cache", &mut artifacts);
+        // Nested target reached through the symlinked ~/.npm must also be skipped
+        fs::create_dir_all(important.join("_cacache")).unwrap();
+        fs::write(important.join("_cacache").join("blob"), "data").unwrap();
+        check_home_cache(&fake_home, ".npm/_cacache", "npm package cache", &mut artifacts);
 
         // With the symlink guard, check_home_cache must now skip symlinked paths
         assert!(
@@ -2024,6 +2686,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: true, // ACTIVE BUILD
+            in_use: None,
         };
 
         // Bulk delete should refuse
@@ -2094,6 +2757,7 @@ mod tests {
                 is_nested: false,
                 hint: None,
                 active_build: false,
+                in_use: None,
             };
 
             // Bulk delete
@@ -2132,6 +2796,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
         let result = delete_dev_artifacts(&[deep_path.clone()], &[deep_artifact]);
         // Should NOT have a depth-guard error (may have "doesn't exist" skip, that's fine)
@@ -2250,6 +2915,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         let result = delete_dev_artifacts_manual(
@@ -2289,6 +2955,7 @@ mod tests {
         let safe_dir = tmp.join("caches").join("npm").join("cache");
         fs::create_dir_all(&safe_dir).unwrap();
         fs::write(safe_dir.join("pkg.tgz"), "cache data").unwrap();
+        backdate(&safe_dir, 48);
 
         let safe_artifact = DevArtifact {
             path: safe_dir.to_string_lossy().to_string(),
@@ -2301,6 +2968,7 @@ mod tests {
             is_nested: false,
             hint: None,
             active_build: false,
+            in_use: None,
         };
 
         let result = delete_dev_artifacts(
