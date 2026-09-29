@@ -403,6 +403,13 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Relaunch the application (applies an installed update)
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) {
+    log_updater("restarting to apply update");
+    app.restart();
+}
+
 /// Test notification (debug only) - uses the same notification path as real notifications
 #[tauri::command]
 fn test_notification(app: tauri::AppHandle) {
@@ -1146,6 +1153,7 @@ pub fn run() {
             get_last_clean_time,
             get_last_clean_freed,
             quit_app,
+            restart_app,
             test_notification,
             open_notification_settings,
             open_storage_settings,

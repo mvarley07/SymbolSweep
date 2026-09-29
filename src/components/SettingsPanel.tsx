@@ -248,7 +248,7 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
             </div>
             <button
               className="update-check-btn"
-              onClick={handleCheckUpdate}
+              onClick={updateStatus === 'installed' ? () => invoke('restart_app') : handleCheckUpdate}
               disabled={updateStatus === 'checking'}
             >
               {updateStatus === 'checking' ? 'Checking...' :
