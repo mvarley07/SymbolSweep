@@ -10,6 +10,16 @@ cd "$REPO"
 VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
 NOTES="${1:-SymbolSweep ${VERSION}}"
 
+# Updater signing key: tauri build signs the .app.tar.gz with it and fails without it
+SIGNING_KEY="$HOME/.tauri/symbolsweep.key"
+if [ ! -f "$SIGNING_KEY" ]; then
+  echo "ERROR: updater signing key not found: $SIGNING_KEY" >&2
+  echo "       It must match the pubkey in src-tauri/tauri.conf.json (plugins.updater.pubkey)." >&2
+  exit 1
+fi
+export TAURI_SIGNING_PRIVATE_KEY="$(cat "$SIGNING_KEY")"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=''
+
 echo "==> 1/6  Installing deps + building signed .app + .dmg (Tauri signs during bundle)"
 npm install
 npm run tauri build
