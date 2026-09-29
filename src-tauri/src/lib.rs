@@ -1078,6 +1078,44 @@ pub fn run() {
                             let _ = app_handle_bg.emit("app-status-update", &app_status);
                             let _ = app_handle_bg.emit("dev-scan-ready", &result);
                         });
+                    } else if !stale {
+                        // Fresh scan: recheck only the held-back rows, so a
+                        // build that just ended stops showing "Building now"
+                        let app_handle_bg = app_handle.clone();
+                        let settings_bg = Arc::clone(&settings_show);
+                        let dev_result_bg = Arc::clone(&dev_result_show);
+                        let dev_in_progress_bg = Arc::clone(&dev_in_progress_show);
+                        let dev_scan_epoch_bg = Arc::clone(&dev_scan_epoch_show);
+                        std::thread::spawn(move || {
+                            let epoch = dev_scan_epoch_bg.load(std::sync::atomic::Ordering::SeqCst);
+                            let Some(mut result) = dev_result_bg.lock().unwrap().clone() else { return };
+                            if !dev_scanner::recheck_held_back(&mut result) {
+                                return;
+                            }
+                            // A full scan that ran or started meanwhile wins
+                            {
+                                let mut cached = dev_result_bg.lock().unwrap();
+                                if dev_in_progress_bg.load(std::sync::atomic::Ordering::SeqCst)
+                                    || dev_scan_epoch_bg.load(std::sync::atomic::Ordering::SeqCst) != epoch
+                                {
+                                    return;
+                                }
+                                *cached = Some(result.clone());
+                            }
+                            let cache_status = {
+                                let s = settings_bg.lock().unwrap();
+                                if s.debug_mode {
+                                    get_simulated_status(s.debug_simulated_size)
+                                } else {
+                                    get_cache_status()
+                                }
+                            };
+                            let failures = settings_bg.lock().unwrap().consecutive_autoclean_failures;
+                            let app_status = compute_app_status(&cache_status, result.totals(), true, failures);
+                            let _ = update_tray(&app_handle_bg, &app_status);
+                            let _ = app_handle_bg.emit("app-status-update", &app_status);
+                            let _ = app_handle_bg.emit("dev-scan-ready", &result);
+                        });
                     }
                 });
             }

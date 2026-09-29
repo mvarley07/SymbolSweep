@@ -383,6 +383,23 @@ impl TierTotals {
 }
 
 impl DevScanResult {
+    /// Recompute the tier totals from the rows (after a recheck changed some)
+    fn refresh_totals(&mut self) {
+        let t = TierTotals::of(&self.artifacts);
+        self.total_bytes = t.total;
+        self.total_display = format_size(t.total);
+        self.safe_bytes = t.safe;
+        self.safe_display = format_size(t.safe);
+        self.safe_deletable_bytes = t.safe_deletable;
+        self.safe_deletable_display = format_size(t.safe_deletable);
+        self.rebuildable_bytes = t.rebuildable;
+        self.rebuildable_display = format_size(t.rebuildable);
+        self.safe_with_reinstall_bytes = t.safe_with_reinstall;
+        self.safe_with_reinstall_display = format_size(t.safe_with_reinstall);
+        self.ask_bytes = t.ask;
+        self.ask_display = format_size(t.ask);
+    }
+
     /// The totals the unified AppStatus is computed from
     pub fn totals(&self) -> crate::cache_monitor::DevTotals {
         crate::cache_monitor::DevTotals {
@@ -1836,6 +1853,35 @@ fn annotate_in_use(artifacts: &mut [DevArtifact]) {
     }
 }
 
+/// Re-evaluate only the rows held back right now (building, or a Safe row in
+/// use) and release any whose reason has gone, so "Building now" clears the
+/// moment a build ends. No directory walk: one lsof/ps snapshot. Returns
+/// whether any row changed.
+pub fn recheck_held_back(result: &mut DevScanResult) -> bool {
+    let home = get_home_dir();
+    let now = SystemTime::now();
+    let mut snapshot: Option<std::rc::Rc<ProcessSnapshot>> = None;
+    let mut procs = || snapshot.get_or_insert_with(|| std::rc::Rc::new(ProcessSnapshot::capture())).clone();
+    let mut changed = false;
+    for a in result.artifacts.iter_mut() {
+        if a.active_build && !is_active_build(Path::new(&a.path)) {
+            a.active_build = false;
+            changed = true;
+        }
+        if a.tier == ArtifactTier::Safe && a.in_use.is_some() {
+            let reason = in_use_reason(Path::new(&a.path), &home, now, &mut procs);
+            if reason != a.in_use {
+                a.in_use = reason;
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        result.refresh_totals();
+    }
+    changed
+}
+
 fn delete_dev_artifacts_inner(
     paths: &[String],
     known_artifacts: &[DevArtifact],
@@ -3143,6 +3189,43 @@ mod tests {
             .collect();
         // 30 is rust-analyzer's cargo check; 50 is a rustc under it; 40 is a terminal cargo build
         assert_eq!(kept, vec![(40, "cargo".to_string(), PathBuf::from("/w/b"))]);
+    }
+
+    #[test]
+    fn test_recheck_releases_a_finished_build() {
+        let tmp = std::env::temp_dir().join("ss-recheck-test");
+        let _ = fs::remove_dir_all(&tmp);
+        let target = rust_project(&tmp.join("done"));
+        fs::write(target.join("big"), vec![0u8; 1000]).unwrap();
+        let row = DevArtifact {
+            path: target.to_string_lossy().to_string(),
+            size_bytes: 1000,
+            size_display: "1000 B".to_string(),
+            tier: ArtifactTier::Rebuildable,
+            kind: "Rust target (build artifacts)".to_string(),
+            project: Some("done".to_string()),
+            staleness_days: None,
+            is_nested: false,
+            hint: None,
+            active_build: true, // flagged by an earlier scan; the build has since ended
+            in_use: None,
+        };
+        let mut result = DevScanResult {
+            artifacts: vec![row],
+            total_bytes: 0, total_display: String::new(),
+            safe_bytes: 0, safe_display: String::new(),
+            safe_deletable_bytes: 0, safe_deletable_display: String::new(),
+            rebuildable_bytes: 0, rebuildable_display: String::new(),
+            safe_with_reinstall_bytes: 0, safe_with_reinstall_display: String::new(),
+            ask_bytes: 0, ask_display: String::new(),
+            scan_duration_ms: 0, scan_roots: vec![],
+        };
+        // No cargo works in this temp project and its files are an hour old
+        assert!(recheck_held_back(&mut result), "a finished build is released");
+        assert!(!result.artifacts[0].active_build);
+        assert_eq!(result.rebuildable_bytes, 1000, "totals are recomputed");
+        assert!(!recheck_held_back(&mut result), "nothing left to release");
+        let _ = fs::remove_dir_all(&tmp);
     }
 
     /// Test: unknown paths (not in scan result) are never deleted
