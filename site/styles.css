@@ -613,6 +613,10 @@ code {
   margin-bottom: var(--space-xs);
 }
 
+.mock .safe-to-clean .total-label {
+  white-space: nowrap;
+}
+
 .mock .safe-to-clean .artifacts-list {
   min-height: 0;
   overflow-y: auto;
@@ -755,7 +759,7 @@ code {
   border-radius: var(--badge-radius);
   font-size: var(--font-xs);
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   transition: all 0.3s ease;
 }
 
