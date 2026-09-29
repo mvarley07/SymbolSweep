@@ -1250,11 +1250,38 @@ pub struct PurgeResult {
     pub errors: Vec<String>,
 }
 
+#[cfg(not(test))]
 fn trash_manifest_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home)
         .join("Library/Application Support/com.mvarley07.symbolsweep")
         .join("trash_manifest.json")
+}
+
+/// The Trash folder SymbolSweep moves items into and purges from
+#[cfg(not(test))]
+fn trash_root() -> PathBuf {
+    get_home_dir().join(".Trash")
+}
+
+// Tests never touch the real ~/.Trash or the app's manifest: each test thread
+// gets its own sandbox under the temp dir, so parallel tests can't clobber
+// each other's manifest either.
+#[cfg(test)]
+fn test_sandbox() -> PathBuf {
+    std::env::temp_dir()
+        .join("ss-test-sandbox")
+        .join(format!("{}-{:?}", std::process::id(), std::thread::current().id()))
+}
+
+#[cfg(test)]
+fn trash_manifest_path() -> PathBuf {
+    test_sandbox().join("trash_manifest.json")
+}
+
+#[cfg(test)]
+fn trash_root() -> PathBuf {
+    test_sandbox().join("Trash")
 }
 
 fn load_trash_manifest() -> Vec<TrashedItem> {
@@ -1308,12 +1335,12 @@ pub fn get_ss_trash_info() -> SsTrashInfo {
 /// SAFETY: Only deletes paths inside ~/.Trash. Manifest entries pointing
 /// elsewhere are rejected and logged as errors (defense against corruption).
 pub fn purge_ss_trash() -> PurgeResult {
-    purge_ss_trash_in(&get_home_dir().join(".Trash"), &|_, _, _| {})
+    purge_ss_trash_in(&trash_root(), &|_, _, _| {})
 }
 
 /// Purge with a per-item progress callback: `(current_index, total_count, bytes_freed_so_far)`.
 pub fn purge_ss_trash_with_progress(on_progress: &dyn Fn(usize, usize, u64)) -> PurgeResult {
-    purge_ss_trash_in(&get_home_dir().join(".Trash"), on_progress)
+    purge_ss_trash_in(&trash_root(), on_progress)
 }
 
 /// Inner implementation accepting an explicit trash root.
@@ -1388,7 +1415,7 @@ pub fn delete_dev_artifacts_manual(paths: &[String], known_artifacts: &[DevArtif
 /// Move a file or directory to macOS Trash using NSFileManager.trashItemAtURL.
 /// Returns Ok(trash_path) with the actual path in ~/.Trash where the item landed,
 /// or Err with a description. Uses the objc crate (already a dependency).
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
     use objc::runtime::{Class, Object, BOOL, YES};
     use objc::{msg_send, sel, sel_impl};
@@ -1450,10 +1477,26 @@ fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(test)))]
 fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
     // Non-macOS fallback: permanent delete (no trash path)
     fs::remove_dir_all(path).map_err(|e| e.to_string()).map(|_| PathBuf::new())
+}
+
+/// Test stand-in: move into the sandbox Trash, renaming on collision like Finder
+#[cfg(test)]
+fn move_to_trash(path: &Path) -> Result<PathBuf, String> {
+    let trash = trash_root();
+    fs::create_dir_all(&trash).map_err(|e| e.to_string())?;
+    let name = path.file_name().ok_or("no file name")?.to_string_lossy().to_string();
+    let mut dest = trash.join(&name);
+    let mut n = 1;
+    while dest.exists() {
+        dest = trash.join(format!("{} {}", name, n));
+        n += 1;
+    }
+    fs::rename(path, &dest).map_err(|e| format!("Trash failed: {}", e))?;
+    Ok(dest)
 }
 
 // ============================================================================
@@ -2074,7 +2117,7 @@ mod tests {
         let entry = manifest.iter().rev().find(|i| i.original_path == path);
         assert!(entry.is_some(), "nested delete must be recorded as a Trash move");
         let trashed = PathBuf::from(&entry.unwrap().trash_path);
-        assert!(trashed.starts_with(get_home_dir().join(".Trash")));
+        assert!(trashed.starts_with(trash_root()));
 
         // Clean up: remove our Trash item and its manifest entry
         let _ = fs::remove_dir_all(&trashed);
@@ -2960,32 +3003,14 @@ mod tests {
         );
         assert_eq!(result.deleted_count, 1, "Rebuildable manual delete should succeed");
         assert!(!rebuild_dir.exists(), "Rebuild dir should no longer be at original path");
-        // The item is now in Trash — we verify by checking ~/.Trash for it.
-        // On macOS, the Trash item may be renamed to avoid conflicts, so we check
-        // for a directory whose name starts with "target".
-        let trash_dir = get_home_dir().join(".Trash");
-        if trash_dir.exists() {
-            let found_in_trash = fs::read_dir(&trash_dir)
-                .map(|entries| {
-                    entries.flatten().any(|e| {
-                        let name = e.file_name().to_string_lossy().to_string();
-                        name.starts_with("target")
-                    })
-                })
-                .unwrap_or(false);
-            println!(
-                "Rebuildable item found in Trash: {} (mechanism: trash)",
-                found_in_trash
-            );
-            // Clean up from Trash
-            if found_in_trash {
-                for entry in fs::read_dir(&trash_dir).unwrap().flatten() {
-                    if entry.file_name().to_string_lossy().starts_with("target") {
-                        let _ = fs::remove_dir_all(entry.path());
-                    }
-                }
-            }
-        }
+        // The item is now in the (sandbox) Trash and recorded in the manifest
+        let rebuild_path = rebuild_dir.to_string_lossy().to_string();
+        let manifest = load_trash_manifest();
+        let entry = manifest.iter().find(|i| i.original_path == rebuild_path)
+            .expect("Rebuildable manual delete must be recorded as a Trash move");
+        let trashed = PathBuf::from(&entry.trash_path);
+        assert!(trashed.starts_with(trash_root()), "trashed item must land in the sandbox Trash");
+        assert!(trashed.join("marker.txt").exists(), "trashed item must be recoverable");
 
         // --- Test 2: Safe bulk delete → permanent ---
         let safe_dir = tmp.join("caches").join("npm").join("cache");
@@ -3013,21 +3038,12 @@ mod tests {
         );
         assert_eq!(result.deleted_count, 1, "Safe bulk delete should succeed");
         assert!(!safe_dir.exists(), "Safe dir should be permanently deleted");
-        // Verify NOT in Trash (permanent)
-        if trash_dir.exists() {
-            let found_cache_in_trash = fs::read_dir(&trash_dir)
-                .map(|entries| {
-                    entries.flatten().any(|e| {
-                        let name = e.file_name().to_string_lossy().to_string();
-                        name == "cache" && e.path().join("pkg.tgz").exists()
-                    })
-                })
-                .unwrap_or(false);
-            println!(
-                "Safe item found in Trash: {} (mechanism: permanent — expected false)",
-                found_cache_in_trash
-            );
-        }
+        // Permanent: never recorded as a Trash move
+        let safe_path = safe_dir.to_string_lossy().to_string();
+        assert!(
+            load_trash_manifest().iter().all(|i| i.original_path != safe_path),
+            "Safe bulk delete must not go to Trash"
+        );
 
         let _ = fs::remove_dir_all(&tmp);
     }
