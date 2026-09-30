@@ -109,6 +109,7 @@ fn get_daemon_status() -> bool {
 /// Clean the cache (with full safety checks)
 #[tauri::command]
 async fn clean(app: tauri::AppHandle, state: tauri::State<'_, AppState>, dry_run: bool) -> Result<CleanResult, String> {
+    state.settings.lock().unwrap().require_license(dry_run)?;
     // Offload blocking file I/O to background thread
     let result = tauri::async_runtime::spawn_blocking(move || clean_cache(dry_run))
         .await
@@ -265,6 +266,7 @@ async fn delete_dev_artifacts_inner(
     paths: Vec<String>,
     manual: bool,
 ) -> Result<DevDeleteResult, String> {
+    state.settings.lock().unwrap().require_license(false)?;
     // Extract needed data from state (fast, sync)
     let known_artifacts = {
         let cached = state.dev_scan_result.lock().unwrap();
@@ -512,7 +514,8 @@ fn get_ss_trash_info() -> SsTrashInfo {
 
 /// Permanently delete only the items SS moved to Trash — never touches other Trash contents
 #[tauri::command]
-async fn purge_ss_trash(app: tauri::AppHandle) -> Result<PurgeResult, String> {
+async fn purge_ss_trash(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<PurgeResult, String> {
+    state.settings.lock().unwrap().require_license(false)?;
     tauri::async_runtime::spawn_blocking(move || {
         dev_scanner::purge_ss_trash_with_progress(&|current, total, bytes_freed| {
             #[derive(Clone, serde::Serialize)]
@@ -851,20 +854,13 @@ pub fn run() {
                     }
 
                     // Check for auto-clean conditions
+                    // Automatic cleaning is licensed-only (free scan mode only scans)
                     let should_auto_clean = {
-                        let s = settings.lock().unwrap();
-                        let threshold_clean = s.auto_clean_on_threshold
-                            && cache_status.size_bytes >= s.auto_clean_threshold;
-
                         let now = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs();
-
-                        let scheduled_clean = s.auto_clean_scheduled
-                            && (now - s.last_clean_timestamp) >= s.auto_clean_interval_secs;
-
-                        threshold_clean || scheduled_clean
+                        settings.lock().unwrap().autoclean_due(cache_status.size_bytes, now)
                     };
 
                     if should_auto_clean {

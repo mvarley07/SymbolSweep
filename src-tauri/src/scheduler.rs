@@ -157,7 +157,38 @@ impl Settings {
         self.consecutive_autoclean_failures += 1;
         let _ = self.save();
     }
+
+    /// A key and this Mac's activation are stored. A key rejected on
+    /// revalidation is cleared, so it stops counting; a revalidation that
+    /// can't reach the server keeps it (fail open).
+    pub fn is_licensed(&self) -> bool {
+        self.license_key.is_some() && self.license_instance_id.is_some()
+    }
+
+    /// Free scan mode: scanning is free, cleaning and deleting need a license.
+    /// A dry run deletes nothing, so it never does.
+    pub fn require_license(&self, dry_run: bool) -> Result<(), String> {
+        if dry_run || self.is_licensed() {
+            Ok(())
+        } else {
+            Err(LICENSE_REQUIRED.to_string())
+        }
+    }
+
+    /// Whether automatic cache cleaning should run now. Licensed only.
+    pub fn autoclean_due(&self, cache_size_bytes: u64, now: u64) -> bool {
+        if !self.is_licensed() {
+            return false;
+        }
+        let threshold_clean = self.auto_clean_on_threshold && cache_size_bytes >= self.auto_clean_threshold;
+        let scheduled_clean = self.auto_clean_scheduled
+            && now.saturating_sub(self.last_clean_timestamp) >= self.auto_clean_interval_secs;
+        threshold_clean || scheduled_clean
+    }
 }
+
+/// The error a clean or delete returns without a license; the UI shows the unlock sheet
+pub const LICENSE_REQUIRED: &str = "license_required";
 
 fn current_timestamp() -> u64 {
     SystemTime::now()
@@ -368,4 +399,61 @@ pub fn time_since_last_clean(settings: &Settings) -> String {
     let now = current_timestamp();
     let elapsed = now.saturating_sub(ts);
     format!("{} ago", format_duration(elapsed))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn licensed() -> Settings {
+        let mut s = Settings::default();
+        s.license_key = Some("KEY".to_string());
+        s.license_instance_id = Some("INSTANCE".to_string());
+        s
+    }
+
+    #[test]
+    fn test_licensed_needs_key_and_activation() {
+        assert!(!Settings::default().is_licensed());
+        let mut key_only = Settings::default();
+        key_only.license_key = Some("KEY".to_string());
+        assert!(!key_only.is_licensed(), "a key without this Mac's activation isn't a license");
+        assert!(licensed().is_licensed());
+    }
+
+    #[test]
+    fn test_free_mode_blocks_cleaning_but_not_dry_runs() {
+        let free = Settings::default();
+        assert_eq!(free.require_license(false), Err(LICENSE_REQUIRED.to_string()));
+        assert_eq!(free.require_license(true), Ok(()), "a dry run deletes nothing");
+        assert_eq!(licensed().require_license(false), Ok(()));
+        assert_eq!(licensed().require_license(true), Ok(()));
+    }
+
+    #[test]
+    fn test_autoclean_runs_only_when_licensed() {
+        let now = 1_000_000;
+        let mut free = Settings::default();
+        free.auto_clean_on_threshold = true;
+        free.auto_clean_threshold = 100;
+        free.auto_clean_scheduled = true;
+        free.auto_clean_interval_secs = 60;
+        free.last_clean_timestamp = 0;
+        assert!(!free.autoclean_due(1_000, now), "over threshold and overdue, but no license");
+
+        let mut paid = licensed();
+        paid.auto_clean_on_threshold = true;
+        paid.auto_clean_threshold = 100;
+        paid.auto_clean_scheduled = false;
+        assert!(paid.autoclean_due(1_000, now), "over threshold");
+        assert!(!paid.autoclean_due(10, now), "under threshold, not scheduled");
+
+        paid.auto_clean_on_threshold = false;
+        paid.auto_clean_scheduled = true;
+        paid.auto_clean_interval_secs = 60;
+        paid.last_clean_timestamp = now - 30;
+        assert!(!paid.autoclean_due(10, now), "scheduled, not yet due");
+        paid.last_clean_timestamp = now - 60;
+        assert!(paid.autoclean_due(10, now), "scheduled and due");
+    }
 }
