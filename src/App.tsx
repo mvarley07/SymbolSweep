@@ -123,7 +123,7 @@ function App() {
       {view === 'settings' && (
         <SettingsPanel
           onBack={() => setView('status')}
-          onDeactivated={() => { setLicensed(false); setView('status'); }}
+          onDeactivated={() => setLicensed(false)}
           onEnterKey={() => setView('activate')}
         />
       )}

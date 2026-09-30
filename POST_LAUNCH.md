@@ -37,17 +37,6 @@ Open questions:
 - Should a held-back row be cleaned automatically once it clears, or wait for the next Clean?
 - Is "held back" the right name everywhere, or should rows and totals use one word?
 
-## Settings panel polish
-
-In `src/components/SettingsPanel.tsx` / `SettingsPanel.css`:
-
-1. **Scrollbar overlaps content.** The scrollbar sits on top of rows and buttons. Use `scrollbar-gutter: stable` on the scroll container, plus right padding, so nothing sits under it.
-2. **Buttons feel crunched.** Give setting rows consistent vertical spacing, and give buttons a min-width.
-3. **Deactivate is jumpy.** The License section changes height abruptly. Instead:
-   - Confirm step: "Deactivate this Mac? You can reactivate with your key"
-   - A short "Deactivating…" state
-   - Cross-fade to the free-mode License section with no layout jump
-
 ## Customer feedback
 
 Append new entries at the bottom: date, where it came from, what they said, what we did.

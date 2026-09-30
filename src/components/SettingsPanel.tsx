@@ -17,7 +17,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onBack, onDeactivated, onEnterKey }: SettingsPanelProps) {
   const { licensed } = useLicense();
-  const { settings, loading, saving, updateSetting } = useSettings();
+  const { settings, loading, saving, updateSetting, refresh: refreshSettings } = useSettings();
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -31,6 +31,29 @@ export function SettingsPanel({ onBack, onDeactivated, onEnterKey }: SettingsPan
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
   const keyCopiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The licensed view keeps showing the key while it fades out after Deactivate
+  const lastKeyRef = useRef<string | undefined>(undefined);
+  if (settings.license_key) lastKeyRef.current = settings.license_key;
+  const shownKey = settings.license_key ?? lastKeyRef.current;
+
+  const handleDeactivate = async () => {
+    setDeactivating(true);
+    setDeactivateError(null);
+    try {
+      // "Deactivating…" stays up long enough to read, even on a fast network
+      await Promise.all([invoke('deactivate_license'), new Promise(r => setTimeout(r, 600))]);
+      // update_settings writes the whole object back: reload so a later toggle
+      // can't restore the key this Mac just gave up
+      await refreshSettings();
+      onDeactivated?.();
+      // Reset once the licensed view has faded out
+      setTimeout(() => setDeactivateConfirm(false), 300);
+    } catch (e) {
+      setDeactivateError(String(e));
+    } finally {
+      setDeactivating(false);
+    }
+  };
 
   useEffect(() => {
     getVersion().then(setAppVersion);
@@ -279,26 +302,78 @@ export function SettingsPanel({ onBack, onDeactivated, onEnterKey }: SettingsPan
         <section className="settings-section">
           <h2>License</h2>
 
-          {settings.license_key && (
-            <div
-              className="license-key-display"
-              onClick={() => {
-                navigator.clipboard.writeText(settings.license_key!).then(() => {
-                  if (keyCopiedTimeoutRef.current) clearTimeout(keyCopiedTimeoutRef.current);
-                  setKeyCopied(true);
-                  keyCopiedTimeoutRef.current = setTimeout(() => setKeyCopied(false), 1500);
-                }).catch(() => {});
-              }}
-              title="Click to copy license key"
-            >
-              <span className="license-status">Active on this Mac</span>
-              <span className="license-key-value">{settings.license_key}</span>
-              {keyCopied && <span className="license-copied">Copied</span>}
-            </div>
-          )}
+          {/* Both views share one grid cell: the section keeps the taller
+              one's height, so Deactivate cross-fades with no layout jump */}
+          <div className="license-stack">
+            <div className={`license-view${licensed ? ' shown' : ''}`} inert={!licensed} aria-hidden={!licensed}>
+              {shownKey && (
+                <div
+                  className="license-key-display"
+                  onClick={() => {
+                    navigator.clipboard.writeText(shownKey).then(() => {
+                      if (keyCopiedTimeoutRef.current) clearTimeout(keyCopiedTimeoutRef.current);
+                      setKeyCopied(true);
+                      keyCopiedTimeoutRef.current = setTimeout(() => setKeyCopied(false), 1500);
+                    }).catch(() => {});
+                  }}
+                  title="Click to copy license key"
+                >
+                  <span className="license-status">Active on this Mac</span>
+                  <span className="license-key-value">{shownKey}</span>
+                  {keyCopied && <span className="license-copied">Copied</span>}
+                </div>
+              )}
 
-          {!licensed ? (
-            <>
+              <div className="license-stack">
+                <div className={`license-view${!deactivateConfirm ? ' shown' : ''}`} inert={deactivateConfirm} aria-hidden={deactivateConfirm}>
+                  <div className="setting-row">
+                    <div className="setting-info">
+                      <label>Deactivate this machine</label>
+                      <span className="setting-description">
+                        Frees a slot so you can activate on another Mac
+                      </span>
+                    </div>
+                    <button
+                      className="update-check-btn deactivate-btn"
+                      onClick={() => setDeactivateConfirm(true)}
+                    >
+                      Deactivate
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`license-view deactivate-confirm${deactivateConfirm ? ' shown' : ''}`} inert={!deactivateConfirm} aria-hidden={!deactivateConfirm}>
+                  {deactivateError ? (
+                    <p className="deactivate-error">{deactivateError}</p>
+                  ) : (
+                    <p className="deactivate-warning">
+                      <strong>Deactivate this Mac?</strong> You can reactivate with your key.
+                    </p>
+                  )}
+                  <div className="deactivate-actions">
+                    <button
+                      className="update-check-btn"
+                      onClick={() => {
+                        setDeactivateConfirm(false);
+                        setDeactivateError(null);
+                      }}
+                      disabled={deactivating}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="update-check-btn deactivate-btn"
+                      onClick={handleDeactivate}
+                      disabled={deactivating}
+                    >
+                      {deactivating ? 'Deactivating\u2026' : 'Deactivate'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`license-view${!licensed ? ' shown' : ''}`} inert={licensed} aria-hidden={licensed}>
               <div className="setting-row">
                 <div className="setting-info">
                   <label>Free scan mode</label>
@@ -313,64 +388,8 @@ export function SettingsPanel({ onBack, onDeactivated, onEnterKey }: SettingsPan
               <button className="license-key-link" onClick={onEnterKey}>
                 I have a key
               </button>
-            </>
-          ) : !deactivateConfirm ? (
-            <div className="setting-row">
-              <div className="setting-info">
-                <label>Deactivate this machine</label>
-                <span className="setting-description">
-                  Frees a slot so you can activate on another Mac
-                </span>
-              </div>
-              <button
-                className="update-check-btn deactivate-btn"
-                onClick={() => setDeactivateConfirm(true)}
-                disabled={deactivating}
-              >
-                Deactivate
-              </button>
             </div>
-          ) : (
-            <div className="deactivate-confirm">
-              <p className="deactivate-warning">
-                This will sign out your license on this machine. You'll need to
-                re-enter your key to use SymbolSweep here again.
-              </p>
-              {deactivateError && (
-                <p className="deactivate-error">{deactivateError}</p>
-              )}
-              <div className="deactivate-actions">
-                <button
-                  className="update-check-btn"
-                  onClick={() => {
-                    setDeactivateConfirm(false);
-                    setDeactivateError(null);
-                  }}
-                  disabled={deactivating}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="update-check-btn deactivate-btn"
-                  onClick={async () => {
-                    setDeactivating(true);
-                    setDeactivateError(null);
-                    try {
-                      await invoke('deactivate_license');
-                      onDeactivated?.();
-                    } catch (e) {
-                      setDeactivateError(String(e));
-                    } finally {
-                      setDeactivating(false);
-                    }
-                  }}
-                  disabled={deactivating}
-                >
-                  {deactivating ? 'Deactivating\u2026' : 'Confirm'}
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </section>
 
         {debugUnlocked && (

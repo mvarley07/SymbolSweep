@@ -342,9 +342,29 @@ select option {
   color: white !important;
 }
 
+/* Views stacked in one grid cell; only .shown is visible. The cell is as
+   tall as the tallest view, so swapping views never moves the layout. */
+.license-stack {
+  display: grid;
+}
+
+.license-view {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+
+.license-view.shown {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease 0.1s, visibility 0s;
+}
+
 .deactivate-confirm {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: var(--space-sm);
 }
 
@@ -353,6 +373,11 @@ select option {
   font-size: 11px;
   line-height: 1.4;
   color: var(--text-tertiary);
+}
+
+.deactivate-warning strong {
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .deactivate-error {
@@ -366,6 +391,16 @@ select option {
   display: flex;
   gap: var(--space-sm);
   justify-content: flex-end;
+}
+
+/* Wide enough for "Deactivating…", so the buttons don't shift when it shows */
+.deactivate-actions .update-check-btn {
+  min-width: 100px;
+}
+
+/* The busy button is the status: keep it readable */
+.deactivate-actions .deactivate-btn:disabled {
+  opacity: 1;
 }
 
 /* Debug Section — intentionally dashed border to signal dev-only */
