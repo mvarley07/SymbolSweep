@@ -38,8 +38,11 @@
         <h1>Reclaim your dev disk space.</h1>
         <p class="sub">Finds the build caches, <code>node_modules</code>, and system junk eating your Mac&mdash;and shows you exactly what&rsquo;s safe to delete.</p>
 
-        <a href="https://vdevtools.lemonsqueezy.com/checkout/buy/a925dc06-6f9e-4554-8936-e90b062edc76" class="cta-btn">Get SymbolSweep &mdash; $12</a>
-        <p class="cta-note">One-time purchase for one Mac. Not a subscription.</p>
+        <div class="cta-row">
+          <a href="/download" class="cta-btn">Download free</a>
+          <a href="https://vdevtools.lemonsqueezy.com/checkout/buy/a925dc06-6f9e-4554-8936-e90b062edc76" class="cta-btn cta-btn--secondary" data-checkout>Buy license, $12</a>
+        </div>
+        <p class="cta-note">Free to scan. $12 once to clean, for one Mac. Not a subscription.</p>
       </header>
     </div>
   </section>
@@ -115,8 +118,11 @@
     <div class="band-inner">
       <div class="final-cta">
         <p class="trust-line">Runs entirely on your Mac. No account, no telemetry, no tracking. The only network calls are license activation and the app&rsquo;s own update check.</p>
-        <a href="https://vdevtools.lemonsqueezy.com/checkout/buy/a925dc06-6f9e-4554-8936-e90b062edc76" class="cta-btn">Get SymbolSweep &mdash; $12</a>
-        <p class="cta-note">One-time purchase for one Mac. Not a subscription.</p>
+        <div class="cta-row">
+          <a href="/download" class="cta-btn">Download free</a>
+          <a href="https://vdevtools.lemonsqueezy.com/checkout/buy/a925dc06-6f9e-4554-8936-e90b062edc76" class="cta-btn cta-btn--secondary" data-checkout>Buy license, $12</a>
+        </div>
+        <p class="cta-note">Free to scan. $12 once to clean, for one Mac. Not a subscription.</p>
       </div>
     </div>
   </section>
@@ -128,14 +134,16 @@
         <span class="footer-specs">macOS 13+</span>
         <a href="/privacy.html">Privacy</a>
         <a href="mailto:hello@symbolsweep.com">Contact</a>
-        <a href="/download">Already bought? Download SymbolSweep</a>
+        <a href="/download">Download SymbolSweep</a>
         <span>&copy; 2026 SymbolSweep</span>
       </div>
     </div>
   </footer>
 
 <script>
-document.querySelectorAll('.cta-btn').forEach(function(btn){
+// Checkout only: /download serves the DMG, so the page never leaves and
+// a loading state would stick
+document.querySelectorAll('.cta-btn[data-checkout]').forEach(function(btn){
   btn.addEventListener('click',function(){
     btn.classList.add('loading');
     btn.textContent='Loading\u2026';

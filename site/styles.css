@@ -187,6 +187,35 @@ code {
   100% { transform: translateX(100%); }
 }
 
+.cta-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cta-btn--secondary,
+.cta-btn--secondary:hover {
+  color: var(--text);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-mid);
+}
+
+.cta-btn--secondary:hover {
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+@media (max-width: 599px) {
+  .cta-row {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .cta-row .cta-btn { text-align: center; }
+}
+
 .cta-note {
   margin-top: 10px;
   font-size: 13px;
