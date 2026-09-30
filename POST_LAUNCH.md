@@ -16,7 +16,7 @@ To review: whether "held back" reads clearly to someone who hasn't seen the rows
 
 Check text contrast against the panel (`#24272C`), in both badge sizes:
 
-- State badge (`.status-state`, `StatusPanel.css`, 10px, weight 600): "Found: heavy" `#f87171` on `rgba(248,113,113,0.08)`, "Found: moderate" `#eab308` on `rgba(234,179,8,0.10)`, runaway `#f87171` on `rgba(248,113,113,0.10)`
+- State badge (`.status-state`, `StatusPanel.css`, 10px, weight 600): "Heavy" `#f87171` on `rgba(248,113,113,0.08)`, "Moderate" `#eab308` on `rgba(234,179,8,0.10)`, runaway `#f87171` on `rgba(248,113,113,0.10)`
 - Tier badges (`.artifact-tier-badge`, `DevScanPanel.css`, 8px, weight 700): SAFE, REBUILD, REINSTALL, REVIEW, BUILDING, SKIPPED
 - Dimmed held-back rows (`.in-use-row`): badge and title are faded further
 
