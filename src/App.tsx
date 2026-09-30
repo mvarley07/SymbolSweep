@@ -36,6 +36,8 @@ function App() {
   // but every clean or delete opens the unlock sheet instead
   const [licensed, setLicensed] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
+  // What the clean or delete that opened the sheet would free
+  const [unlockBytes, setUnlockBytes] = useState<number | undefined>();
 
   // Check license status on mount
   useEffect(() => {
@@ -94,7 +96,7 @@ function App() {
   }
 
   return (
-    <LicenseContext.Provider value={{ licensed, requestUnlock: () => setUnlockOpen(true) }}>
+    <LicenseContext.Provider value={{ licensed, requestUnlock: (bytes) => { setUnlockBytes(bytes); setUnlockOpen(true); } }}>
     <div className="app-container">
       {view === 'activate' && (
         <ActivationScreen
@@ -130,6 +132,7 @@ function App() {
       )}
       {unlockOpen && (
         <UnlockSheet
+          bytes={unlockBytes}
           onClose={() => setUnlockOpen(false)}
           onHaveKey={() => { setUnlockOpen(false); setView('activate'); }}
         />

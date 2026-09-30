@@ -10,8 +10,9 @@ interface LicenseState {
   /** A key is activated on this Mac. Without one the app runs in free scan
    *  mode: it scans and shows real numbers, but can't clean or delete. */
   licensed: boolean;
-  /** Show the unlock sheet (checkout, or "I have a key") */
-  requestUnlock: () => void;
+  /** Show the unlock sheet (checkout, or "I have a key"). `bytes` is what the
+   *  triggering clean or delete would free; the buy button names it. */
+  requestUnlock: (bytes?: number) => void;
 }
 
 export const LicenseContext = createContext<LicenseState>({ licensed: true, requestUnlock: () => {} });

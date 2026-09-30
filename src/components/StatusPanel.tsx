@@ -145,7 +145,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   }, [freshCleanFreed]);
 
   const handleCleanClick = () => {
-    if (!licensed) return requestUnlock();
+    if (!licensed) return requestUnlock(cleanBytes);
     if (!settings.first_clean_confirmed) {
       setShowConfirmation(true);
       setDryRunResult(null);
@@ -289,7 +289,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   // Safe rows held back right now (building or in use)
   const heldBackBytes = sumBytes(safeRows.filter(a => a.active_build || a.in_use));
   const handleDeleteSafeRow = async (path: string) => {
-    if (!licensed) return requestUnlock();
+    if (!licensed) return requestUnlock(safeRows.find(a => a.path === path)?.size_bytes);
     try {
       // Backend rescans and emits; rows, hero and tray refresh from that rescan
       await deleteOneArtifact([path]);
