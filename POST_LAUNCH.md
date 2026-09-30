@@ -54,6 +54,15 @@ In `src/components/SettingsPanel.tsx` / `SettingsPanel.css`:
    - A short "Deactivating…" state
    - Cross-fade to the free-mode License section with no layout jump
 
+## Unlock sheet button amount
+
+The unlock sheet (`src/components/UnlockSheet.tsx`) always says "Unlock cleaning, $12". Instead, show the amount of the action that opened it, e.g. "Free up 6.2 GB, $12". Fall back to "Unlock cleaning, $12" when there's no amount (e.g. Empty Trash).
+
+Today `requestUnlock()` (`src/license.ts`) takes no arguments. It needs to take the amount, and each trigger needs to pass its own:
+
+- `StatusPanel.tsx`: Clean (`cleanBytes`) and per-row delete (the row's size)
+- `DevScanPanel.tsx`: Clean Safe, Clean Rebuild, Clean Reinstall (the tier's cleanable bytes), and per-row delete
+
 ## Customer feedback
 
 Append new entries at the bottom: date, where it came from, what they said, what we did.
