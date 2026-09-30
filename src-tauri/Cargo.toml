@@ -1,6 +1,6 @@
 [package]
 name = "symbolsweep"
-version = "2.1.8"
+version = "2.1.9"
 description = "macOS menu bar app that monitors and cleans the coresymbolicationd cache"
 authors = ["you"]
 edition = "2021"
