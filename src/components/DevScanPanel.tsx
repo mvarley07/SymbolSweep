@@ -298,6 +298,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           {/* Pinned: total, tiles, action buttons, messages */}
           <div className="scan-summary">
           <div className="scan-total scan-total-only">
+            <span className="total-label">Found</span>
             <span className="total-value">{result.total_display}</span>
           </div>
           {appStatus?.breakdown_display && appStatus.cache.size_bytes > 0 && (

@@ -181,12 +181,8 @@
   margin-bottom: var(--space-md);
 }
 
-/* Dev Artifacts: the title bar names it; just the total, left-aligned with
-   the tiles (not the row sizes — the tiles sit in between) */
-.scan-total.scan-total-only {
-  justify-content: flex-start;
-}
-
+/* Dev Artifacts: label and total span the tile grid's outer edges, not the
+   row sizes — the full-width tiles sit in between */
 .scan-total.scan-total-only .total-value {
   padding-right: 0;
 }
