@@ -37,12 +37,6 @@ Open questions:
 - Should a held-back row be cleaned automatically once it clears, or wait for the next Clean?
 - Is "held back" the right name everywhere, or should rows and totals use one word?
 
-## Tier legend: SAFE wording
-
-The SAFE line in the Dev Artifacts legend (`src/components/DevScanPanel.tsx:223`) reads "Free to delete, regenerates automatically". Now that there's a free tier, "free" could be misread as "free to delete without a license", but cleaning needs one.
-
-Change it to: "Always safe, regenerates on its own"
-
 ## Settings panel polish
 
 In `src/components/SettingsPanel.tsx` / `SettingsPanel.css`:

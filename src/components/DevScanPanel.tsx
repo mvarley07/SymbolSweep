@@ -220,7 +220,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           <div className="tier-legend-items">
             <div className="tier-legend-item">
               <span className="artifact-tier-badge tier-safe">SAFE</span>
-              <span>Free to delete, regenerates automatically</span>
+              <span>Always safe, regenerates on its own</span>
             </div>
             <div className="tier-legend-item">
               <span className="artifact-tier-badge tier-rebuild">REBUILD</span>
