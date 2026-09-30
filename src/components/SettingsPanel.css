@@ -58,6 +58,12 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* The scroller reaches into the panel's right gutter and keeps its
+     scrollbar there, so nothing sits under it: content still ends at the
+     header's right edge (gutter minus the 5px scrollbar, App.css) */
+  scrollbar-gutter: stable;
+  margin-right: calc(-1 * var(--gutter));
+  padding-right: calc(var(--gutter) - 5px);
 }
 
 /* Sections */
@@ -87,11 +93,14 @@
 }
 
 /* Setting Rows */
+/* Every row the same rhythm, whether it holds a toggle, select or button */
 .setting-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-sm) 0;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 10px 0;
   gap: var(--space-md);
 }
 
@@ -99,9 +108,11 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Bleeds left (clipped at the scroller's edge); the right edge stays on the
+   content edge so its button lines up with the rows above */
 .setting-row.nested {
-  padding: var(--space-sm) var(--gutter);
-  margin: 0 calc(-1 * var(--gutter));
+  padding: 10px 0 10px var(--gutter);
+  margin: 0 0 0 calc(-1 * var(--gutter));
   background: var(--bg-secondary);
   border-bottom: none;
 }
@@ -112,6 +123,11 @@
 
 .setting-row select {
   flex-shrink: 0;
+}
+
+/* Row-level selects only; the inline one in a description stays text-sized */
+.setting-row > select {
+  min-width: var(--settings-btn-min-w);
 }
 
 .setting-info {
@@ -244,9 +260,17 @@ select option {
   min-width: 0;
 }
 
+/* Row buttons share one min-width so labels ("Check", "Checking...") don't
+   crowd their borders or resize the row */
+.settings-panel {
+  --settings-btn-min-w: 84px;
+}
+
 /* Update check button */
 .update-check-btn {
-  padding: 5px var(--space-sm);
+  min-width: var(--settings-btn-min-w);
+  padding: 6px 12px;
+  text-align: center;
   font-size: var(--font-xs);
   font-weight: 500;
   border: 1px solid var(--border-medium);
@@ -528,7 +552,9 @@ select option {
 }
 
 .notification-hint .hint-btn {
-  padding: 5px var(--space-sm);
+  flex-shrink: 0;
+  min-width: var(--settings-btn-min-w);
+  padding: 6px 12px;
   font-size: var(--font-xs);
   font-weight: 500;
   border: 1px solid var(--border-medium);
