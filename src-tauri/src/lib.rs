@@ -3,6 +3,7 @@
 mod cache_cleaner;
 mod cache_monitor;
 mod dev_scanner;
+mod gate;
 mod license;
 mod scheduler;
 mod tray;
@@ -11,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 
-use cache_cleaner::{clean_cache, get_log_file_path, log_deletion, CleanResult};
+use cache_cleaner::{get_log_file_path, log_deletion, CleanResult};
 use cache_monitor::{DevTotals, 
     compute_app_status, format_size, get_cache_status, get_combined_cache_status,
     get_simulated_status, is_daemon_running, AppStatus, CacheStatus,
@@ -109,12 +110,12 @@ fn get_daemon_status() -> bool {
 /// Clean the cache (with full safety checks)
 #[tauri::command]
 async fn clean(app: tauri::AppHandle, state: tauri::State<'_, AppState>, dry_run: bool) -> Result<CleanResult, String> {
-    state.settings.lock().unwrap().require_license(dry_run)?;
+    // License first (gate): without one only a dry run goes through
+    let settings = state.settings.lock().unwrap().clone();
     // Offload blocking file I/O to background thread
-    let result = tauri::async_runtime::spawn_blocking(move || clean_cache(dry_run))
+    let result = tauri::async_runtime::spawn_blocking(move || gate::clean(&settings, dry_run))
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())??;
 
     // State updates are fast — run after I/O completes
     if !dry_run && result.success {
@@ -266,7 +267,7 @@ async fn delete_dev_artifacts_inner(
     paths: Vec<String>,
     manual: bool,
 ) -> Result<DevDeleteResult, String> {
-    state.settings.lock().unwrap().require_license(false)?;
+    let settings = state.settings.lock().unwrap().clone();
     // Extract needed data from state (fast, sync)
     let known_artifacts = {
         let cached = state.dev_scan_result.lock().unwrap();
@@ -280,18 +281,15 @@ async fn delete_dev_artifacts_inner(
         s.dev_scan_roots.clone()
     };
 
-    // Offload heavy deletion + re-scan to background thread
+    // Offload heavy deletion + re-scan to background thread. License first
+    // (gate): without one nothing is deleted and nothing rescanned.
     let (delete_result, new_scan) = tauri::async_runtime::spawn_blocking(move || {
-        let del = if manual {
-            dev_scanner::delete_dev_artifacts_manual(&paths, &known_artifacts)
-        } else {
-            dev_scanner::delete_dev_artifacts(&paths, &known_artifacts)
-        };
+        let del = gate::delete_artifacts(&settings, &paths, &known_artifacts, manual)?;
         let scan = dev_scanner::scan_dev_artifacts(&roots);
-        (del, scan)
+        Ok::<_, String>((del, scan))
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())??;
 
     // Update cached result (fast) and record the scan timestamp
     {
@@ -515,9 +513,10 @@ fn get_ss_trash_info() -> SsTrashInfo {
 /// Permanently delete only the items SS moved to Trash — never touches other Trash contents
 #[tauri::command]
 async fn purge_ss_trash(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<PurgeResult, String> {
-    state.settings.lock().unwrap().require_license(false)?;
+    // License first (gate)
+    let settings = state.settings.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        dev_scanner::purge_ss_trash_with_progress(&|current, total, bytes_freed| {
+        gate::purge_trash(&settings, &|current, total, bytes_freed| {
             #[derive(Clone, serde::Serialize)]
             struct PurgeProgress {
                 current: usize,
@@ -535,7 +534,7 @@ async fn purge_ss_trash(app: tauri::AppHandle, state: tauri::State<'_, AppState>
         })
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -854,20 +853,21 @@ pub fn run() {
                     }
 
                     // Check for auto-clean conditions
-                    // Automatic cleaning is licensed-only (free scan mode only scans)
-                    let should_auto_clean = {
+                    // Automatic cleaning is licensed-only (gate): free scan mode only scans
+                    let autoclean_result = {
                         let now = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs();
-                        settings.lock().unwrap().autoclean_due(cache_status.size_bytes, now)
+                        let snapshot = settings.lock().unwrap().clone();
+                        gate::autoclean(&snapshot, cache_status.size_bytes, now)
                     };
+                    let should_auto_clean = autoclean_result.is_some();
 
-                    if should_auto_clean {
+                    if let Some(clean_result) = autoclean_result {
                         let show_notifications = settings.lock().unwrap().show_notifications;
 
-                        // Perform clean
-                        match clean_cache(false) {
+                        match clean_result {
                             Ok(result) => {
                                 // Update last clean timestamp and reset debug size
                                 // (record_clean also resets consecutive_autoclean_failures)

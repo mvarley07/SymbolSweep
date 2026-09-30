@@ -1482,6 +1482,17 @@ fn record_trashed_item(original_path: &str, trash_path: &Path, size_bytes: u64) 
     save_trash_manifest(&manifest);
 }
 
+/// Tests elsewhere in the crate: put an item in the sandbox Trash and record
+/// it in the sandbox manifest, as a Trash move would
+#[cfg(test)]
+pub(crate) fn stage_trashed_item(name: &str) -> PathBuf {
+    let item = trash_root().join(name);
+    fs::create_dir_all(&item).unwrap();
+    fs::write(item.join("data"), b"x").unwrap();
+    record_trashed_item(&format!("/original/{}", name), &item, 1);
+    item
+}
+
 /// Get info about SS items still sitting in Trash (validates they still exist)
 pub fn get_ss_trash_info() -> SsTrashInfo {
     let manifest = load_trash_manifest();

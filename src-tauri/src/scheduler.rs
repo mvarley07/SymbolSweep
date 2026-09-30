@@ -158,11 +158,12 @@ impl Settings {
         let _ = self.save();
     }
 
-    /// A key and this Mac's activation are stored. A key rejected on
+    /// A key and this Mac's activation are stored, and the key has passed a
+    /// validation with Lemon Squeezy (activation counts). A key rejected on
     /// revalidation is cleared, so it stops counting; a revalidation that
     /// can't reach the server keeps it (fail open).
     pub fn is_licensed(&self) -> bool {
-        self.license_key.is_some() && self.license_instance_id.is_some()
+        self.license_key.is_some() && self.license_instance_id.is_some() && self.license_last_validated > 0
     }
 
     /// Free scan mode: scanning is free, cleaning and deleting need a license.
@@ -409,6 +410,7 @@ mod tests {
         let mut s = Settings::default();
         s.license_key = Some("KEY".to_string());
         s.license_instance_id = Some("INSTANCE".to_string());
+        s.license_last_validated = 1;
         s
     }
 
@@ -418,6 +420,9 @@ mod tests {
         let mut key_only = Settings::default();
         key_only.license_key = Some("KEY".to_string());
         assert!(!key_only.is_licensed(), "a key without this Mac's activation isn't a license");
+        let mut never_validated = licensed();
+        never_validated.license_last_validated = 0;
+        assert!(!never_validated.is_licensed(), "a key that never passed validation isn't a license");
         assert!(licensed().is_licensed());
     }
 
