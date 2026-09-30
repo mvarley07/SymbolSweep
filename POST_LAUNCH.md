@@ -37,16 +37,6 @@ Open questions:
 - Should a held-back row be cleaned automatically once it clears, or wait for the next Clean?
 - Is "held back" the right name everywhere, or should rows and totals use one word?
 
-## Dev Artifacts total row
-
-Today the total (`.scan-total-only` in `DevScanPanel.tsx`) sits alone, right-aligned to the row sizes (`padding-right: var(--size-edge)` in `DevScanPanel.css`). It stops about 50px short of the tiles' and buttons' right edge, so it looks like it's floating.
-
-Change:
-
-- Add a "FOUND" label (`.total-label`) flush left
-- Put the total flush right
-- Line both up with the tile grid's edges: drop the `--size-edge` padding for `.scan-total-only`
-
 ## Customer feedback
 
 Append new entries at the bottom: date, where it came from, what they said, what we did.
