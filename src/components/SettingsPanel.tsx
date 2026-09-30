@@ -2,16 +2,21 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSettings } from '../hooks/useSettings';
+import { useLicense, CHECKOUT_URL } from '../license';
 import { DEBUG_SIZES } from '../types';
 import './SettingsPanel.css';
 
 interface SettingsPanelProps {
   onBack: () => void;
   onDeactivated?: () => void;
+  /** Open the activation screen (free scan mode) */
+  onEnterKey?: () => void;
 }
 
-export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, onDeactivated, onEnterKey }: SettingsPanelProps) {
+  const { licensed } = useLicense();
   const { settings, loading, saving, updateSetting } = useSettings();
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -116,12 +121,13 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
             <div className="setting-info">
               <label htmlFor="auto-threshold">Auto-clear symbolication cache</label>
               <span className="setting-description">
+                {!licensed && <span className="setting-licensed-only">Included with a license. </span>}
                 Clears automatically when it grows past{' '}
                 <select
                   className="inline-select"
                   value={settings.auto_clean_threshold}
                   onChange={(e) => updateSetting('auto_clean_threshold', Number(e.target.value))}
-                  disabled={saving || !settings.auto_clean_on_threshold}
+                  disabled={saving || !licensed || !settings.auto_clean_on_threshold}
                 >
                   <option value={1 * 1024 * 1024 * 1024}>1 GB</option>
                   <option value={2 * 1024 * 1024 * 1024}>2 GB</option>
@@ -134,9 +140,9 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
               <input
                 type="checkbox"
                 id="auto-threshold"
-                checked={settings.auto_clean_on_threshold}
+                checked={licensed && settings.auto_clean_on_threshold}
                 onChange={(e) => updateSetting('auto_clean_on_threshold', e.target.checked)}
-                disabled={saving}
+                disabled={saving || !licensed}
               />
               <span className="toggle-slider" />
             </label>
@@ -291,7 +297,24 @@ export function SettingsPanel({ onBack, onDeactivated }: SettingsPanelProps) {
             </div>
           )}
 
-          {!deactivateConfirm ? (
+          {!licensed ? (
+            <>
+              <div className="setting-row">
+                <div className="setting-info">
+                  <label>Free scan mode</label>
+                  <span className="setting-description">
+                    Scanning is free. Cleaning and automatic cache cleaning need a license.
+                  </span>
+                </div>
+              </div>
+              <button className="license-unlock-btn" onClick={() => openUrl(CHECKOUT_URL)}>
+                Unlock cleaning, $12
+              </button>
+              <button className="license-key-link" onClick={onEnterKey}>
+                I have a key
+              </button>
+            </>
+          ) : !deactivateConfirm ? (
             <div className="setting-row">
               <div className="setting-info">
                 <label>Deactivate this machine</label>

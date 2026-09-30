@@ -7,6 +7,8 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { DevScanPanel } from './components/DevScanPanel';
 import { ActivationScreen } from './components/ActivationScreen';
+import { UnlockSheet } from './components/UnlockSheet';
+import { LicenseContext } from './license';
 import { useSettings } from './hooks/useSettings';
 import type { LicenseStatus } from './types';
 import './App.css';
@@ -30,25 +32,26 @@ function App() {
   const { settings, loading, updateSettings } = useSettings();
   const [view, setView] = useState<View>('status');
   const [licenseChecked, setLicenseChecked] = useState(false);
+  // Without a license the app runs in free scan mode: real scans and numbers,
+  // but every clean or delete opens the unlock sheet instead
+  const [licensed, setLicensed] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
 
   // Check license status on mount
   useEffect(() => {
     invoke<LicenseStatus>('check_license')
       .then((status) => {
-        if (status.status === 'NotActivated' || status.status === 'Rejected') {
-          setView('activate');
-        }
+        setLicensed(status.status !== 'NotActivated' && status.status !== 'Rejected');
         setLicenseChecked(true);
       })
       .catch(() => {
-        // Command failure with no stored activation → block
-        setView('activate');
+        // Command failure: free scan mode (the backend refuses cleaning too)
+        setLicensed(false);
         setLicenseChecked(true);
       });
   }, []);
 
   // Determine initial view based on first_run_completed
-  // (only runs after license is confirmed valid)
   useEffect(() => {
     if (!loading && licenseChecked && view !== 'activate' && !settings.first_run_completed) {
       setView('welcome');
@@ -91,15 +94,20 @@ function App() {
   }
 
   return (
+    <LicenseContext.Provider value={{ licensed, requestUnlock: () => setUnlockOpen(true) }}>
     <div className="app-container">
       {view === 'activate' && (
-        <ActivationScreen onActivated={() => {
-          if (!settings.first_run_completed) {
-            setView('welcome');
-          } else {
-            setView('status');
-          }
-        }} />
+        <ActivationScreen
+          onActivated={() => {
+            setLicensed(true);
+            if (!settings.first_run_completed) {
+              setView('welcome');
+            } else {
+              setView('status');
+            }
+          }}
+          onCancel={() => setView(settings.first_run_completed ? 'status' : 'welcome')}
+        />
       )}
       {view === 'welcome' && (
         <WelcomeScreen onComplete={handleWelcomeComplete} />
@@ -113,13 +121,21 @@ function App() {
       {view === 'settings' && (
         <SettingsPanel
           onBack={() => setView('status')}
-          onDeactivated={() => setView('activate')}
+          onDeactivated={() => { setLicensed(false); setView('status'); }}
+          onEnterKey={() => setView('activate')}
         />
       )}
       {view === 'devscan' && (
         <DevScanPanel onBack={() => setView('status')} />
       )}
+      {unlockOpen && (
+        <UnlockSheet
+          onClose={() => setUnlockOpen(false)}
+          onHaveKey={() => { setUnlockOpen(false); setView('activate'); }}
+        />
+      )}
     </div>
+    </LicenseContext.Provider>
   );
 }
 

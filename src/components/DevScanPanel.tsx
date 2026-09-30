@@ -5,6 +5,7 @@ import { useAppStatus, useDevScan, useDeleteDevArtifacts, useDeleteDevArtifactsM
 import type { DevArtifact, DevDeleteResult, SkippedArtifact, SsTrashInfo, PurgeResult } from '../types';
 import { ArtifactRow, SkippedRow, heldBackReason } from './ArtifactRows';
 import { fitWindowTo } from '../windowSize';
+import { useLicense } from '../license';
 import { formatSize } from '../formatSize';
 import './DevScanPanel.css';
 
@@ -22,6 +23,9 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   const { status: appStatus } = useAppStatus();
   const { deleteArtifacts: bulkDeleteArtifacts, deleting: bulkDeleting } = useDeleteDevArtifacts();
   const { deleteArtifacts: manualDeleteArtifacts, deleting: manualDeleting } = useDeleteDevArtifactsManual();
+  // Free scan mode: every clean or delete opens the unlock sheet instead
+  const { licensed, requestUnlock } = useLicense();
+  const ifLicensed = (action: () => void) => () => (licensed ? action() : requestUnlock());
   const deleting = bulkDeleting || manualDeleting;
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deletedToTrash, setDeletedToTrash] = useState(false);
@@ -116,6 +120,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   };
 
   const handleDeleteOne = async (path: string) => {
+    if (!licensed) return requestUnlock();
     try {
       const artifact = result?.artifacts.find(a => a.path === path);
       const trashed = artifact?.tier === 'Rebuildable' || artifact?.tier === 'SafeWithReinstall' || !!artifact?.is_nested;
@@ -137,6 +142,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
   };
 
   const handleCleanSafe = async () => {
+    if (!licensed) return requestUnlock();
     if (!result) return;
     const paths = result.artifacts
       .filter(a => a.tier === 'Safe' && !a.active_build && !a.in_use)
@@ -339,7 +345,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             ) : (
               <button
                 className="clean-tier-btn tier-rebuild"
-                onClick={() => setConfirmRebuild(true)}
+                onClick={ifLicensed(() => setConfirmRebuild(true))}
                 disabled={deleting || rebuildCleanableBytes === 0}
               >
                 {rebuildCleanableBytes > 0 ? `Clean Rebuild (${formatSize(rebuildCleanableBytes)})` : tierIdleLabel('Rebuildable', 'Nothing to rebuild now')}
@@ -357,7 +363,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
             ) : (
               <button
                 className="clean-tier-btn tier-reinstall"
-                onClick={() => setConfirmReinstall(true)}
+                onClick={ifLicensed(() => setConfirmReinstall(true))}
                 disabled={deleting || reinstallCleanableBytes === 0}
               >
                 {reinstallCleanableBytes > 0 ? `Clean Reinstall (${formatSize(reinstallCleanableBytes)})` : tierIdleLabel('SafeWithReinstall', 'Nothing to reinstall now')}
@@ -392,7 +398,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
                   <button className="confirm-no" onClick={() => setConfirmPurge(false)}>Cancel</button>
                 </div>
               ) : (
-                <button className="ss-trash-purge-btn" onClick={() => setConfirmPurge(true)}>
+                <button className="ss-trash-purge-btn" onClick={ifLicensed(() => setConfirmPurge(true))}>
                   Empty SymbolSweep Trash
                 </button>
               )}

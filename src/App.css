@@ -114,6 +114,7 @@ html, body, #root {
 }
 
 .app-container {
+  position: relative;  /* the unlock sheet sits over the current view */
   height: 100%;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);

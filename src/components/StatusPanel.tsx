@@ -5,6 +5,7 @@ import { useSettings } from '../hooks/useSettings';
 import { CleanConfirmation } from './CleanConfirmation';
 import { ArtifactRow } from './ArtifactRows';
 import { fitWindowTo } from '../windowSize';
+import { useLicense } from '../license';
 import { formatSize } from '../formatSize';
 import type { CleanState, CleanResult, DevScanResult } from '../types';
 import './StatusPanel.css';
@@ -88,6 +89,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   const { clean, dryRun, cleaning } = useCleanCache();
   const { lastCleanTime, lastCleanFreed, refresh: refreshLastClean } = useLastCleanTime();
   const { settings, updateSetting } = useSettings();
+  const { licensed, requestUnlock } = useLicense();
   const { result: devResult } = useDevScan();
   const { deleteArtifacts } = useDeleteDevArtifacts();
   const { deleteArtifacts: deleteOneArtifact, deleting: deletingRow } = useDeleteDevArtifactsManual();
@@ -143,6 +145,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   }, [freshCleanFreed]);
 
   const handleCleanClick = () => {
+    if (!licensed) return requestUnlock();
     if (!settings.first_clean_confirmed) {
       setShowConfirmation(true);
       setDryRunResult(null);
@@ -286,6 +289,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
   // Safe rows held back right now (building or in use)
   const heldBackBytes = sumBytes(safeRows.filter(a => a.active_build || a.in_use));
   const handleDeleteSafeRow = async (path: string) => {
+    if (!licensed) return requestUnlock();
     try {
       // Backend rescans and emits; rows, hero and tray refresh from that rescan
       await deleteOneArtifact([path]);

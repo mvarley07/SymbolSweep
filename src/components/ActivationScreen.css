@@ -118,3 +118,16 @@
   cursor: not-allowed;
   transform: none !important;
 }
+
+/* Back to free scan mode */
+.activation-cancel {
+  align-self: center;
+  padding: var(--space-xs) var(--space-sm);
+  background: none;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.activation-cancel:hover:not(:disabled) {
+  color: var(--text-primary);
+}

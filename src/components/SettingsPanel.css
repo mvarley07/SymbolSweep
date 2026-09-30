@@ -544,3 +544,37 @@ select option {
   border-color: var(--accent);
   color: white;
 }
+
+/* Free scan mode */
+.setting-licensed-only {
+  color: var(--accent);
+}
+
+.license-unlock-btn {
+  width: 100%;
+  height: var(--btn-height);
+  margin-top: var(--space-sm);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  letter-spacing: 0.01em;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+}
+
+.license-unlock-btn:hover {
+  background: var(--accent-hover);
+}
+
+.license-key-link {
+  display: block;
+  margin: var(--space-sm) auto 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: none;
+  font-size: var(--font-sm);
+  color: var(--accent);
+}
+
+.license-key-link:hover {
+  color: var(--text-primary);
+}

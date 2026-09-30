@@ -6,9 +6,11 @@ import './ActivationScreen.css';
 
 interface ActivationScreenProps {
   onActivated: () => void;
+  /** Back to free scan mode without a key */
+  onCancel: () => void;
 }
 
-export function ActivationScreen({ onActivated }: ActivationScreenProps) {
+export function ActivationScreen({ onActivated, onCancel }: ActivationScreenProps) {
   const [key, setKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
         </div>
 
         <p className="activation-description">
-          Enter your license key to get started:
+          Enter your license key to unlock cleaning:
         </p>
 
         <div className="activation-action">
@@ -97,6 +99,10 @@ export function ActivationScreen({ onActivated }: ActivationScreenProps) {
             disabled={loading || !key.trim()}
           >
             {loading ? 'Activating\u2026' : 'Activate'}
+          </button>
+
+          <button className="activation-cancel" onClick={onCancel} disabled={loading}>
+            Continue without a key
           </button>
         </div>
       </div>

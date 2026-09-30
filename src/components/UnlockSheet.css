@@ -1,0 +1,71 @@
+/* UnlockSheet: over whatever view is open, inside the popup window */
+
+.unlock-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.45);
+  animation: fadeIn 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.unlock-sheet {
+  width: 100%;
+  padding: var(--space-lg) var(--gutter) var(--gutter);
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.unlock-title {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.unlock-text {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-sm);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.unlock-buy {
+  width: 100%;
+  height: var(--btn-height);
+  font-size: var(--btn-size);
+  font-weight: var(--btn-weight);
+  letter-spacing: 0.01em;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+}
+
+.unlock-buy:hover {
+  background: var(--accent-hover);
+}
+
+.unlock-links {
+  display: flex;
+  justify-content: space-between;
+}
+
+.unlock-link {
+  padding: var(--space-xs) 0;
+  background: none;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.unlock-link:first-child {
+  color: var(--accent);
+}
+
+.unlock-link:hover {
+  color: var(--text-primary);
+}
