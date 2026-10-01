@@ -390,7 +390,7 @@ export function StatusPanel({ onSettingsClick, onDevScanClick }: StatusPanelProp
 
         {appStatus.show_gap_banner && (
           <div className="gap-banner">
-            <span>Your disk is still low — most usage is outside SymbolSweep's reach.</span>
+            <span>Your disk is still low. Most usage is outside SymbolSweep's reach.</span>
             {appStatus.snapshot_count > 0 && (
               <span className="gap-snapshots"> {appStatus.snapshot_count} snapshot{appStatus.snapshot_count !== 1 ? 's' : ''} detected.</span>
             )}

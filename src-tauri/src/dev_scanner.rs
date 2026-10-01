@@ -48,10 +48,10 @@ impl ArtifactTier {
 
     pub fn description(&self) -> &'static str {
         match self {
-            ArtifactTier::Safe => "Caches — regenerate automatically",
-            ArtifactTier::Rebuildable => "Build artifacts — regenerable but slow to rebuild",
-            ArtifactTier::SafeWithReinstall => "node_modules — one npm install to restore",
-            ArtifactTier::Ask => "Build outputs — some projects ship from these",
+            ArtifactTier::Safe => "Caches: regenerate automatically",
+            ArtifactTier::Rebuildable => "Build artifacts: regenerable but slow to rebuild",
+            ArtifactTier::SafeWithReinstall => "node_modules: one npm install to restore",
+            ArtifactTier::Ask => "Build outputs: some projects ship from these",
         }
     }
 }
@@ -514,7 +514,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -535,7 +535,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -556,7 +556,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -577,7 +577,7 @@ fn scan_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} use pnpm store prune (removes only orphaned packages)".to_string()),
+                hint: Some("Safe to delete. Use pnpm store prune (removes only orphaned packages)".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -609,7 +609,7 @@ fn check_home_cache(home: &Path, rel_path: &str, kind: &str, artifacts: &mut Vec
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -660,7 +660,7 @@ fn scan_library_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                         project: None,
                         staleness_days: None,
                         is_nested: false,
-                        hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                        hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                         active_build: false,
                         in_use: None,
                     });
@@ -738,7 +738,7 @@ fn scan_derived_data(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
+                hint: Some("Safe to delete. Rebuilds on next Xcode build".to_string()),
                 active_build: building,
                 in_use: None,
             });
@@ -765,7 +765,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} re-downloads on next gradle build (needs network)".to_string()),
+                hint: Some("Safe to delete. Re-downloads on next gradle build (needs network)".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -786,7 +786,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} re-downloads on next mvn build (needs network)".to_string()),
+                hint: Some("Safe to delete. Re-downloads on next mvn build (needs network)".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -810,7 +810,7 @@ fn scan_rebuildable_home_caches(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Safe to delete \u{2014} re-downloads on next go build (needs network)".to_string()),
+                hint: Some("Safe to delete. Re-downloads on next go build (needs network)".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -837,7 +837,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Keep unless you're sure \u{2014} may contain databases; use docker system prune".to_string()),
+                hint: Some("Keep unless you're sure. May contain databases; use docker system prune".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -858,7 +858,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Keep \u{2014} holds crash symbols for shipped apps".to_string()),
+                hint: Some("Keep. Holds crash symbols for shipped apps".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -879,7 +879,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Keep unless you're sure \u{2014} delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
+                hint: Some("Keep unless you're sure. Delete via Xcode \u{2192} Settings \u{2192} Platforms".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -900,7 +900,7 @@ fn scan_ask_tier(home: &Path, artifacts: &mut Vec<DevArtifact>) {
                 project: None,
                 staleness_days: None,
                 is_nested: false,
-                hint: Some("Keep unless you're sure \u{2014} delete via Android Studio \u{2192} Device Manager".to_string()),
+                hint: Some("Keep unless you're sure. Delete via Android Studio \u{2192} Device Manager".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -1121,7 +1121,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
-                        hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                        hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                         active_build: false,
                         in_use: None,
                     });
@@ -1146,7 +1146,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: check_project_staleness(&entry_path, dir),
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} rebuilds on next cargo build (takes minutes, needs network)".to_string()),
+                    hint: Some("Safe to delete. Rebuilds on next cargo build (takes minutes, needs network)".to_string()),
                     active_build: building,
                     in_use: None,
                 });
@@ -1167,7 +1167,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} rebuilds on next dotnet build".to_string()),
+                    hint: Some("Safe to delete. Rebuilds on next dotnet build".to_string()),
                     active_build: false,
                     in_use: None,
                 });
@@ -1188,7 +1188,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} rebuilds when Unity reimports the project".to_string()),
+                    hint: Some("Safe to delete. Rebuilds when Unity reimports the project".to_string()),
                     active_build: false,
                     in_use: None,
                 });
@@ -1209,7 +1209,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} rebuilds on next Unreal Editor launch".to_string()),
+                    hint: Some("Safe to delete. Rebuilds on next Unreal Editor launch".to_string()),
                     active_build: false,
                     in_use: None,
                 });
@@ -1231,7 +1231,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                     project: get_project_name(&entry_path),
                     staleness_days: None,
                     is_nested: false,
-                    hint: Some("Safe to delete \u{2014} rebuilds on next Xcode build".to_string()),
+                    hint: Some("Safe to delete. Rebuilds on next Xcode build".to_string()),
                     active_build: building,
                     in_use: None,
                 });
@@ -1254,7 +1254,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
-                        hint: Some("Test coverage report \u{2014} regenerates on the next coverage run".to_string()),
+                        hint: Some("Test coverage report. Regenerates on the next coverage run".to_string()),
                         active_build: false,
                         in_use: None,
                     });
@@ -1278,7 +1278,7 @@ fn scan_project_root(dir: &Path, artifacts: &mut Vec<DevArtifact>, depth: u32) {
                         project: get_project_name(&entry_path),
                         staleness_days: None,
                         is_nested: false,
-                        hint: Some("Keep unless you're sure \u{2014} may contain shipped output you haven't deployed".to_string()),
+                        hint: Some("Keep unless you're sure. May contain shipped output you haven't deployed".to_string()),
                         active_build: false,
                         in_use: None,
                     });
@@ -1311,7 +1311,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
                 project: get_project_name(nm_path),
                 staleness_days: None,
                 is_nested: true, // Excluded from the parent row's size below
-                hint: Some("Safe to delete \u{2014} cache regenerates automatically".to_string()),
+                hint: Some("Safe to delete. Cache regenerates automatically".to_string()),
                 active_build: false,
                 in_use: None,
             });
@@ -1333,7 +1333,7 @@ fn handle_node_modules(nm_path: &Path, project_dir: &Path, artifacts: &mut Vec<D
             project: get_project_name(nm_path),
             staleness_days: staleness,
             is_nested: false,
-            hint: Some("Rebuilds on next npm install \u{2014} needs network, may resolve different versions".to_string()),
+            hint: Some("Rebuilds on next npm install. Needs network and may resolve different versions".to_string()),
             active_build: false,
             in_use: None,
         });

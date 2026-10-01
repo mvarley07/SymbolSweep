@@ -6,8 +6,8 @@ import './DevScanPanel.css';
 // "Safe to clean" list, so both render identical rows from the same tokens.
 
 export const TIER_CONFIG: Record<ArtifactTier, { label: string; desc: string; className: string }> = {
-  Safe: { label: 'SAFE', desc: 'Caches \u2014 regenerate automatically', className: 'tier-safe' },
-  Rebuildable: { label: 'REBUILD', desc: 'Build artifacts \u2014 slow to rebuild', className: 'tier-rebuild' },
+  Safe: { label: 'SAFE', desc: 'Regenerate automatically', className: 'tier-safe' },
+  Rebuildable: { label: 'REBUILD', desc: 'Slow to rebuild', className: 'tier-rebuild' },
   SafeWithReinstall: { label: 'REINSTALL', desc: 'npm install to restore', className: 'tier-reinstall' },
   Ask: { label: 'REVIEW', desc: 'May contain shipped output', className: 'tier-ask' },
 };
@@ -31,7 +31,7 @@ function getRemovalInfo(artifact: DevArtifact): { command: string; note?: string
   const shortPath = artifact.path.replace(/^\/Users\/[^/]+/, '~');
   switch (artifact.kind) {
     case 'Docker':
-      return { command: 'docker system prune -a --volumes', note: 'Deletes volumes \u2014 may include databases' };
+      return { command: 'docker system prune -a --volumes', note: 'Deletes volumes, which may include databases' };
     case 'Xcode Archives':
       return { instruction: 'In Xcode: Window \u2192 Organizer \u2192 delete archives you no longer need' };
     case 'iOS Simulators':
@@ -60,7 +60,7 @@ function CopyButton({ text }: { text: string }) {
   };
 
   return (
-    <button className="copy-btn" onClick={handleCopy} data-tip="Copy just this item" aria-label="Copy just this item">
+    <button className="copy-btn" onClick={handleCopy} data-tip="Copy command" aria-label="Copy command">
       {copied ? (
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M3 8.5l3 3 7-7" />
@@ -217,8 +217,8 @@ export function ArtifactRow({ artifact, onDelete, deleting }: ArtifactRowProps) 
               className="artifact-delete-btn"
               onClick={() => onDelete(artifact.path)}
               disabled={deleting}
-              data-tip="Remove from rack"
-              aria-label="Remove from rack"
+              data-tip="Delete"
+              aria-label="Delete"
             >
               {TRASH_ICON}
             </button>

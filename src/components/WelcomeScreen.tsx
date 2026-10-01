@@ -44,7 +44,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           </div>
           <div className="feature-item">
             <span className="feature-icon">✓</span>
-            <span>Safe — only touches Apple's cache folder</span>
+            <span>Safe: only touches Apple's cache folder</span>
           </div>
         </div>
 

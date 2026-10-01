@@ -138,7 +138,7 @@ pub fn tray_title(status: &AppStatus) -> String {
     }
     match status.clean_state {
         CleanState::Clean if status.headline_bytes == 0 => String::new(), // icon only
-        CleanState::Runaway => format!("Cache runaway \u{2014} {}", status.headline_display),
+        CleanState::Runaway => format!("Cache runaway: {}", status.headline_display),
         _ => format!("{} {}", status.headline_display, status.headline_label),
     }
 }
@@ -153,7 +153,7 @@ pub fn update_tray<R: Runtime>(
         if !status.dev_scan_complete {
             // Pre-scan: don't assert any clean state
             tray.set_title(Some(""))?;
-            tray.set_tooltip(Some("SymbolSweep \u{2014} Scanning\u{2026}"))?;
+            tray.set_tooltip(Some("SymbolSweep: Scanning\u{2026}"))?;
         } else {
             tray.set_title(Some(&tray_title(status)))?;
 

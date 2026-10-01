@@ -137,7 +137,7 @@ export function SettingsPanel({ onBack, onDeactivated, onEnterKey }: SettingsPan
           <h2>Auto-Clean</h2>
           <p className="section-description">
             Keeps the macOS symbolication cache (coresymbolicationd) from growing
-            out of control. Doesn't touch package caches or build artifacts — use Clean Now for those.
+            out of control. Doesn't touch package caches or build artifacts. Use Clean Now for those.
           </p>
 
           <div className="setting-row">

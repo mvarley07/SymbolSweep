@@ -86,7 +86,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
     try {
       const res = await invoke<PurgeResult>('purge_ss_trash');
       if (res.purged_count > 0 && res.errors.length > 0) {
-        showResult(`Freed ${res.bytes_freed_display} — ${res.errors.length} item(s) failed`);
+        showResult(`Freed ${res.bytes_freed_display}. ${res.errors.length} item(s) failed`);
       } else if (res.purged_count > 0) {
         showResult(`Freed ${res.bytes_freed_display} from Trash (${res.purged_count} items)`);
       } else if (res.errors.length > 0) {
@@ -388,7 +388,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           {trashInfo && !purging && (
             <div className="ss-trash-banner">
               <div className="ss-trash-text">
-                <span className="ss-trash-size">{trashInfo.total_display}</span> in Trash ({trashInfo.count} {trashInfo.count === 1 ? 'item' : 'items'}) — recoverable
+                <span className="ss-trash-size">{trashInfo.total_display}</span> in Trash ({trashInfo.count} {trashInfo.count === 1 ? 'item' : 'items'}), recoverable
               </div>
               {confirmPurge ? (
                 <div className="confirm-strip tier-purge">
@@ -424,7 +424,7 @@ export function DevScanPanel({ onBack }: DevScanPanelProps) {
           {skipped.length > 0 && (
             <div className="skipped-list">
               <div className="skipped-header">
-                <span>Skipped &mdash; left in place ({skipped.length})</span>
+                <span>Skipped, left in place ({skipped.length})</span>
                 <button className="skipped-dismiss" onClick={() => setSkipped([])} aria-label="Dismiss skipped list">
                   Dismiss
                 </button>

@@ -956,7 +956,7 @@ pub fn run() {
                                         send_notification(
                                             &app_handle,
                                             "SymbolSweep",
-                                            "Autoclean has failed repeatedly \u{2014} cache is unmanaged",
+                                            "Autoclean has failed repeatedly. Cache is unmanaged",
                                         );
                                     }
                                 }
@@ -974,7 +974,7 @@ pub fn run() {
                                     send_notification(
                                         &app_handle,
                                         "SymbolSweep",
-                                        &format!("{} reclaimable — consider cleaning", app_status.reclaimable_display),
+                                        &format!("{} reclaimable. Consider cleaning", app_status.reclaimable_display),
                                     );
                                     warning_notified = true;
                                 }
@@ -984,7 +984,7 @@ pub fn run() {
                                     send_notification(
                                         &app_handle,
                                         "SymbolSweep",
-                                        &format!("{} piled up — a good time to sweep", app_status.reclaimable_display),
+                                        &format!("{} piled up. A good time to sweep", app_status.reclaimable_display),
                                     );
                                     critical_notified = true;
                                 }
@@ -995,7 +995,7 @@ pub fn run() {
                                         &app_handle,
                                         "SymbolSweep",
                                         &format!(
-                                            "Symbolication cache has grown to {} \u{2014} clean now",
+                                            "Symbolication cache has grown to {}. Clean now",
                                             app_status.cache.size_display
                                         ),
                                     );
