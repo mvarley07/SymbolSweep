@@ -151,20 +151,20 @@ code {
 .cta-btn {
   display: inline-block;
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--bg);
   background: var(--accent);
-  padding: 12px 28px;
+  padding: 14px 36px;
   border-radius: var(--radius-sm);
   text-decoration: none;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, box-shadow 0.15s, filter 0.15s;
   border: none;
   cursor: pointer;
 }
 
 .cta-btn:hover {
-  opacity: 0.88;
+  filter: brightness(1.08);
   color: var(--bg);
 }
 
@@ -190,6 +190,7 @@ code {
 .cta-row {
   display: flex;
   justify-content: center;
+  align-items: center;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -199,10 +200,12 @@ code {
   color: var(--text);
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--border-mid);
+  font-size: 15px;
+  padding: 12px 28px;
 }
 
 .cta-btn--secondary:hover {
-  opacity: 1;
+  filter: none;
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
