@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why is coresymbolicationd using so much disk space? | SymbolSweep</title>
+  <meta name="description" content="The com.apple.coresymbolicationd cache can grow past 80 GB on a developer's Mac. What it is, why it grows, whether it's safe to delete, and how to clear it.">
+  <link rel="canonical" href="https://www.symbolsweep.com/coresymbolicationd">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page prose">
+    <h1>Why is coresymbolicationd using so much disk space?</h1>
+
+    <p>If your Mac's disk filled up and you traced it to <code>~/Library/Caches/com.apple.coresymbolicationd</code>, you're not alone. On a developer's Mac this one folder can quietly grow to 50, 80, even 100 GB or more.</p>
+
+    <h2>What it is</h2>
+    <p><code>coresymbolicationd</code> is a macOS system daemon. It caches debug symbols so crash reports, stack traces and profiling tools can turn memory addresses back into function names. That process is called symbolication.</p>
+
+    <h2>Why it grows</h2>
+    <p>It adds to the cache every time you build in Xcode, attach a debugger or symbolicate a crash log. Apple never expires the cache, so it doesn't shrink on its own. It just keeps growing until you notice your disk is full.</p>
+    <p>Only macOS has this daemon, so this is a Mac developer problem. Windows and Linux don't build up anything like it.</p>
+
+    <h2>Is it safe to delete?</h2>
+    <p>Yes. It's a cache, and it rebuilds automatically. The only cost is that symbolication may be a little slower the first few times afterward, while the cache fills back in. Your code, projects and Xcode settings aren't stored there.</p>
+
+    <h2>How to check its size</h2>
+    <p>In Terminal:</p>
+    <pre><code>du -sh ~/Library/Caches/com.apple.coresymbolicationd</code></pre>
+
+    <h2>How to clear it by hand</h2>
+    <ol>
+      <li>Quit Xcode and Instruments.</li>
+      <li>In Finder, choose Go &rarr; Go to Folder and enter <code>~/Library/Caches/com.apple.coresymbolicationd</code>.</li>
+      <li>Select everything inside the folder and move it to the Trash. Leave the folder itself in place.</li>
+      <li>Empty the Trash to get the space back.</li>
+    </ol>
+    <p>Or in Terminal, which deletes the folder's contents immediately and skips the Trash:</p>
+    <pre><code>rm -rf ~/Library/Caches/com.apple.coresymbolicationd/*</code></pre>
+    <p>Either way, it starts growing again the next time you build or debug.</p>
+
+    <h2>Keep it in check automatically</h2>
+    <p><a href="/">SymbolSweep</a> is a menu bar app that watches this cache and clears it automatically once it passes a size you choose. It only ever deletes inside <code>~/Library/Caches/com.apple.coresymbolicationd</code>, and it logs every deletion.</p>
+    <p>It also finds the other things filling a developer's disk, like Xcode DerivedData, <code>node_modules</code>, Rust <code>target</code> folders and package manager caches, and shows you which are safe to delete.</p>
+    <p>Free to scan. $12 once to clean, for one Mac. No subscription. Requires macOS 13 or later on Apple silicon.</p>
+    <p><a href="/download">Download SymbolSweep for Mac</a></p>
+
+    <footer class="site-footer" style="margin-top: 48px;">
+      <a href="/">&larr; Back to SymbolSweep</a>
+    </footer>
+  </div>
+</body>
+</html>

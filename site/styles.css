@@ -496,6 +496,34 @@ code {
 
 .prose code {
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.prose ol {
+  padding-left: 20px;
+  margin-bottom: 16px;
+}
+
+.prose ol li {
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  padding: 4px 0 4px 4px;
+}
+
+.prose pre {
+  background: var(--surface);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  font-family: var(--mono);
+  color: var(--text);
+  overflow-wrap: normal;
 }
 
 /* ═══════════════════════════════════════════════════════════════
