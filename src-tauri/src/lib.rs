@@ -407,7 +407,41 @@ fn quit_app(app: tauri::AppHandle) {
 #[tauri::command]
 fn restart_app(app: tauri::AppHandle) {
     log_updater("restarting to apply update");
+    // app.restart() spawns the new binary as our child. When we were started by the
+    // login LaunchAgent, launchd kills the job's process group as we exit, taking the
+    // child with it. Launching the bundle through LaunchServices puts the new instance
+    // outside our process group.
+    if let Some(bundle) = app_bundle_path() {
+        // Drop the single-instance socket first, or the new instance would hand off to us and quit
+        tauri_plugin_single_instance::destroy(&app);
+        let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+        let mut cmd = std::process::Command::new("/usr/bin/open");
+        cmd.arg("-n").arg(&bundle);
+        if !args.is_empty() {
+            cmd.arg("--args").args(&args);
+        }
+        match cmd.status() {
+            Ok(s) if s.success() => {
+                log_updater(&format!("relaunched {}", bundle.display()));
+                app.exit(0);
+                return;
+            }
+            Ok(s) => log_updater(&format!("relaunch via open failed: {}", s)),
+            Err(e) => log_updater(&format!("relaunch via open failed: {}", e)),
+        }
+    }
     app.restart();
+}
+
+/// The .app bundle containing the running binary (…/X.app/Contents/MacOS/bin -> …/X.app)
+fn app_bundle_path() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let bundle = exe.parent()?.parent()?.parent()?;
+    if bundle.extension().map_or(false, |e| e == "app") {
+        Some(bundle.to_path_buf())
+    } else {
+        None
+    }
 }
 
 /// Test notification (debug only) - uses the same notification path as real notifications
