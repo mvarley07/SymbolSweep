@@ -225,6 +225,12 @@ code {
   color: var(--text-faint);
 }
 
+.cta-req {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 /* ─── Demo slot ──────────────────────────────────────────────────────── */
 .demo-slot {
   text-align: center;
